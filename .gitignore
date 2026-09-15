@@ -1,0 +1,9 @@
+﻿zipfile/
+*.zip
+node_modules/
+dist/
+build/
+.next/
+.env
+.env.local
+.DS_Store
