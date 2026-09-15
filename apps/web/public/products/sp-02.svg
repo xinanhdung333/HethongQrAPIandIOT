@@ -1,0 +1,16 @@
+<svg width="900" height="675" viewBox="0 0 900 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="675" fill="#f4f4f5"/>
+  <rect x="154" y="116" width="592" height="386" rx="30" fill="#18181b"/>
+  <rect x="194" y="156" width="312" height="306" rx="18" fill="#fafafa"/>
+  <rect x="226" y="188" width="76" height="76" rx="6" fill="#18181b"/>
+  <rect x="398" y="188" width="76" height="76" rx="6" fill="#18181b"/>
+  <rect x="226" y="360" width="76" height="76" rx="6" fill="#18181b"/>
+  <rect x="330" y="292" width="42" height="42" rx="4" fill="#18181b"/>
+  <rect x="398" y="360" width="42" height="42" rx="4" fill="#18181b"/>
+  <rect x="552" y="178" width="140" height="42" rx="21" fill="#3f3f46"/>
+  <rect x="552" y="250" width="140" height="34" rx="17" fill="#52525b"/>
+  <rect x="552" y="314" width="140" height="34" rx="17" fill="#52525b"/>
+  <circle cx="620" cy="416" r="38" fill="#06b6d4"/>
+  <rect x="226" y="502" width="448" height="34" rx="17" fill="#d4d4d8"/>
+  <text x="450" y="610" text-anchor="middle" fill="#18181b" font-family="Inter, Arial" font-size="34" font-weight="700">SP-02 Pro Multi Gate</text>
+</svg>

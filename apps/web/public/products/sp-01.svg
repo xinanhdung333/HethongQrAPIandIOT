@@ -1,0 +1,17 @@
+<svg width="900" height="675" viewBox="0 0 900 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="675" fill="#f4f4f5"/>
+  <rect x="210" y="105" width="480" height="465" rx="34" fill="#18181b"/>
+  <rect x="250" y="145" width="400" height="300" rx="18" fill="#fafafa"/>
+  <rect x="288" y="184" width="84" height="84" rx="6" fill="#18181b"/>
+  <rect x="528" y="184" width="84" height="84" rx="6" fill="#18181b"/>
+  <rect x="288" y="304" width="84" height="84" rx="6" fill="#18181b"/>
+  <rect x="408" y="184" width="36" height="36" rx="4" fill="#18181b"/>
+  <rect x="456" y="232" width="36" height="36" rx="4" fill="#18181b"/>
+  <rect x="408" y="304" width="36" height="36" rx="4" fill="#18181b"/>
+  <rect x="504" y="328" width="36" height="36" rx="4" fill="#18181b"/>
+  <rect x="552" y="376" width="36" height="36" rx="4" fill="#18181b"/>
+  <rect x="282" y="486" width="236" height="24" rx="12" fill="#3f3f46"/>
+  <circle cx="594" cy="498" r="22" fill="#22c55e"/>
+  <rect x="300" y="92" width="300" height="26" rx="13" fill="#d4d4d8"/>
+  <text x="450" y="625" text-anchor="middle" fill="#18181b" font-family="Inter, Arial" font-size="34" font-weight="700">SP-01 Mini QR Box</text>
+</svg>

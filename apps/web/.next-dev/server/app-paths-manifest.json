@@ -1,0 +1,7 @@
+{
+  "/dang-nhap/page": "app/dang-nhap/page.js",
+  "/thue-api/page": "app/thue-api/page.js",
+  "/thanh-toan-demo/page": "app/thanh-toan-demo/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/api-keys/page": "app/dashboard/api-keys/page.js"
+}

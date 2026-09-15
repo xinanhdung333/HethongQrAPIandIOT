@@ -1,0 +1,32 @@
+{
+  "name": "smart-qr-platform",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @smartqr/api\" \"npm run dev -w @smartqr/web\"",
+    "start:local": "concurrently \"npm run start -w @smartqr/api\" \"npm run start -w @smartqr/web\"",
+    "build": "npm run build -w @smartqr/api && npm run build -w @smartqr/web",
+    "lint": "npm run lint -w @smartqr/web",
+    "db:generate": "npm run db:generate -w @smartqr/database",
+    "db:migrate": "npm run db:migrate -w @smartqr/database",
+    "db:seed": "npm run db:seed -w @smartqr/database",
+    "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "typescript": "^5.5.4"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "prisma@5.22.0": true,
+    "bcrypt@5.1.1": true,
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true,
+    "@nestjs/core@10.4.22": true
+  }
+}

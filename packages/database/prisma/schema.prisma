@@ -1,0 +1,585 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  passwordHash       String              @map("password_hash")
+  avatarUrl          String?             @map("avatar_url")
+  role               UserRole            @default(CUSTOMER)
+  rentals            RentalOrder[]
+  shows              Show[]
+  apiKeys            ApiKey[]
+  apiRentals         ApiRentalOrder[]
+  externalQrCodes    ExternalQrCode[]
+  externalQrScanLogs ExternalQrScanLog[]
+  payoutAccounts     PayoutAccount[]
+  paymentTransactions PaymentTransaction[]
+  apiNotifications   ApiNotification[]
+  payouts            Payout[]            @relation("ShowOwnerPayouts")
+  activityLogs       ActivityLog[]
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Product {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  name           String
+  type           ProductType
+  priceSell      Int           @map("price_sell")
+  priceRentMonth Int           @map("price_rent_month")
+  depositFee     Int           @map("deposit_fee")
+  stock          Int
+  images         Json
+  specs          Json
+  rentals        RentalOrder[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+model RentalOrder {
+  id              String       @id @default(cuid())
+  userId          String       @map("user_id")
+  productId       String       @map("product_id")
+  type            OrderType
+  duration        Int
+  quantity        Int
+  rentFee         Int          @map("rent_fee")
+  depositFee      Int          @map("deposit_fee")
+  installFee      Int          @map("install_fee")
+  total           Int
+  status          RentalStatus @default(PENDING)
+  shippingAddress Json         @map("shipping_address")
+  gateIds         Json?        @map("gate_ids")
+  damageNotes     String?      @map("damage_notes")
+  user            User         @relation(fields: [userId], references: [id])
+  product         Product      @relation(fields: [productId], references: [id])
+  tickets         Ticket[]
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@map("rental_orders")
+}
+
+model Show {
+  id            String        @id @default(cuid())
+  ownerId       String        @map("owner_id")
+  slug          String        @unique
+  name          String
+  description   String        @db.Text
+  bannerUrl     String        @map("banner_url")
+  themeColor    String        @map("theme_color")
+  location      String
+  startAt       DateTime      @map("start_at")
+  ticketPrice   Int           @map("ticket_price")
+  totalTickets  Int           @map("total_tickets")
+  soldTickets   Int           @default(0) @map("sold_tickets")
+  payoutAccount Json          @map("payout_account")
+  status        ShowStatus    @default(ACTIVE)
+  owner         User          @relation(fields: [ownerId], references: [id])
+  ticketOrders  TicketOrder[]
+  tickets       Ticket[]
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@map("shows")
+}
+
+model TicketOrder {
+  id             String            @id @default(cuid())
+  showId         String            @map("show_id")
+  buyerName      String            @map("buyer_name")
+  buyerEmail     String            @map("buyer_email")
+  buyerPhone     String?           @map("buyer_phone")
+  buyerNote      String?           @map("buyer_note") @db.Text
+  quantity       Int
+  totalAmount    Int               @map("total_amount")
+  platformFee    Int               @map("platform_fee")
+  payoutAmount   Int               @map("payout_amount")
+  status         TicketOrderStatus @default(PENDING)
+  payosPaymentId String?           @map("payos_payment_id")
+  show           Show              @relation(fields: [showId], references: [id])
+  tickets        Ticket[]
+  payouts        Payout[]
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@map("ticket_orders")
+}
+
+model Ticket {
+  id            String       @id @default(cuid())
+  showId        String       @map("show_id")
+  rentalOrderId String?      @map("rental_order_id")
+  ticketOrderId String?      @map("ticket_order_id")
+  jti           String       @unique
+  qrJwt         String       @map("qr_jwt") @db.Text
+  qrOfflineJwt  String?      @map("qr_offline_jwt") @db.Text
+  isUsed        Boolean      @default(false) @map("is_used")
+  usedAt        DateTime?    @map("used_at")
+  useCount      Int          @default(0) @map("use_count")
+  show          Show         @relation(fields: [showId], references: [id])
+  rentalOrder   RentalOrder? @relation(fields: [rentalOrderId], references: [id])
+  ticketOrder   TicketOrder? @relation(fields: [ticketOrderId], references: [id])
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@map("tickets")
+}
+
+model ApiKey {
+  id              String           @id @default(cuid())
+  userId          String           @map("user_id")
+  keyHash         String           @unique @map("key_hash")
+  prefix          String
+  quota           Int              @default(10000)
+  scopes          Json             @default("[\"qr:create\",\"qr:read\",\"ticket:verify\"]")
+  rentalId        String?          @map("rental_id")
+  rental          ApiRentalOrder?  @relation(fields: [rentalId], references: [id])
+  status          String           @default("active")
+  isTest          Boolean          @default(false) @map("is_test")
+  allowedIps      Json             @default("[]") @map("allowed_ips")
+  rateLimit       Int              @default(60) @map("rate_limit")
+  revokeAt        DateTime?        @map("revoke_at")
+  rotationWarnedAt DateTime?        @map("rotation_warned_at")
+  user            User             @relation(fields: [userId], references: [id])
+  externalQrCodes ExternalQrCode[]
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  @@map("api_keys")
+}
+
+model ApiRentalOrder {
+  id             String       @id @default(cuid())
+  userId         String       @map("user_id")
+  appName        String       @map("app_name")
+  website        String?
+  callbackUrl    String?      @map("callback_url")
+  plan           String
+  duration       Int
+  quota          Int
+  scopes         Json         @default("[\"qr:create\",\"qr:read\",\"ticket:verify\"]")
+  total          Int
+  status         RentalStatus @default(PENDING)
+  payosPaymentId String?      @map("payos_payment_id")
+  apiKeyPrefix   String?      @map("api_key_prefix")
+  keys           ApiKey[]
+  signingEnabled Boolean      @default(false) @map("signing_enabled")
+  signingSecret  String?       @map("signing_secret")
+  webhookSecret  String?       @map("webhook_secret")
+  billingMode    String        @default("fixed") @map("billing_mode")
+  createUnitPrice Int          @default(10) @map("create_unit_price")
+  verifyUnitPrice Int          @default(1) @map("verify_unit_price")
+  commissionRateOverrideBp Int? @map("commission_rate_override_bp")
+  user           User         @relation(fields: [userId], references: [id])
+  paymentTransactions PaymentTransaction[]
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@map("api_rental_orders")
+}
+
+model ExternalQrCode {
+  id           String              @id @default(cuid())
+  userId       String              @map("user_id")
+  apiKeyId     String              @map("api_key_id")
+  jti          String              @unique
+  code         String              @unique
+  qrJwt        String              @map("qr_jwt") @db.Text
+  resourceType String              @map("resource_type")
+  resourceId   String              @map("resource_id")
+  customerRef  String?             @map("customer_ref")
+  payload      Json?
+  metadata     Json?
+  isTest       Boolean             @default(false) @map("is_test")
+  maxUses      Int                 @default(1) @map("max_uses")
+  useCount     Int                 @default(0) @map("use_count")
+  allowedGateIds Json              @default("[]") @map("allowed_gate_ids")
+  notBefore    DateTime?           @map("not_before")
+  revokedAt    DateTime?           @map("revoked_at")
+  expiryNotifiedAt DateTime?       @map("expiry_notified_at")
+  expiresAt    DateTime            @map("expires_at")
+  isUsed       Boolean             @default(false) @map("is_used")
+  usedAt       DateTime?           @map("used_at")
+  user         User                @relation(fields: [userId], references: [id])
+  apiKey       ApiKey              @relation(fields: [apiKeyId], references: [id])
+  scanLogs     ExternalQrScanLog[]
+  paymentTransactions PaymentTransaction[]
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([expiresAt, expiryNotifiedAt])
+  @@map("external_qr_codes")
+}
+
+model TenantGateKey {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique @map("tenant_id")
+  publicKey         String    @map("public_key") @db.Text
+  privateKeyEnc     String    @map("private_key_enc") @db.Text
+  algorithm         String    @default("RS256")
+  previousPublicKey String?   @map("previous_public_key") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  rotatedAt         DateTime? @map("rotated_at")
+
+  @@map("tenant_gate_keys")
+}
+
+model TenantSettings {
+  tenantId       String    @id @map("tenant_id")
+  offlineCapable Boolean   @default(false) @map("offline_capable")
+  enabledAt      DateTime? @map("enabled_at")
+  enabledBy      String?   @map("enabled_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("tenant_settings")
+}
+
+model ApiUsagePeriod {
+  id            String   @id @default(cuid())
+  scopeId       String   @map("scope_id")
+  month         String
+  isTest        Boolean  @default(false) @map("is_test")
+  qrCreated     Int      @default(0) @map("qr_created")
+  verifySuccess Int      @default(0) @map("verify_success")
+  verifyFailed  Int      @default(0) @map("verify_failed")
+  billedAmount  Int      @default(0) @map("billed_amount")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([scopeId, month, isTest])
+  @@map("api_usage_periods")
+}
+
+model ApiUsageEvent {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  apiKeyId     String   @map("api_key_id")
+  rentalId     String?  @map("rental_id")
+  action       String
+  resourceType String?  @map("resource_type")
+  isTest       Boolean  @default(false) @map("is_test")
+  units        Int      @default(1)
+  cost         Int      @default(0)
+  success      Boolean
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isTest, createdAt])
+  @@index([rentalId, createdAt])
+  @@map("api_usage_events")
+}
+
+model ApiIdempotency {
+  id          String   @id @default(cuid())
+  scopeId     String   @map("scope_id")
+  key         String
+  operation   String
+  requestHash String   @map("request_hash")
+  response    Json
+  expiresAt   DateTime @map("expires_at")
+
+  @@unique([scopeId, operation, key])
+  @@index([expiresAt])
+  @@map("api_idempotency")
+}
+
+model ApiRequestLog {
+  id           String   @id @default(cuid())
+  requestId    String   @map("request_id")
+  userId       String?  @map("user_id")
+  apiKeyId     String?  @map("api_key_id")
+  rentalId     String?  @map("rental_id")
+  method       String
+  endpoint     String
+  statusCode   Int      @map("status_code")
+  durationMs   Int      @map("duration_ms")
+  ip           String?
+  isTest       Boolean  @default(false) @map("is_test")
+  error        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isTest, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@map("api_request_logs")
+}
+
+model WebhookEvent {
+  id           String   @id @default(cuid())
+  rentalId     String   @map("rental_id")
+  event        String
+  body         String   @db.Text
+  targetUrl    String   @map("target_url")
+  secret       String
+  dedupeKey    String?  @unique @map("dedupe_key")
+  status       String   @default("pending")
+  attempts          Int      @default(0)
+  manualReplayCount Int      @default(0) @map("manual_replay_count")
+  nextAttemptAt     DateTime @default(now()) @map("next_attempt_at")
+  lockedUntil  DateTime? @map("locked_until")
+  deliveredAt  DateTime? @map("delivered_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  logs         WebhookAttempt[]
+
+  @@index([status, nextAttemptAt])
+  @@index([rentalId, createdAt])
+  @@map("webhook_events")
+}
+
+model WebhookAttempt {
+  id         String       @id @default(cuid())
+  eventId    String       @map("event_id")
+  event      WebhookEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attempt    Int
+  statusCode Int?         @map("status_code")
+  error      String?
+  durationMs Int          @map("duration_ms")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@index([eventId, createdAt])
+  @@map("webhook_attempts")
+}
+
+model ApiNotification {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  rentalId    String?  @map("rental_id")
+  dedupeKey   String   @unique @map("dedupe_key")
+  kind        String
+  payload     Json
+  status      String   @default("pending")
+  attempts    Int      @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  lockedUntil DateTime? @map("locked_until")
+  lastError   String?  @map("last_error")
+  sentAt      DateTime? @map("sent_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([status, nextAttemptAt])
+  @@map("api_notifications")
+}
+
+model ApiStatusSample {
+  id        String   @id @default(cuid())
+  healthy   Boolean
+  latencyMs Int      @map("latency_ms")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("api_status_samples")
+}
+
+model ApiIncident {
+  id         String   @id @default(cuid())
+  title      String
+  status     String   @default("investigating")
+  startedAt  DateTime @default(now()) @map("started_at")
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([startedAt])
+  @@map("api_incidents")
+}
+
+model ExternalQrScanLog {
+  id           String         @id @default(cuid())
+  userId       String         @map("user_id")
+  externalQrId String         @map("external_qr_id")
+  gateId       String         @map("gate_id")
+  valid        Boolean
+  reason       String?
+  ip           String?
+  userAgent    String?        @map("user_agent") @db.Text
+  externalQr   ExternalQrCode @relation(fields: [externalQrId], references: [id])
+  user         User           @relation(fields: [userId], references: [id])
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([externalQrId, createdAt])
+  @@map("external_qr_scan_logs")
+}
+
+model Payout {
+  id            String       @id @default(cuid())
+  showOwnerId   String       @map("show_owner_id")
+  ticketOrderId String       @map("ticket_order_id")
+  amount        Int
+  status        PayoutStatus @default(PENDING)
+  showOwner     User         @relation("ShowOwnerPayouts", fields: [showOwnerId], references: [id])
+  ticketOrder   TicketOrder  @relation(fields: [ticketOrderId], references: [id])
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@map("payouts")
+}
+
+model PayoutAccount {
+  id            String       @id @default(cuid())
+  userId        String       @map("user_id")
+  method        PayoutMethod @default(BANK)
+  bankName      String?      @map("bank_name")
+  accountNumber String?      @map("account_number")
+  accountName   String      @map("account_name")
+  branch        String?
+  walletType    String?      @map("wallet_type")
+  walletId      String?      @map("wallet_id")
+  isDefault     Boolean      @default(false) @map("is_default")
+  status        String       @default("active")
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentTransactions PaymentTransaction[]
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@index([userId, isDefault])
+  @@map("payout_accounts")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  version   Int      @default(1)
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+model PaymentTransaction {
+  id                    String        @id @default(cuid())
+  userId                String        @map("user_id")
+  rentalId              String        @map("rental_id")
+  qrCodeId              String?       @map("qr_code_id")
+  idempotencyKey        String        @unique @map("idempotency_key")
+  grossAmount           Int           @map("gross_amount")
+  commissionRateBp      Int           @map("commission_rate_bp")
+  commissionAmount      Int           @map("commission_amount")
+  userAmount            Int           @map("user_amount")
+  payoutAccountId       String?       @map("payout_account_id")
+  payoutAccountSnapshot Json?         @map("payout_account_snapshot")
+  status                PaymentTransactionStatus @default(PENDING)
+  payoutNote            String?       @map("payout_note") @db.Text
+  metadata              Json?
+  user                  User          @relation(fields: [userId], references: [id])
+  rental                ApiRentalOrder @relation(fields: [rentalId], references: [id])
+  qrCode                ExternalQrCode? @relation(fields: [qrCodeId], references: [id])
+  payoutAccount         PayoutAccount? @relation(fields: [payoutAccountId], references: [id])
+  createdAt             DateTime      @default(now()) @map("created_at")
+  confirmedAt           DateTime?     @map("confirmed_at")
+  payoutCompletedAt     DateTime?     @map("payout_completed_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([rentalId, createdAt])
+  @@index([status, createdAt])
+  @@map("payment_transactions")
+}
+
+model StaticPage {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  navLabel     String   @map("nav_label")
+  title        String
+  description  String   @db.Text
+  heroImage    String   @map("hero_image")
+  ctaPrimary   Json     @map("cta_primary")
+  ctaSecondary Json?    @map("cta_secondary")
+  sections     Json
+  sortOrder    Int      @default(0) @map("sort_order")
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("static_pages")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  method     String?
+  path       String?
+  ip         String?
+  userAgent  String?  @map("user_agent") @db.Text
+  metadata   Json?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("activity_logs")
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum ProductType {
+  IOT_MINI
+  IOT_PRO
+  COMPONENT
+}
+
+enum OrderType {
+  RENT
+  BUY
+}
+
+enum RentalStatus {
+  PENDING
+  PAID
+  SHIPPED
+  ACTIVE
+  RETURNED
+  CANCELLED
+}
+
+enum ShowStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+}
+
+enum TicketOrderStatus {
+  PENDING
+  PAID
+}
+
+enum PayoutStatus {
+  PENDING
+  TRANSFERRED
+}
+
+enum PayoutMethod {
+  BANK
+  WALLET
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  CONFIRMED
+  PAYOUT_PROCESSING
+  PAYOUT_COMPLETED
+  FAILED
+  DISPUTED
+}
+
+

@@ -1,0 +1,13 @@
+<svg width="900" height="675" viewBox="0 0 900 675" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="675" fill="#f4f4f5"/>
+  <rect x="196" y="168" width="236" height="236" rx="22" fill="#18181b"/>
+  <rect x="234" y="206" width="160" height="160" rx="12" fill="#fafafa"/>
+  <path d="M278 286h72M314 250v72" stroke="#18181b" stroke-width="22" stroke-linecap="round"/>
+  <rect x="486" y="198" width="218" height="154" rx="18" fill="#27272a"/>
+  <rect x="520" y="232" width="150" height="86" rx="10" fill="#67e8f9"/>
+  <rect x="506" y="410" width="160" height="62" rx="31" fill="#18181b"/>
+  <circle cx="546" cy="441" r="18" fill="#22c55e"/>
+  <circle cx="626" cy="441" r="18" fill="#22c55e"/>
+  <path d="M432 286h54M595 352v58" stroke="#a1a1aa" stroke-width="18" stroke-linecap="round"/>
+  <text x="450" y="585" text-anchor="middle" fill="#18181b" font-family="Inter, Arial" font-size="34" font-weight="700">QR Components Kit</text>
+</svg>

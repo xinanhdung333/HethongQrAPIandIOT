@@ -1,0 +1,15 @@
+[mcp_servers.shadcn-ui]
+command = "npx"
+args = ["-y", "shadcn-ui-mcp-server"]
+
+[mcp_servers.magic]
+command = "npx"
+args = ["-y", "@21st-dev/magic-mcp"]
+env = { "API_KEY" = "21st_sk_df60f59dc963bb46a28617773f4a0fa499988d84d248fb837924a548082c3090" }
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+
+[mcp_servers.21st]
+url = "https://21st.dev/api/mcp"
+bearer_token_env_var = "API_KEY_21ST"
