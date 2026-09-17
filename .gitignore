@@ -10,3 +10,4 @@ zipfile/
 .env
 .env.local
 .DS_Store
+.env.example
