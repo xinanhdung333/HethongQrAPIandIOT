@@ -1,8 +1,0 @@
-{
-  "/docs/page": "app/docs/page.js",
-  "/admin/page": "app/admin/page.js",
-  "/thanh-toan-demo/page": "app/thanh-toan-demo/page.js",
-  "/dashboard/shows/page": "app/dashboard/shows/page.js",
-  "/e/[slug]/page": "app/e/[slug]/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
-}
