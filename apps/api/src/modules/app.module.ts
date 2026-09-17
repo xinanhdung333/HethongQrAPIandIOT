@@ -35,6 +35,8 @@ import { DeveloperController } from "../modules/developer.controller";
 import { GatesController } from "../modules/gates.controller";
 import { StatusController } from "../modules/status.controller";
 import { AccountSettingsController } from "../modules/account-settings.controller";
+import { SecurityController } from "../modules/security.controller";
+import { CsrfMiddleware } from "../security/csrf.middleware";
 import { AdminSettingsPaymentsController, DeveloperPaymentsController, PaymentsController } from "../modules/settings-payments.controller";
 import { PlatformService } from "../services/platform.service";
 import { PayosMockService } from "../services/payos.mock";
@@ -63,6 +65,7 @@ import { PayosMockService } from "../services/payos.mock";
     PaymentsController,
     DeveloperPaymentsController,
     AdminSettingsPaymentsController
+    ,SecurityController
   ],
   providers: [
     PrismaService,
@@ -88,8 +91,7 @@ import { PayosMockService } from "../services/payos.mock";
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(ApiAuditMiddleware).forRoutes("*");
+    consumer.apply(CsrfMiddleware, ApiAuditMiddleware).forRoutes("*");
   }
 }
-
 

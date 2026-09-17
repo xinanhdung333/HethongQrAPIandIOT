@@ -24,6 +24,7 @@ model User {
   apiNotifications   ApiNotification[]
   payouts            Payout[]            @relation("ShowOwnerPayouts")
   activityLogs       ActivityLog[]
+  revokedResources   RevokedResource[]
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
@@ -82,12 +83,17 @@ model Show {
   themeColor    String        @map("theme_color")
   location      String
   startAt       DateTime      @map("start_at")
+  endAt         DateTime?     @map("end_at")
   ticketPrice   Int           @map("ticket_price")
   totalTickets  Int           @map("total_tickets")
   soldTickets   Int           @default(0) @map("sold_tickets")
   payoutAccount Json          @map("payout_account")
   status        ShowStatus    @default(ACTIVE)
+  installationStatus String   @default("PENDING") @map("installation_status")
+  scannerCount  Int           @default(0) @map("scanner_count")
+  installationNote String?    @map("installation_note")
   owner         User          @relation(fields: [ownerId], references: [id])
+  apiKeys       ApiKey[]
   ticketOrders  TicketOrder[]
   tickets       Ticket[]
   createdAt     DateTime      @default(now()) @map("created_at")
@@ -147,11 +153,14 @@ model ApiKey {
   scopes          Json             @default("[\"qr:create\",\"qr:read\",\"ticket:verify\"]")
   rentalId        String?          @map("rental_id")
   rental          ApiRentalOrder?  @relation(fields: [rentalId], references: [id])
+  showId          String?          @map("show_id")
+  show            Show?            @relation(fields: [showId], references: [id])
   status          String           @default("active")
   isTest          Boolean          @default(false) @map("is_test")
   allowedIps      Json             @default("[]") @map("allowed_ips")
   rateLimit       Int              @default(60) @map("rate_limit")
   revokeAt        DateTime?        @map("revoke_at")
+  suspendUntil    DateTime?        @map("suspend_until")
   rotationWarnedAt DateTime?        @map("rotation_warned_at")
   user            User             @relation(fields: [userId], references: [id])
   externalQrCodes ExternalQrCode[]
@@ -223,6 +232,21 @@ model ExternalQrCode {
   @@index([apiKeyId, createdAt])
   @@index([expiresAt, expiryNotifiedAt])
   @@map("external_qr_codes")
+}
+
+model RevokedResource {
+  id           String   @id @default(cuid())
+  resourceType String   @map("resource_type")
+  jti          String
+  revokedAt    DateTime @default(now()) @map("revoked_at")
+  tenantId     String   @map("tenant_id")
+  isTest       Boolean  @default(false) @map("is_test")
+  userId       String?  @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceType, jti])
+  @@index([tenantId, revokedAt])
+  @@map("revoked_resources")
 }
 
 model TenantGateKey {
@@ -581,5 +605,3 @@ enum PaymentTransactionStatus {
   FAILED
   DISPUTED
 }
-
-

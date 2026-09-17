@@ -36,6 +36,18 @@ export class DeveloperController {
     return session ? this.developer.revoke(session, id) : undefined;
   }
 
+  @Post("keys/:id/suspend")
+  async suspend(@Param("id") id: string, @Body() dto: { until?: string }, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+    const session = await this.session(authorization, res);
+    return session ? this.developer.suspend(session, id, dto.until) : undefined;
+  }
+
+  @Post("keys/:id/resume")
+  async resume(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+    const session = await this.session(authorization, res);
+    return session ? this.developer.resume(session, id) : undefined;
+  }
+
   @Post("rentals/:id/test-key")
   async testKey(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
@@ -116,5 +128,3 @@ export class DeveloperController {
     return session;
   }
 }
-
-

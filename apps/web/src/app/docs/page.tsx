@@ -43,7 +43,7 @@ const endpoints = [
     group: "Thanh toán và cổng quét",
     items: [
       ["POST", "/webhooks/payos-demo", "Mock PayOS paid thủ công. kind là ticket, rental hoặc api.", `{"order_id":"{{ticketOrderId}}","kind":"ticket"}`],
-      ["POST", "/api/v1/tickets/verify", "Verify QR JWT hoặc ticket_code. Cần X-API-KEY hoặc X-DEMO-SCAN khi test local.", `{"ticket_code":"SQR-ABC123","gate_id":"gate-main"}`]
+      ["POST", "/api/v1/tickets/verify", "Verify QR JWT hoặc ticket_code bằng show scan key đúng với show của vé.", `{"ticket_code":"SQR-ABC123","gate_id":"gate-main"}`]
     ]
   },
   {
@@ -61,6 +61,8 @@ const endpoints = [
       ["GET", "/admin/orders", "Danh sách đơn thuê/mua.", ""],
       ["GET", "/admin/shows", "Danh sách show.", ""],
       ["PATCH", "/admin/shows/:id/status", "Đổi trạng thái DRAFT/ACTIVE/ENDED.", `{"status":"ACTIVE"}`],
+      ["POST", "/admin/shows/:id/scan-key", "Admin cấp raw key một lần cho máy quét đúng show.", "Header: Authorization: Bearer {{adminToken}}"],
+      ["PATCH", "/admin/shows/:id/installation", "Admin cập nhật trạng thái, số máy và ghi chú lắp đặt.", `{"status":"READY","scanner_count":2,"note":"Đã test camera và mạng tại cổng chính"}`],
       ["GET", "/admin/tickets", "Danh sách ticket orders, tickets và payout.", ""],
       ["GET", "/admin/api-keys", "Danh sách API key prefix.", ""],
       ["POST", "/admin/api-keys", "Tạo API key mới. Response chỉ hiện raw key một lần.", `{"user_id":"{{userId}}","quota":10000}`]
@@ -77,8 +79,30 @@ const flow = [
   "POST /shows, copy show_id vào showId và slug trong public_url vào showSlug.",
   "POST /e/:slug/buy, chờ 5 giây hoặc gọi webhook kind ticket.",
   "GET /dashboard hoặc GET /admin/tickets, copy qrJwt vào biến qrJwt.",
-  "POST /api/v1/tickets/verify với X-DEMO-SCAN: true khi test local, hoặc X-API-KEY: {{apiKey}} khi dùng key thật."
+  "Admin POST /admin/shows/:id/scan-key để cấp key riêng cho máy quét, sau đó POST /api/v1/tickets/verify với X-API-KEY: {{showScanKey}}."
 ];
+
+const powershellVerifyExample = String.raw`$apiUrl = "http://localhost:4000"
+$apiKey = "sk_live_DAN_KEY_VAO_DAY"
+$qrJwt = "DAN_CHUOI_QR_JWT_VAO_DAY"
+
+$body = @{
+  qr_jwt = $qrJwt
+  gate_id = "gate-main"
+} | ConvertTo-Json
+
+$request = @{
+  Uri = "$apiUrl/api/v1/tickets/verify"
+  Method = "Post"
+  Headers = @{
+    "X-API-KEY" = $apiKey
+    "Content-Type" = "application/json"
+  }
+  Body = $body
+}
+
+$result = Invoke-RestMethod @request
+$result | ConvertTo-Json -Depth 10`;
 
 export default function DocsPage() {
   return (
@@ -116,6 +140,31 @@ export default function DocsPage() {
         <ol className="mt-5 grid gap-3 text-sm text-zinc-600">
           {flow.map((item, index) => <li key={item}>{index + 1}. {item}</li>)}
         </ol>
+      </Reveal>
+
+      <Reveal className="mt-10 panel p-6">
+        <h2 className="text-2xl font-semibold tracking-tight">Verify QR show từ website khác</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+          API key của máy quét thuộc riêng từng show, không phải key thuê API chung. User chỉ tạo show và theo dõi trạng thái lắp đặt.
+          Admin vào Admin Console để bấm “Cấp key cho máy quét”; raw key được cấp một lần cho đội lắp đặt. Khách hàng chỉ nhận QR vé.
+        </p>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-semibold">PowerShell</h3>
+            <pre className="mt-3 min-h-[360px] overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-6 text-zinc-100"><code>{powershellVerifyExample}</code></pre>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold">Body thay thế nếu dùng ticket code</h3>
+            <pre className="mt-3 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-6 text-zinc-100"><code>{`$body = @{
+  ticket_code = "SQR-ABC123"
+  gate_id = "gate-main"
+} | ConvertTo-Json`}</code></pre>
+            <p className="mt-3 text-sm leading-6 text-zinc-600">
+              Dùng <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">qr_jwt</code> cho chuỗi JWT lấy từ QR vé.
+              Nếu gửi lại cùng một vé sau khi check-in, API sẽ trả về trạng thái vé đã được sử dụng.
+            </p>
+          </div>
+        </div>
       </Reveal>
 
       <div className="mt-10 grid gap-8">

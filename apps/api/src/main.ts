@@ -9,7 +9,12 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   if (process.env.TRUST_PROXY_HOPS) app.getHttpAdapter().getInstance().set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
   app.enableCors({
-    origin: [/^http:\/\/localhost:\d+$/, process.env.WEB_ORIGIN ?? "http://localhost:3000"],
+    origin: Array.from(new Set([
+      process.env.WEB_ORIGIN ?? "http://localhost:3000",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "https://smartqr.vn"
+    ])),
     credentials: true,
     exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After", "X-Request-Id", "Idempotency-Replayed"]
   });

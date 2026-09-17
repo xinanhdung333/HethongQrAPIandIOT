@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Query, Res } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post, Res } from "@nestjs/common";
 import { Response } from "express";
 import { ApiBulkCreateQrDto, ApiCreateQrDto } from "../api-qr.dto";
 import { RequireApiKey } from "../security/api-key.decorator";
@@ -22,8 +22,8 @@ export class QrCodesController {
 
   @Get(":id")
   @RequireApiKey("qr:read")
-  get(@Param("id") id: string, @Headers("x-api-key") headerApiKey: string | undefined, @Query("api_key") queryApiKey: string | undefined) {
-    return this.platform.getExternalQrCode(id, headerApiKey ?? queryApiKey);
+  get(@Param("id") id: string, @Headers("x-api-key") headerApiKey: string | undefined) {
+    return this.platform.getExternalQrCode(id, headerApiKey);
   }
 
   @Post(":id/revoke")
@@ -37,10 +37,9 @@ export class QrCodesController {
   async svg(
     @Param("id") id: string,
     @Headers("x-api-key") headerApiKey: string | undefined,
-    @Query("api_key") queryApiKey: string | undefined,
     @Res() res: Response
   ) {
-    const svg = await this.platform.getExternalQrSvg(id, headerApiKey ?? queryApiKey);
+    const svg = await this.platform.getExternalQrSvg(id, headerApiKey);
     res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
     res.setHeader("Cache-Control", "private, no-store");
     return res.send(svg);

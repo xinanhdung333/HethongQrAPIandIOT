@@ -1,7 +1,6 @@
 ﻿import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { ApiKey, ApiRentalOrder, ExternalQrCode, Prisma } from "@prisma/client";
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
 import QRCode from "qrcode";
 import { ApiCreateQrDto, ApiVerifyQrDto } from "../api-qr.dto";
 import { ApiKeyScope } from "../security/api-key.decorator";
@@ -77,7 +76,13 @@ export class QrPlatformService {
       const qr = await tx.externalQrCode.findUnique({ where: { id }, include: { apiKey: true } });
       if (!qr || !this.owns(current, qr)) throw new NotFoundException({ error: "qr_not_found", message: "QR code not found" });
       if (qr.revokedAt) return this.serializeQr(qr, resolveTenantId({ rentalId: qr.apiKey.rentalId, userId: qr.userId }));
-      const revoked = await tx.externalQrCode.update({ where: { id }, data: { revokedAt: new Date() } });
+      const revokedAt = new Date();
+      const revoked = await tx.externalQrCode.update({ where: { id }, data: { revokedAt } });
+      await tx.revokedResource.upsert({
+        where: { resourceType_jti: { resourceType: "external_qr", jti: qr.jti } },
+        create: { resourceType: "external_qr", jti: qr.jti, revokedAt, tenantId: resolveTenantId({ rentalId: qr.apiKey.rentalId, userId: qr.userId }), userId: qr.userId, isTest: qr.isTest },
+        update: { revokedAt }
+      });
       const result = await this.serializeQr(revoked, resolveTenantId(current));
       if (current.rentalId) await this.webhooks.enqueue(tx, current.rentalId, "qr.revoked", result, `qr.revoked:${id}`);
       return result;
@@ -114,7 +119,7 @@ export class QrPlatformService {
       }
       // The database controls revocation and use count; multi-use QR tokens do not rely on a Redis session.
       try {
-        const decoded = this.auth.decodeJwt<{ jti: string; type?: string }>(qr.qrJwt);
+        const decoded = await this.auth.verifyQrJwt<{ jti: string; type?: string }>(qr.qrJwt);
         if (decoded.jti !== qr.jti || decoded.type !== "external_qr") throw new Error("Invalid token claims");
       } catch {
         return this.deny(tx, current, qr, dto, "invalid_qr", "Invalid QR signature", meta);
@@ -229,11 +234,11 @@ export class QrPlatformService {
   private async createOne(tx: Prisma.TransactionClient, key: IntegrationKey, dto: ApiCreateQrDto) {
     const ttl = Math.min(Math.max(dto.ttl_seconds ?? DEFAULT_TTL, 60), MAX_TTL);
     const jti = crypto.randomBytes(18).toString("hex");
-    const token = jwt.sign({
+    const token = await this.auth.signQrJwt({
       sub: `external:${dto.resource_type}:${dto.resource_id}`, type: "external_qr", owner_id: key.userId,
       resource_type: dto.resource_type, resource_id: dto.resource_id, customer_ref: dto.customer_ref,
       is_test: key.isTest, jti
-    }, process.env.JWT_SECRET ?? "dev-secret", { expiresIn: ttl });
+    }, ttl);
     const qr = await tx.externalQrCode.create({
       data: {
         userId: key.userId, apiKeyId: key.id, jti, code: `SQR-${crypto.randomBytes(8).toString("hex").toUpperCase()}`,
@@ -300,4 +305,3 @@ export class QrPlatformService {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 }
-

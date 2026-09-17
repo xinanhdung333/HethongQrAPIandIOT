@@ -63,6 +63,7 @@ export default function ShowsDashboardPage() {
     } finally {
       setEndingId("");
     }
+
   }
 
   const ordersByShow = useMemo(() => {
@@ -136,6 +137,11 @@ export default function ShowsDashboardPage() {
                     <p>Địa điểm: {show.location ?? "Đang cập nhật"}</p>
                     <p>Ngày diễn ra: {show.startAt ? new Date(show.startAt).toLocaleString("vi-VN") : "Đang cập nhật"}</p>
                   </div>
+                  <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm">
+                    <p className="font-medium text-zinc-900">Thiết bị quét</p>
+                    <p className="mt-1 text-zinc-600">Trạng thái: {installationLabel(show.installationStatus)} · {show.scannerCount ?? 0} máy</p>
+                    {show.installationNote && <p className="mt-1 text-xs text-zinc-500">{show.installationNote}</p>}
+                  </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <MiniStat label="Đơn bán" value={String(orders.length)} />
@@ -163,6 +169,16 @@ export default function ShowsDashboardPage() {
       </section>
     </div>
   );
+}
+
+function installationLabel(status?: string) {
+  return ({
+    PENDING: "Chưa xếp lịch",
+    SCHEDULED: "Đã xếp lịch",
+    INSTALLING: "Đang lắp đặt",
+    READY: "Đã sẵn sàng",
+    BLOCKED: "Bị chặn"
+  } as Record<string, string>)[status ?? "PENDING"] ?? status ?? "Chưa cập nhật";
 }
 
 function TicketManager({ orders, loading }: { orders: DashboardTicketOrder[]; loading: boolean }) {

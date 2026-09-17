@@ -40,6 +40,17 @@ export class RedisService implements OnModuleDestroy {
     this.localCache.set(key, { value, expiresAt: ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined });
   }
 
+  async setIfAbsent(key: string, value: string, ttlSeconds: number) {
+    if (this.redis?.status === "ready") {
+      const result = await this.redis.set(key, value, "EX", ttlSeconds, "NX");
+      return result === "OK";
+    }
+    const current = await this.get(key);
+    if (current !== null) return false;
+    this.localCache.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+    return true;
+  }
+
   async del(key: string) {
     if (this.redis?.status === "ready") await this.redis.del(key);
     this.localCache.delete(key);

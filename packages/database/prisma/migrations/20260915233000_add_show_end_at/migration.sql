@@ -1,0 +1,1 @@
+ALTER TABLE "shows" ADD COLUMN "end_at" TIMESTAMP(3);

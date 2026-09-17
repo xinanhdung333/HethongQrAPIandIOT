@@ -1,7 +1,8 @@
 {
-  "/dang-nhap/page": "app/dang-nhap/page.js",
-  "/thue-api/page": "app/thue-api/page.js",
+  "/docs/page": "app/docs/page.js",
+  "/admin/page": "app/admin/page.js",
   "/thanh-toan-demo/page": "app/thanh-toan-demo/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/dashboard/api-keys/page": "app/dashboard/api-keys/page.js"
+  "/dashboard/shows/page": "app/dashboard/shows/page.js",
+  "/e/[slug]/page": "app/e/[slug]/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

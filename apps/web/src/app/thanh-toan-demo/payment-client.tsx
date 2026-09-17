@@ -5,7 +5,7 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, Copy, Download, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { API_URL, api, money } from "@/lib/api";
+import { API_URL, api } from "@/lib/api";
 
 type PaidTicket = { id: string; qrJwt: string; isUsed: boolean };
 type PaidTicketOrder = {
@@ -25,8 +25,9 @@ export function PaymentClient() {
   const search = useSearchParams();
   const orderId = search.get("order_id") || "";
   const kind = search.get("kind") || "ticket";
+  const paymentExpires = search.get("expires") || "";
+  const paymentSignature = search.get("signature") || "";
   const enableOfflineRsa = search.get("enable_offline_rsa") === "1";
-  const amount = Number(search.get("amount") || 0);
   const [status, setStatus] = useState<"waiting" | "paid" | "error">("waiting");
   const [seconds, setSeconds] = useState(5);
   const [tickets, setTickets] = useState<PaidTicket[]>([]);
@@ -39,10 +40,9 @@ export function PaymentClient() {
     const timer = window.setTimeout(async () => {
       try {
         const body = JSON.stringify({ order_id: orderId, kind });
-        const signed = await signPayosDemo(body);
         const result = await api<PaidTicketOrder | unknown>("/webhooks/payos-demo", {
           method: "POST",
-          headers: signed,
+          headers: { "X-Payment-Expires": paymentExpires, "X-Payment-Signature": paymentSignature },
           body
         });
         if (kind === "ticket" && result && typeof result === "object" && "tickets" in result) {
@@ -77,7 +77,7 @@ export function PaymentClient() {
       window.clearTimeout(timer);
       window.clearInterval(tick);
     };
-  }, [enableOfflineRsa, kind, orderId]);
+  }, [enableOfflineRsa, kind, orderId, paymentExpires, paymentSignature]);
 
   return (
     <main className="shell py-16">
@@ -86,7 +86,7 @@ export function PaymentClient() {
           {status === "waiting" ? <Loader2 className="animate-spin text-zinc-900" /> : <CheckCircle2 className={status === "paid" ? "text-emerald-600" : "text-red-600"} />}
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{status === "paid" ? "Đã thanh toán demo" : status === "error" ? "Thanh toán demo lỗi" : "PayOS DEMO MOCK"}</h1>
-        <p className="mt-3 text-zinc-600">Đơn {orderId}. Số tiền {money(amount)}.</p>
+        <p className="mt-3 text-zinc-600">Đơn {orderId}. Số tiền được xác nhận từ dữ liệu đơn hàng.</p>
         {status === "waiting" && <p className="mt-4 text-sm text-zinc-500">Tự paid sau {seconds}s</p>}
         {message && <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">{message}</p>}
       </section>
@@ -153,20 +153,6 @@ export function PaymentClient() {
       )}
     </main>
   );
-}
-
-async function signPayosDemo(body: string) {
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  const nonce = crypto.randomUUID().replace(/-/g, "");
-  const secret = process.env.NEXT_PUBLIC_PAYOS_DEMO_SECRET || "payos-demo-dev-secret";
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${timestamp}.${nonce}.${body}`));
-  const hex = Array.from(new Uint8Array(signature), byte => byte.toString(16).padStart(2, "0")).join("");
-  return {
-    "X-Payos-Timestamp": timestamp,
-    "X-Payos-Nonce": nonce,
-    "X-Payos-Signature": `sha256=${hex}`
-  };
 }
 
 function TicketCard({ ticket, index }: { ticket: PaidTicket; index: number }) {

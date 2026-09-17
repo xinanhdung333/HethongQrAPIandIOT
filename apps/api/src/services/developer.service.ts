@@ -6,6 +6,7 @@ import { ApiKeyIssuanceService } from "./api-key-issuance.service";
 import { parseCallbackUrl } from "./safe-http";
 import { PrismaService } from "./prisma.service";
 import { SystemSettingsService } from "./system-settings.service";
+import { ActivityLogService } from "./activity-log.service";
 
 const PLAN_QUOTAS = { starter: 5000, business: 30000 } as const;
 const PLAN_PRICES = { starter: 199000, business: 499000 } as const;
@@ -15,7 +16,7 @@ type Session = { sub: string; role: string };
 
 @Injectable()
 export class DeveloperService {
-  constructor(private readonly prisma: PrismaService, private readonly auth: AuthService, private readonly settings: SystemSettingsService, private readonly keys: ApiKeyIssuanceService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auth: AuthService, private readonly settings: SystemSettingsService, private readonly keys: ApiKeyIssuanceService, private readonly activity: ActivityLogService) {}
 
   async overview(userId: string) {
     const [keys, rentals, notifications] = await Promise.all([
@@ -61,12 +62,33 @@ export class DeveloperService {
         tx
       });
     });
+    await this.activity.record({ session, action: "ROTATE_API_KEY", targetType: "ApiKey", targetId: old.id, metadata: { replacementKeyId: issued.key.id } });
     return { api_key_once: issued.api_key_once, key: this.publicKey(issued.key) };
   }
 
   async revoke(session: Session, id: string) {
     const key = await this.keyForUser(session, id);
     const updated = await this.prisma.apiKey.update({ where: { id: key.id }, data: { status: "revoked", revokeAt: new Date() } });
+    await this.activity.record({ session, action: "REVOKE_API_KEY", targetType: "ApiKey", targetId: key.id });
+    return { key: this.publicKey(updated) };
+  }
+
+  async suspend(session: Session, id: string, until?: string) {
+    const key = await this.keyForUser(session, id);
+    const suspendedUntil = until ? new Date(until) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    if (Number.isNaN(suspendedUntil.getTime()) || suspendedUntil <= new Date()) {
+      throw new BadRequestException({ error: "invalid_suspend_until", message: "until must be a future ISO date" });
+    }
+
+    const updated = await this.prisma.apiKey.update({ where: { id: key.id }, data: { status: "suspended", suspendUntil: suspendedUntil } });
+    await this.activity.record({ session, action: "SUSPEND_API_KEY", targetType: "ApiKey", targetId: key.id, metadata: { until: suspendedUntil.toISOString() } });
+    return { key: this.publicKey(updated) };
+  }
+
+  async resume(session: Session, id: string) {
+    const key = await this.keyForUser(session, id);
+    const updated = await this.prisma.apiKey.update({ where: { id: key.id }, data: { status: "active", suspendUntil: null } });
+    await this.activity.record({ session, action: "RESUME_API_KEY", targetType: "ApiKey", targetId: key.id });
     return { key: this.publicKey(updated) };
   }
 
@@ -114,12 +136,14 @@ export class DeveloperService {
       where: { id: rental.id },
       data: kind === "signing" ? { signingSecret: sealSecret(secret), signingEnabled: true } : { webhookSecret: sealSecret(secret) }
     });
+    await this.activity.record({ session, action: "ROTATE_RENTAL_SECRET", targetType: "ApiRentalOrder", targetId: rental.id, metadata: { kind } });
     return { secret_once: secret, rental: this.publicRental(updated) };
   }
 
   async revealSecrets(session: Session, rentalId: string, password?: string) {
     await this.requirePassword(session.sub, password);
     const rental = await this.rentalForUser(session, rentalId);
+    await this.activity.record({ session, action: "REVEAL_RENTAL_SECRETS", targetType: "ApiRentalOrder", targetId: rental.id });
     return {
       signing_secret: rental.signingSecret ? openSecret(rental.signingSecret) : null,
       webhook_secret: rental.webhookSecret ? openSecret(rental.webhookSecret) : null
@@ -221,7 +245,7 @@ export class DeveloperService {
     return { item: updated };
   }
 
-  publicKey(key: { id: string; prefix: string; quota: number; scopes: unknown; rentalId: string | null; status: string; isTest: boolean; allowedIps: unknown; rateLimit: number; revokeAt: Date | null; createdAt: Date }) {
+  publicKey(key: { id: string; prefix: string; quota: number; scopes: unknown; rentalId: string | null; status: string; isTest: boolean; allowedIps: unknown; rateLimit: number; revokeAt: Date | null; suspendUntil?: Date | null; createdAt: Date }) {
     return {
       id: key.id,
       prefix: key.prefix,
@@ -233,6 +257,7 @@ export class DeveloperService {
       allowedIps: Array.isArray(key.allowedIps) ? key.allowedIps : [],
       rateLimit: key.rateLimit,
       revokeAt: key.revokeAt,
+      suspendUntil: key.suspendUntil ?? null,
       createdAt: key.createdAt
     };
   }
@@ -286,4 +311,3 @@ export class DeveloperService {
     return rental;
   }
 }
-

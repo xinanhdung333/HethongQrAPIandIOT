@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { AuthService, FULL_API_KEY_SCOPES } from "../security/auth.service";
 import { ApiKeyScope } from "../security/api-key.decorator";
 import { signOfflineQrToken } from "../security/gate-signing";
+import { gateRedisTenantId } from "../security/gate-tenant";
 import { enableOfflineCapable, isOfflineCapable } from "../security/tenant";
 import { ApiRentalDto, BuyProductDto, CreateExternalQrDto, LoginDto, RegisterDto, RentalDto, ShowDto, UpdateApiKeyScopesDto, UpdateProfileDto, VerifyTicketDto } from "../dto";
 import { PayosMockService } from "./payos.mock";
@@ -187,6 +188,7 @@ export class PlatformService {
         themeColor: dto.theme_color,
         location: dto.location,
         startAt: new Date(dto.start_at),
+        endAt: dto.end_at ? new Date(dto.end_at) : null,
         ticketPrice: dto.ticket_price,
         totalTickets: dto.total_tickets,
         payoutAccount: dto.payout_account as Prisma.InputJsonValue
@@ -204,6 +206,16 @@ export class PlatformService {
     const result = await this.prisma.show.updateMany({ where: { id, ownerId: userId }, data: { status: "ENDED" } });
     if (!result.count) throw new NotFoundException("Show not found");
     return this.prisma.show.findUnique({ where: { id } });
+  }
+
+  async createShowScanKey(showId: string, userId: string) {
+    const issued = await this.keys.issueKey({
+      userId,
+      showId,
+      scopes: ["ticket:verify"],
+      source: "self"
+    });
+    return { api_key_once: issued.api_key_once, show_id: showId, key_prefix: issued.key.prefix };
   }
 
   async returnRental(id: string, userId: string) {
@@ -355,7 +367,7 @@ export class PlatformService {
     const jti = crypto.randomBytes(18).toString("hex");
     const code = `SQR-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-    const qrJwt = await this.auth.signJwt({
+    const qrJwt = await this.auth.signQrJwt({
       sub: `external:${dto.resource_type}:${dto.resource_id}`,
       type: "external_qr",
       owner_id: key.userId,
@@ -425,8 +437,10 @@ export class PlatformService {
     const offlineCapable = await isOfflineCapable(this.prisma, tenantId);
     for (let i = 0; i < order.quantity; i += 1) {
       const jti = crypto.randomBytes(18).toString("hex");
-      const qrJwt = await this.auth.signJwt({ sub: `ticket:${order.id}:${i + 1}`, show_id: order.showId, buyer: order.buyerEmail, type: "ticket", jti }, 60 * 60 * 24 * 30);
-      const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000);
+      const showEndAt = order.show.endAt ?? order.show.startAt;
+      const expiresAt = new Date(showEndAt.getTime() + 24 * 60 * 60 * 1000);
+      const ttlSeconds = Math.max(1, Math.ceil((expiresAt.getTime() - Date.now()) / 1000));
+      const qrJwt = await this.auth.signQrJwt({ sub: `ticket:${order.id}:${i + 1}`, show_id: order.showId, buyer: order.buyerEmail, type: "ticket", jti }, ttlSeconds);
       const qrOfflineJwt = offlineCapable
         ? await signOfflineQrToken(this.prisma, {
           jti,
@@ -469,8 +483,9 @@ export class PlatformService {
     if (dto.ticket_code && !dto.ticket_code.includes(".")) {
       const external = await this.prisma.externalQrCode.findUnique({ where: { code: dto.ticket_code }, include: { apiKey: true } });
       if (!external) throw new UnauthorizedException("Code not found");
+      if (key?.showId) throw new ForbiddenException({ error: "show_key_external_qr", message: "Show scanner keys can only verify tickets for their show" });
       if (key && external.userId !== key.userId) throw new UnauthorizedException("API key cannot verify this QR code");
-      if (await this.redis.get(`gate:used:${external.apiKey.rentalId ?? external.userId}:${external.jti}`)) {
+      if (await this.redis.get(`gate:used:${gateRedisTenantId(external.apiKey, "external_qr")}:${external.jti}`)) {
         await this.recordExternalQrScan(external.id, external.userId, dto.gate_id, false, "QR code already used", requestMeta);
         return { valid: false, reason: "QR code already used" };
       }
@@ -484,12 +499,16 @@ export class PlatformService {
       }
       ticketToken = external.qrJwt;
     }
-    const decoded = await this.auth.verifyJwt<{ jti: string; show_id?: string; buyer?: string; type?: string; owner_id?: string; resource_type?: string; resource_id?: string; customer_ref?: string }>(ticketToken);
+    const decoded = await this.auth.verifyQrJwt<{ jti: string; show_id?: string; buyer?: string; type?: string; owner_id?: string; resource_type?: string; resource_id?: string; customer_ref?: string }>(ticketToken);
     if (decoded.type === "external_qr") {
       const external = await this.prisma.externalQrCode.findFirst({ where: { qrJwt: ticketToken }, include: { apiKey: true } });
       if (!external || external.jti !== decoded.jti) throw new UnauthorizedException("QR code not found");
+      if (key?.showId) throw new ForbiddenException({ error: "show_key_external_qr", message: "Show scanner keys can only verify tickets for their show" });
+      if (external.revokedAt || await this.prisma.revokedResource.findUnique({ where: { resourceType_jti: { resourceType: "external_qr", jti: external.jti } } })) {
+        return { valid: false, reason: "QR code revoked" };
+      }
       if (key && external.userId !== key.userId) throw new UnauthorizedException("API key cannot verify this QR code");
-      const externalGateUsedKey = `gate:used:${external.apiKey.rentalId ?? external.userId}:${decoded.jti}`;
+      const externalGateUsedKey = `gate:used:${gateRedisTenantId(external.apiKey, "external_qr")}:${decoded.jti}`;
       if (await this.redis.get(externalGateUsedKey)) {
         await this.recordExternalQrScan(external.id, external.userId, dto.gate_id, false, "QR code already used", requestMeta);
         return { valid: false, reason: "QR code already used" };
@@ -527,7 +546,16 @@ export class PlatformService {
     }
     const ticket = await this.prisma.ticket.findFirst({ where: { qrJwt: ticketToken }, include: { show: true } });
     if (!ticket || ticket.jti !== decoded.jti) throw new UnauthorizedException("Ticket not found");
-    const ticketGateUsedKey = `gate:used:${ticket.show.ownerId}:${decoded.jti}`;
+    if (key && key.showId && key.showId !== ticket.showId) {
+      throw new ForbiddenException({ error: "show_key_mismatch", message: "This scanner key is not authorized for this show" });
+    }
+    if (key && !key.showId && key.rentalId) {
+      throw new ForbiddenException({ error: "show_key_required", message: "Show tickets require the scanner key issued for that show" });
+    }
+    if (await this.prisma.revokedResource.findUnique({ where: { resourceType_jti: { resourceType: "ticket", jti: ticket.jti } } })) {
+      return { valid: false, reason: "Ticket revoked" };
+    }
+    const ticketGateUsedKey = `gate:used:${gateRedisTenantId({ userId: ticket.show.ownerId }, "ticket")}:${decoded.jti}`;
     if (await this.redis.get(ticketGateUsedKey)) return { valid: false, reason: "Ticket already used" };
     if (ticket.isUsed) return { valid: false, reason: "Ticket already used" };
     const now = new Date();
@@ -537,6 +565,20 @@ export class PlatformService {
     await this.redis.del(`jwt:jti:${decoded.jti}`);
     this.realtime.emitTicketVerified(ticket.show.ownerId, { ticket_id: ticket.id, gate_id: dto.gate_id, show_id: ticket.showId });
     return { valid: true, ticket_id: ticket.id, show_id: ticket.showId, gate_id: dto.gate_id, buyer: decoded.buyer };
+  }
+
+  async revokeTicket(id: string, apiKey?: string) {
+    if (!apiKey) throw new UnauthorizedException("Missing API key");
+    const key = await this.assertApiKey(apiKey, "qr:create");
+    const ticket = await this.prisma.ticket.findUnique({ where: { id }, include: { show: true } });
+    if (!ticket || ticket.show.ownerId !== key.userId) throw new NotFoundException("Ticket not found");
+    const revokedAt = new Date();
+    await this.prisma.revokedResource.upsert({
+      where: { resourceType_jti: { resourceType: "ticket", jti: ticket.jti } },
+      create: { resourceType: "ticket", jti: ticket.jti, revokedAt, tenantId: ticket.show.ownerId, userId: ticket.show.ownerId, isTest: false },
+      update: { revokedAt }
+    });
+    return { revoked: true, ticket_id: ticket.id, jti: ticket.jti, revoked_at: revokedAt.toISOString() };
   }
 
   async dashboard(userId: string) {
@@ -605,7 +647,7 @@ export class PlatformService {
     }
   }
 
-  private publicApiKey(key: { id: string; userId: string; prefix: string; quota: number; scopes: unknown; rentalId?: string | null; status?: string; isTest?: boolean; allowedIps?: unknown; rateLimit?: number; revokeAt?: Date | null; createdAt: Date }) {
+  private publicApiKey(key: { id: string; userId: string; prefix: string; quota: number; scopes: unknown; rentalId?: string | null; status?: string; isTest?: boolean; allowedIps?: unknown; rateLimit?: number; revokeAt?: Date | null; suspendUntil?: Date | null; createdAt: Date }) {
     return {
       id: key.id,
       userId: key.userId,
@@ -618,6 +660,7 @@ export class PlatformService {
       allowedIps: Array.isArray(key.allowedIps) ? key.allowedIps : [],
       rateLimit: key.rateLimit ?? 60,
       revokeAt: key.revokeAt ?? null,
+      suspendUntil: key.suspendUntil ?? null,
       createdAt: key.createdAt
     };
   }

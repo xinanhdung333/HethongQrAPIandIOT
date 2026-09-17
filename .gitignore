@@ -1,9 +1,12 @@
-﻿zipfile/
-*.zip
+﻿.next/
+.next-dev/
+**/.next-dev/
+**/fetch-cache/
 node_modules/
 dist/
 build/
-.next/
+zipfile/
+*.zip
 .env
 .env.local
 .DS_Store

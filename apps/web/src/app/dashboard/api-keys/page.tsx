@@ -15,7 +15,7 @@ const sections = [
 ] as const;
 type SectionId = typeof sections[number]["id"];
 
-type DeveloperKey = { id: string; prefix: string; quota: number; scopes: string[]; rentalId: string | null; status: string; isTest: boolean; allowedIps: string[]; rateLimit: number; revokeAt: string | null; createdAt?: string };
+type DeveloperKey = { id: string; prefix: string; quota: number; scopes: string[]; rentalId: string | null; status: string; isTest: boolean; allowedIps: string[]; rateLimit: number; revokeAt: string | null; suspendUntil?: string | null; createdAt?: string };
 type DeveloperRental = { id: string; appName: string; callbackUrl: string | null; plan: string; quota: number; status: string; signingEnabled: boolean; billingMode: string; apiKeyPrefix: string | null; createdAt?: string };
 type DeveloperOverview = { keys: DeveloperKey[]; rentals: DeveloperRental[]; notifications: Array<{ id: string; kind: string; payload: Record<string, unknown>; createdAt: string }> };
 type Analytics = { totals: { requests: number; qr_created: number; verify_success: number; verify_failed: number; billed_amount: number }; daily: Array<{ date: string; requests: number; qr_created: number; verify_success: number; verify_failed: number }> };
@@ -148,6 +148,17 @@ export default function ApiKeysPage() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Khong revoke duoc API key.";
       setMessage(detail === "Login required" ? "Phien dang nhap het han. Hay dang nhap lai roi thu revoke key." : detail);
+    }
+
+  }
+
+  async function resumeKey(key: DeveloperKey) {
+    try {
+      await api(`/api/v1/developer/keys/${key.id}/resume`, { method: "POST" });
+      setMessage(`Da mo lai key ${key.prefix}...`);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Khong mo lai duoc API key.");
     }
   }
 
@@ -301,6 +312,7 @@ export default function ApiKeysPage() {
           onSaveIps={(key, next) => void saveIps(key, next)}
           onRotate={(key) => void rotateKey(key)}
           onRevoke={(key) => void revokeKey(key)}
+          onResume={(key) => void resumeKey(key)}
         />
       )}
 
@@ -371,7 +383,8 @@ function ApiKeyTable({
   onIpDraftChange,
   onSaveIps,
   onRotate,
-  onRevoke
+  onRevoke,
+  onResume
 }: {
   keys: DeveloperKey[];
   rentals: DeveloperRental[];
@@ -391,6 +404,7 @@ function ApiKeyTable({
   onSaveIps: (key: DeveloperKey, next: string[]) => void;
   onRotate: (key: DeveloperKey) => void;
   onRevoke: (key: DeveloperKey) => void;
+  onResume: (key: DeveloperKey) => void;
 }) {
   return (
     <section id="keys" className="panel mt-6 overflow-hidden">
@@ -448,12 +462,12 @@ function ApiKeyTable({
                   <td className="px-5 py-4"><IpWhitelistEditor value={ipDrafts[key.id] ?? key.allowedIps} onChange={(next) => onIpDraftChange(key.id, next)} onSave={(next) => onSaveIps(key, next)} /></td>
                   <td className="px-5 py-4">{key.rateLimit}/phut</td>
                   <td className="px-5 py-4">
-                    <span className={key.status === "revoked" ? "font-medium text-red-700" : key.status === "deprecated" ? "font-medium text-amber-700" : "font-medium text-emerald-700"}>
+                    <span className={key.status === "revoked" ? "font-medium text-red-700" : key.status === "deprecated" || key.status === "suspended" ? "font-medium text-amber-700" : "font-medium text-emerald-700"}>
                       {key.status}
                     </span>
                     <p className="mt-1 text-xs text-zinc-600">{keyLifecycleNote(key)}</p>
                   </td>
-                  <td className="px-5 py-4">{key.status === "revoked" ? <span className="text-xs text-zinc-500">Da revoke</span> : <div className="flex flex-wrap gap-2"><button className="btn btn-secondary text-sm" title="Quên key? Cấp lại ngay, giữ nguyên quyền hạn hiện tại." onClick={() => onRotate(key)}><RotateCcw size={16} /> Cấp lại key</button><button className="btn btn-secondary text-sm" onClick={() => onRevoke(key)}><Trash2 size={16} /> Revoke</button></div>}</td>
+                  <td className="px-5 py-4">{key.status === "revoked" ? <span className="text-xs text-zinc-500">Da revoke</span> : <div className="flex flex-wrap gap-2">{key.status === "suspended" && <button className="btn btn-secondary text-sm" onClick={() => onResume(key)}>Mở khoá</button>}<button className="btn btn-secondary text-sm" title="Quên key? Cấp lại ngay, giữ nguyên quyền hạn hiện tại." onClick={() => onRotate(key)}><RotateCcw size={16} /> Cấp lại key</button><button className="btn btn-secondary text-sm" onClick={() => onRevoke(key)}><Trash2 size={16} /> Revoke</button></div>}</td>
                 </tr>
               );
             })}
@@ -689,6 +703,7 @@ function RentalTable({
 
 function keyLifecycleNote(key: DeveloperKey) {
   if (key.status === "revoked") return "Key đã revoke, không còn dùng được.";
+  if (key.status === "suspended") return key.suspendUntil ? `Key đang tạm khoá đến ${new Date(key.suspendUntil).toLocaleString("vi-VN")}.` : "Key đang tạm khoá.";
   if (key.status === "deprecated") {
     return key.revokeAt
       ? `Key đã rotate; sẽ revoke ngày ${new Date(key.revokeAt).toLocaleDateString("vi-VN")}.`

@@ -44,6 +44,7 @@ export class ShowDto {
   @IsString() theme_color!: string;
   @IsString() location!: string;
   @IsString() start_at!: string;
+  @IsOptional() @IsString() end_at?: string;
   @IsInt() @Min(1000) ticket_price!: number;
   @IsInt() @Min(1) total_tickets!: number;
   @IsOptional() @IsString() description?: string;

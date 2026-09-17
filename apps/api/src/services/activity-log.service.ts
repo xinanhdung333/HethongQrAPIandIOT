@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { Request } from "express";
 import { PrismaService } from "./prisma.service";
 
-type UserSession = { sub: string; email: string; role: string; jti: string };
+type UserSession = { sub: string; email?: string; role?: string; jti?: string };
 
 type ActivityInput = {
   session: UserSession;
@@ -46,4 +46,3 @@ export class ActivityLogService {
     return forwarded || req?.ip;
   }
 }
-

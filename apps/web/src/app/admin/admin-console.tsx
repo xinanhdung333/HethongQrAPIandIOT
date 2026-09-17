@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Database, ExternalLink, FileText, History, Home, KeyRound, Loader2, LogOut, Package, Radio, Save, ShieldCheck, ShoppingBag, Ticket, Truck, Users } from "lucide-react";
+import { BarChart3, Copy, Database, ExternalLink, FileText, History, Home, KeyRound, Loader2, LogOut, Package, Radio, Save, ShieldCheck, ShoppingBag, Ticket, Truck, Users } from "lucide-react";
 import { API_URL, money, StaticPage } from "@/lib/api";
 
 type AdminData = {
@@ -10,7 +10,7 @@ type AdminData = {
   users: Array<{ id: string; email: string; role: string; createdAt: string }>;
   products: Array<{ id: string; slug: string; name: string; type: string; priceSell: number; priceRentMonth: number; depositFee: number; stock: number; images?: string[] }>;
   orders: Array<{ id: string; type: string; status: string; quantity: number; total: number; user?: { email: string }; product?: { name: string } }>;
-  shows: Array<{ id: string; slug: string; name: string; status: string; soldTickets: number; totalTickets: number; ticketPrice: number; owner?: { email: string } }>;
+  shows: Array<{ id: string; slug: string; name: string; status: string; soldTickets: number; totalTickets: number; ticketPrice: number; installationStatus: string; scannerCount: number; installationNote?: string | null; apiKeys?: Array<{ prefix: string; status: string }>; owner?: { email: string } }>;
   tickets: Array<{ id: string; status: string; quantity: number; totalAmount: number; payoutAmount: number; show: { name: string }; tickets: Array<{ id: string; isUsed: boolean }> }>;
   apiKeys: Array<{ id: string; prefix: string; quota: number; userId: string; rentalId: string | null; scopes: string[]; rateLimit: number; createdAt: string; user?: { email: string }; rental?: { appName: string; plan: string } | null }>;
   staticPages: StaticPage[];
@@ -57,6 +57,7 @@ export function AdminConsole() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [onceKey, setOnceKey] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("smartqr_token") ?? "";
@@ -67,14 +68,32 @@ export function AdminConsole() {
   const adminUser = useMemo(() => data.users.find((user) => user.role === "ADMIN"), [data.users]);
 
   async function request<T>(path: string, init?: RequestInit, overrideToken = token): Promise<T> {
+    const method = init?.method?.toUpperCase() ?? "GET";
+    let csrfToken: string | undefined;
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      const csrfResponse = await fetch(`${API_URL}/api/csrf-token`, {
+        credentials: "include",
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!csrfResponse.ok) throw new Error("Không lấy được CSRF token.");
+      csrfToken = (await csrfResponse.json() as { token?: string }).token;
+      if (!csrfToken) throw new Error("CSRF token không hợp lệ.");
+    }
     const res = await fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${overrideToken}`,
+        ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        ...(overrideToken ? { Authorization: `Bearer ${overrideToken}` } : {}),
         ...(init?.headers ?? {})
-      }
+      },
+      credentials: "include",
+      signal: init?.signal ?? AbortSignal.timeout(10000)
     });
+    if (res.status === 204) return undefined as T;
+    if (res.status === 401) {
+      throw new Error("ADMIN_SESSION_EXPIRED");
+    }
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
@@ -96,6 +115,11 @@ export function AdminConsole() {
       ]);
       setData({ summary, users, products, orders, shows, tickets, apiKeys, staticPages, activityLogs });
     } catch (error) {
+      if (error instanceof Error && error.message === "ADMIN_SESSION_EXPIRED") {
+        window.localStorage.removeItem("smartqr_token");
+        window.location.href = "/dang-nhap?next=/admin";
+        return;
+      }
       setMessage(error instanceof Error ? error.message : "Không tải được admin");
     } finally {
       setLoading(false);
@@ -147,6 +171,54 @@ export function AdminConsole() {
     await request(`/admin/shows/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
     setMessage("Đã cập nhật trạng thái show");
     await load();
+  }
+
+  async function updateShowInstallation(id: string, formData: FormData) {
+    await request(`/admin/shows/${id}/installation`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: String(formData.get("installationStatus")),
+        scanner_count: Number(formData.get("scannerCount")),
+        note: String(formData.get("installationNote") ?? "")
+      })
+    });
+    setMessage("Đã cập nhật trạng thái lắp đặt");
+    await load();
+  }
+
+  async function createShowScanKey(showId: string) {
+    setMessage("");
+    try {
+      const created = await request<{ api_key_once: string }>('/admin/shows/' + showId + '/scan-key', { method: "POST", body: "{}" });
+      setOnceKey(created.api_key_once);
+      setMessage("Đã cấp key máy quét. Raw key chỉ hiển thị một lần.");
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Không thể cấp key máy quét.");
+    }
+  }
+
+  async function rotateShowScanKey(showId: string) {
+    setMessage("");
+    try {
+      const created = await request<{ api_key_once: string }>(`/admin/shows/${showId}/scan-key/rotate`, { method: "POST", body: "{}" });
+      setOnceKey(created.api_key_once);
+      setMessage("Đã thu hồi key cũ và cấp key mới. Raw key chỉ hiển thị một lần.");
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Không thể cấp key mới.");
+    }
+  }
+
+  async function copyOnceKey() {
+    if (!onceKey) return;
+    try {
+      await navigator.clipboard.writeText(onceKey);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setMessage("Không thể tự động copy. Hãy bôi đen và copy key thủ công.");
+    }
   }
 
   async function createApiKey(formData: FormData) {
@@ -264,6 +336,21 @@ export function AdminConsole() {
           )}
 
           {message && <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700">{message}</p>}
+          {onceKey && (
+            <section className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-amber-950">Raw API key mới</p>
+                  <p className="mt-1 text-xs text-amber-800">Hãy copy và lưu ngay. Key đầy đủ chỉ hiển thị một lần.</p>
+                </div>
+                <button type="button" className="btn btn-primary text-sm" onClick={() => void copyOnceKey()}>
+                  <Copy size={16} />
+                  {copied ? "Đã copy" : "Copy key"}
+                </button>
+              </div>
+              <code className="mt-3 block select-all break-all rounded-lg border border-amber-200 bg-white p-3 text-sm text-zinc-900">{onceKey}</code>
+            </section>
+          )}
 
           {tab === "activityLogs" && (
             <SimpleTable
@@ -284,13 +371,35 @@ export function AdminConsole() {
           {tab === "shows" && (
             <section className="grid gap-3">
               {data.shows.map((show) => (
-                <article key={show.id} className="panel flex flex-wrap items-center justify-between gap-3 p-4">
-                  <div><b>{show.name}</b><p className="mt-1 text-sm text-zinc-600">{show.owner?.email} · {show.soldTickets}/{show.totalTickets} vé · {money(show.ticketPrice)}</p></div>
-                  <select className="field w-36" value={show.status} onChange={(event) => updateShowStatus(show.id, event.target.value)}>
-                    <option value="DRAFT">DRAFT</option>
-                    <option value="ACTIVE">ACTIVE</option>
-                    <option value="ENDED">ENDED</option>
-                  </select>
+                <article key={show.id} className="panel grid gap-4 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><b>{show.name}</b><p className="mt-1 text-sm text-zinc-600">{show.owner?.email} · {show.soldTickets}/{show.totalTickets} vé · {money(show.ticketPrice)}</p></div>
+                    <select className="field w-36" value={show.status} onChange={(event) => updateShowStatus(show.id, event.target.value)}>
+                      <option value="DRAFT">DRAFT</option>
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="ENDED">ENDED</option>
+                    </select>
+                  </div>
+                  <form action={(formData) => updateShowInstallation(show.id, formData)} className="grid gap-3 md:grid-cols-[180px_120px_1fr_auto]">
+                    <select name="installationStatus" className="field" defaultValue={show.installationStatus}>
+                      <option value="PENDING">Chưa xếp lịch</option>
+                      <option value="SCHEDULED">Đã xếp lịch</option>
+                      <option value="INSTALLING">Đang lắp đặt</option>
+                      <option value="READY">Đã sẵn sàng</option>
+                      <option value="BLOCKED">Bị chặn</option>
+                    </select>
+                    <input name="scannerCount" className="field" type="number" min="0" defaultValue={show.scannerCount} placeholder="Số máy" />
+                    <input name="installationNote" className="field" defaultValue={show.installationNote ?? ""} placeholder="Ghi chú lắp đặt" />
+                    <button className="btn btn-secondary text-sm">Lưu lắp đặt</button>
+                  </form>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600">
+                    <span>Key máy quét: {show.apiKeys?.find((key) => ["active", "deprecated"].includes(key.status))?.prefix ?? "chưa cấp"}</span>
+                    {show.apiKeys?.some((key) => ["active", "deprecated"].includes(key.status)) ? (
+                      <button className="btn btn-secondary text-xs" onClick={() => void rotateShowScanKey(show.id)}>Cấp key mới</button>
+                    ) : (
+                      <button className="btn btn-primary text-xs" onClick={() => void createShowScanKey(show.id)}>Cấp key cho máy quét</button>
+                    )}
+                  </div>
                 </article>
               ))}
             </section>
@@ -305,7 +414,6 @@ export function AdminConsole() {
                 </select>
                 <input name="rentalId" className="field" placeholder="API rental ID dang ACTIVE" required />
                 <button className="btn btn-primary text-sm"><KeyRound size={16} />Tạo key</button>
-                {onceKey && <p className="break-all rounded-lg bg-zinc-50 p-3 text-xs font-mono">{onceKey}</p>}
               </form>
               <SimpleTable rows={data.apiKeys.map((key) => [key.prefix, key.user?.email ?? key.userId, key.rental?.appName ?? key.rentalId ?? "-", `${key.quota} / ${key.rateLimit}rpm`, new Date(key.createdAt).toLocaleString("vi-VN")])} />
             </section>

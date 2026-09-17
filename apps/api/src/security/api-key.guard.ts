@@ -23,10 +23,10 @@ export class ApiKeyGuard implements CanActivate {
     if (!required) return true;
 
     const request = context.switchToHttp().getRequest();
-    const demoScan = request.headers["x-demo-scan"] === "true" && process.env.NODE_ENV !== "production" && !request.headers["x-api-key"] && !request.query?.api_key && request.originalUrl.split("?")[0] === "/api/v1/tickets/verify";
+    const demoScan = request.headers["x-demo-scan"] === "true" && process.env.NODE_ENV !== "production" && !request.headers["x-api-key"] && request.originalUrl.split("?")[0] === "/api/v1/tickets/verify";
     if (demoScan) return true;
 
-    const raw = request.headers["x-api-key"] ?? request.query?.api_key;
+    const raw = request.headers["x-api-key"];
     if (!raw || Array.isArray(raw) || typeof raw !== "string") throw new UnauthorizedException("Missing API key");
     const key = await this.auth.getApiKey(raw);
     if (!key) throw new UnauthorizedException("Invalid API key");

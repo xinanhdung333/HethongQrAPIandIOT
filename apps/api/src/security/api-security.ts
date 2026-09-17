@@ -62,7 +62,10 @@ export function verifyRequestSignature(secret: string, timestamp: unknown, signa
   }
 }
 
-export function assertActiveKey(key: { status: string; revokeAt: Date | null; rental?: { status: string } | null }) {
+export function assertActiveKey(key: { status: string; revokeAt: Date | null; suspendUntil?: Date | null; rental?: { status: string } | null }) {
+  if (key.status === "suspended" && (!key.suspendUntil || key.suspendUntil.getTime() > Date.now())) {
+    throw new UnauthorizedException({ error: "key_suspended", message: "API key is temporarily suspended" });
+  }
   if (key.status === "revoked" || (key.revokeAt && key.revokeAt.getTime() <= Date.now())) {
     throw new UnauthorizedException({ error: "key_revoked", message: "API key has been revoked" });
   }

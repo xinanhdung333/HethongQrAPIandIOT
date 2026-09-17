@@ -83,7 +83,7 @@ export class AdminController {
   async shows(@Headers("authorization") authorization?: string) {
     await this.assertAdmin(authorization);
     return this.prisma.show.findMany({
-      include: { owner: { select: { id: true, email: true } } },
+      include: { owner: { select: { id: true, email: true } }, apiKeys: { select: { prefix: true, status: true } } },
       orderBy: { createdAt: "desc" },
       take: 100
     });
@@ -94,6 +94,47 @@ export class AdminController {
     await this.assertAdmin(authorization);
     if (!Object.values(ShowStatus).includes(dto.status as ShowStatus)) throw new NotFoundException("Trạng thái show không hợp lệ");
     return this.prisma.show.update({ where: { id }, data: { status: dto.status as ShowStatus } });
+  }
+
+  @Post("shows/:id/scan-key")
+  async createShowScanKey(@Param("id") id: string, @Headers("authorization") authorization?: string) {
+    await this.assertAdmin(authorization);
+    const show = await this.prisma.show.findUnique({ where: { id } });
+    if (!show) throw new NotFoundException("Không tìm thấy show");
+    const issued = await this.keys.issueKey({ userId: show.ownerId, showId: show.id, scopes: ["ticket:verify"], source: "admin" });
+    return { api_key_once: issued.api_key_once, show_id: show.id, key_prefix: issued.key.prefix };
+  }
+
+  @Post("shows/:id/scan-key/rotate")
+  async rotateShowScanKey(@Param("id") id: string, @Headers("authorization") authorization?: string) {
+    await this.assertAdmin(authorization);
+    const show = await this.prisma.show.findUnique({ where: { id } });
+    if (!show) throw new NotFoundException("Không tìm thấy show");
+
+    await this.prisma.apiKey.updateMany({
+      where: { showId: show.id, status: { in: ["active", "deprecated"] } },
+      data: { status: "revoked", revokeAt: new Date() }
+    });
+    const issued = await this.keys.issueKey({ userId: show.ownerId, showId: show.id, scopes: ["ticket:verify"], source: "admin" });
+    return { api_key_once: issued.api_key_once, show_id: show.id, key_prefix: issued.key.prefix };
+  }
+
+  @Patch("shows/:id/installation")
+  async updateShowInstallation(@Param("id") id: string, @Body() body: { status?: string; scanner_count?: number; note?: string }, @Headers("authorization") authorization?: string) {
+    await this.assertAdmin(authorization);
+    const allowed = ["PENDING", "SCHEDULED", "INSTALLING", "READY", "BLOCKED"];
+    if (body.status && !allowed.includes(body.status)) throw new NotFoundException("Trạng thái lắp đặt không hợp lệ");
+    if (body.scanner_count !== undefined && (!Number.isInteger(body.scanner_count) || body.scanner_count < 0)) {
+      throw new NotFoundException("Số máy quét không hợp lệ");
+    }
+    return this.prisma.show.update({
+      where: { id },
+      data: {
+        ...(body.status ? { installationStatus: body.status } : {}),
+        ...(body.scanner_count !== undefined ? { scannerCount: body.scanner_count } : {}),
+        ...(body.note !== undefined ? { installationNote: body.note.trim() || null } : {})
+      }
+    });
   }
 
   @Get("tickets")

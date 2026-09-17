@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { importSPKI, jwtVerify, type KeyLike } from "jose";
 import { ImagePlus, ScanLine, Wifi, WifiOff } from "lucide-react";
-import { API_URL, api } from "@/lib/api";
+import { API_URL, NetworkError, api } from "@/lib/api";
+import { readPrunedUsedMap } from "@/lib/offline-scan";
 
 type OfflinePayload = { jti?: string; tenant_id?: string; type?: string; resource_type?: string; resource_id?: string };
 type UsageEvent = { jti: string; gate_id: string; used_at: string; resource_type: "external_qr" | "ticket" };
@@ -60,7 +61,7 @@ export function ScannerClient() {
       }
       setResult(await verifyOffline(qr.trim()));
     } catch (error) {
-      if (!offlineMode && navigator.onLine) {
+      if (error instanceof NetworkError && !offlineMode && navigator.onLine) {
         try {
           setResult(await verifyOffline(qr.trim()));
           return;
@@ -102,7 +103,7 @@ export function ScannerClient() {
     if (payload.type !== "ticket_offline") return { valid: false, offline: true, reason: "Token khong phai ve show (ticket_offline)" };
     if (!payload.jti) return { valid: false, offline: true, reason: "QR thieu jti" };
 
-    const used: Record<string, string> = JSON.parse(window.localStorage.getItem(STORAGE_SHOW_USED) ?? "{}");
+    const used = readPrunedUsedMap(STORAGE_SHOW_USED);
     if (used[payload.jti]) return { valid: false, offline: true, reason: `Ve da dung luc ${used[payload.jti]} tai may nay` };
 
     const usedAt = new Date().toISOString();

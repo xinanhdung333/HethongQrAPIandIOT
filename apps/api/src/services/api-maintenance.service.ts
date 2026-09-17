@@ -24,16 +24,17 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   async tick(now = new Date()) {
-    const [webhooks, notifications, expired, quota, rotation, samples, cleanup] = await Promise.all([
+    const [webhooks, notifications, expired, quota, anomalies, rotation, samples, cleanup] = await Promise.all([
       this.webhooks.processDue(now),
       this.notifications.processDue(now),
       this.enqueueExpiredQr(now),
       this.enqueueQuotaWarnings(now),
+      this.enqueueQuotaBurstWarnings(now),
       this.maintainRotatedKeys(now),
       this.sampleStatus(now),
       this.cleanupOldRows(now)
     ]);
-    return { webhooks, notifications, expired, quota, rotation, samples, cleanup };
+    return { webhooks, notifications, expired, quota, anomalies, rotation, samples, cleanup };
   }
 
   private async enqueueExpiredQr(now: Date) {
@@ -90,8 +91,42 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
     return count;
   }
 
+  private async enqueueQuotaBurstWarnings(now: Date) {
+    const windowMinutes = Math.max(1, Number(process.env.API_QUOTA_BURST_WINDOW_MINUTES ?? 15));
+    const thresholdPercent = Math.max(1, Number(process.env.API_QUOTA_BURST_PERCENT ?? 10));
+    const since = new Date(now.getTime() - windowMinutes * 60 * 1000);
+    const rentals = await this.prisma.apiRentalOrder.findMany({ where: { status: RentalStatus.ACTIVE } });
+    let count = 0;
+    for (const rental of rentals) {
+      if (rental.quota <= 0) continue;
+      const burst = await this.prisma.apiUsageEvent.aggregate({
+        where: { rentalId: rental.id, action: "qr.create", success: true, isTest: false, createdAt: { gte: since } },
+        _sum: { units: true }
+      });
+      const used = burst._sum.units ?? 0;
+      if (used < rental.quota * thresholdPercent / 100) continue;
+      const hour = now.toISOString().slice(0, 13);
+      await this.prisma.apiNotification.upsert({
+        where: { dedupeKey: `quota-burst:${rental.id}:${hour}` },
+        update: {},
+        create: {
+          userId: rental.userId,
+          rentalId: rental.id,
+          dedupeKey: `quota-burst:${rental.id}:${hour}`,
+          kind: "quota_burst_warning",
+          payload: { window_minutes: windowMinutes, threshold_percent: thresholdPercent, used, quota: rental.quota, app_name: rental.appName }
+        }
+      });
+      count++;
+    }
+    return count;
+  }
+
   private async maintainRotatedKeys(now: Date) {
-    const revoked = await this.prisma.apiKey.updateMany({ where: { status: "deprecated", revokeAt: { lte: now } }, data: { status: "revoked" } });
+    const [revoked, resumed] = await Promise.all([
+      this.prisma.apiKey.updateMany({ where: { status: "deprecated", revokeAt: { lte: now } }, data: { status: "revoked" } }),
+      this.prisma.apiKey.updateMany({ where: { status: "suspended", suspendUntil: { lte: now } }, data: { status: "active", suspendUntil: null } })
+    ]);
     const soon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const warningKeys = await this.prisma.apiKey.findMany({ where: { status: "deprecated", revokeAt: { lte: soon }, rotationWarnedAt: null } });
     for (const key of warningKeys) {
@@ -110,7 +145,7 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
         });
       });
     }
-    return revoked.count + warningKeys.length;
+    return revoked.count + resumed.count + warningKeys.length;
   }
 
   private async cleanupOldRows(now: Date) {
@@ -136,4 +171,3 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
     return 1;
   }
 }
-

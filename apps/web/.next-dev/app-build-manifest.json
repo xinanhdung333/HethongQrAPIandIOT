@@ -1,9 +1,9 @@
 {
   "pages": {
-    "/page": [
+    "/e/[slug]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/e/[slug]/page.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",
@@ -11,10 +11,10 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/dang-nhap/page": [
+    "/thanh-toan-demo/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dang-nhap/page.js"
+      "static/chunks/app/thanh-toan-demo/page.js"
     ],
     "/dashboard/page": [
       "static/chunks/webpack.js",
@@ -26,20 +26,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/layout.js"
     ],
-    "/thue-api/page": [
+    "/dang-nhap/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/thue-api/page.js"
+      "static/chunks/app/dang-nhap/page.js"
     ],
-    "/thanh-toan-demo/page": [
+    "/dashboard/shows/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/thanh-toan-demo/page.js"
+      "static/chunks/app/dashboard/shows/page.js"
     ],
-    "/dashboard/api-keys/page": [
+    "/docs/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/api-keys/page.js"
+      "static/chunks/app/docs/page.js"
+    ],
+    "/admin/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin/page.js"
     ]
   }
 }

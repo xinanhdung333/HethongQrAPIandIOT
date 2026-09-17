@@ -8,7 +8,8 @@ import { SystemSettingsService } from "./system-settings.service";
 type IssueSource = "self" | "admin" | "developer" | "hardware_rental";
 type IssueInput = {
   userId: string;
-  rentalId: string;
+  rentalId?: string;
+  showId?: string;
   scopes: ApiKeyScope[];
   quota?: number;
   mode?: "live" | "test";
@@ -22,8 +23,29 @@ export class ApiKeyIssuanceService {
   constructor(private readonly prisma: PrismaService, private readonly auth: AuthService, private readonly settings: SystemSettingsService) {}
 
   async issueKey(input: IssueInput) {
-    if (!input.rentalId) throw new BadRequestException({ error: "missing_rental", message: "API key must be attached to an API rental" });
+    if (!input.rentalId && !input.showId) throw new BadRequestException({ error: "missing_scope_owner", message: "API key must be attached to an API rental or show" });
     const tx = input.tx ?? this.prisma;
+    if (input.showId) {
+      const show = await tx.show.findFirst({ where: { id: input.showId, ownerId: input.userId } });
+      if (!show) throw new NotFoundException({ error: "show_not_found", message: "Show not found for this user" });
+      const existing = await tx.apiKey.findFirst({ where: { showId: show.id, status: { in: ["active", "deprecated"] } } });
+      if (existing) throw new ForbiddenException({ error: "show_scan_key_exists", message: "This show already has an active scanner key" });
+      const raw = this.auth.createApiKey("live");
+      const key = await tx.apiKey.create({
+        data: {
+          userId: input.userId,
+          showId: show.id,
+          keyHash: raw.hash,
+          prefix: raw.prefix,
+          quota: input.quota ?? 100000,
+          scopes: Array.from(new Set(input.scopes)),
+          rateLimit: 600,
+          isTest: false,
+          status: "active"
+        }
+      });
+      return { api_key_once: raw.raw, key };
+    }
     const rental = await tx.apiRentalOrder.findFirst({ where: { id: input.rentalId, userId: input.userId } });
     if (!rental) throw new NotFoundException({ error: "api_rental_not_found", message: "API rental not found for this user" });
     if (rental.status !== RentalStatus.ACTIVE) throw new ForbiddenException({ error: "rental_inactive", message: "API rental is not active" });

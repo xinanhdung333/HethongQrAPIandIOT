@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Headers, Param, Post, Req } from "@nestjs/common";
 import { Request } from "express";
 import { ApiVerifyQrDto } from "../api-qr.dto";
 import { PlatformService } from "../services/platform.service";
@@ -11,10 +11,16 @@ export class TicketsController {
 
   @Post("verify")
   @RequireApiKey("ticket:verify")
-  async verify(@Body() dto: ApiVerifyQrDto, @Headers("x-api-key") apiKey: string | undefined, @Headers("idempotency-key") idempotencyKey: string | undefined, @Query("api_key") queryApiKey: string | undefined, @Req() req: Request) {
+  async verify(@Body() dto: ApiVerifyQrDto, @Headers("x-api-key") apiKey: string | undefined, @Headers("idempotency-key") idempotencyKey: string | undefined, @Req() req: Request) {
     const userAgent = req.headers["user-agent"];
-    const result = await this.qrPlatform.verifyExternal(dto, apiKey ?? queryApiKey, { ip: req.ip, userAgent: Array.isArray(userAgent) ? userAgent.join(", ") : userAgent }, idempotencyKey, true);
+    const result = await this.qrPlatform.verifyExternal(dto, apiKey, { ip: req.ip, userAgent: Array.isArray(userAgent) ? userAgent.join(", ") : userAgent }, idempotencyKey, true);
     if (result) return result;
-    return this.platform.verifyTicket(dto, apiKey ?? queryApiKey, { ip: req.ip, userAgent: Array.isArray(userAgent) ? userAgent.join(", ") : userAgent });
+    return this.platform.verifyTicket(dto, apiKey, { ip: req.ip, userAgent: Array.isArray(userAgent) ? userAgent.join(", ") : userAgent });
+  }
+
+  @Post(":id/revoke")
+  @RequireApiKey("qr:create")
+  revoke(@Param("id") id: string, @Headers("x-api-key") apiKey: string | undefined) {
+    return this.platform.revokeTicket(id, apiKey);
   }
 }

@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { ApiKey, ApiRentalOrder, Prisma } from "@prisma/client";
 import { getGateKeyPairForTenant, getLegacyGatePublicKey } from "../security/gate-signing";
+import { gateRedisTenantId, GateUsageResourceType } from "../security/gate-tenant";
 import { isOfflineCapable, resolveTenantId } from "../security/tenant";
 import { PrismaService } from "./prisma.service";
 import { RedisService } from "./redis.service";
@@ -25,19 +26,19 @@ export class GateSyncService {
   }
 
   async revokedDelta(key: IntegrationKey, since: Date) {
-    // TODO: ticket revocation not implemented.
-    const rows = await this.prisma.externalQrCode.findMany({
+    const tenantId = resolveTenantId(key);
+    const rows = await this.prisma.revokedResource.findMany({
       where: {
-        ...this.tenantQrWhere(key),
+        tenantId,
         isTest: key.isTest,
-        revokedAt: { not: null, gt: since }
+        revokedAt: { gt: since }
       },
-      select: { jti: true, revokedAt: true },
+      select: { resourceType: true, jti: true, revokedAt: true },
       orderBy: { revokedAt: "asc" },
       take: 5000
     });
     return {
-      revoked: rows.map((row) => ({ jti: row.jti, revoked_at: row.revokedAt!.toISOString() })),
+      revoked: rows.map((row) => ({ resource_type: row.resourceType, jti: row.jti, revoked_at: row.revokedAt.toISOString() })),
       server_time: new Date().toISOString()
     };
   }
@@ -47,7 +48,7 @@ export class GateSyncService {
     const conflicts: { jti: string; first_gate: string; reported_gate: string }[] = [];
 
     for (const event of events) {
-      const tenantId = resolveTenantId(key);
+      const tenantId = this.redisTenantId(key, event.resource_type);
       const redisKey = `gate:used:${tenantId}:${event.jti}`;
       const claim = `${event.gate_id}|${event.used_at}`;
       const existing = await this.redis.get(redisKey);
@@ -93,8 +94,11 @@ export class GateSyncService {
   }
 
   async listConflicts(key: IntegrationKey) {
-    const pattern = `gate:conflict:${resolveTenantId(key)}:*`;
-    const redisKeys = await this.redis.keys(pattern);
+    const tenantIds = Array.from(new Set([
+      this.redisTenantId(key, "external_qr"),
+      this.redisTenantId(key, "ticket")
+    ]));
+    const redisKeys = (await Promise.all(tenantIds.map((tenantId) => this.redis.keys(`gate:conflict:${tenantId}:*`)))).flat();
     const result: { redis_key: string; reported_gate: string; used_at: string }[] = [];
     for (const redisKey of redisKeys) {
       const value = await this.redis.get(redisKey);
@@ -115,5 +119,9 @@ export class GateSyncService {
     // Show tickets are owned by the show tenant, not by an API rental. API-rental
     // keys therefore fall back to their userId for ticket usage sync.
     return { show: { ownerId: key.userId } };
+  }
+
+  private redisTenantId(key: IntegrationKey, resourceType: GateUsageResourceType) {
+    return gateRedisTenantId(key, resourceType);
   }
 }
