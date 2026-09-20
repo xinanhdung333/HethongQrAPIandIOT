@@ -7,12 +7,22 @@ import { parseCallbackUrl } from "./safe-http";
 import { PrismaService } from "./prisma.service";
 import { SystemSettingsService } from "./system-settings.service";
 import { ActivityLogService } from "./activity-log.service";
+import { Request } from "express";
 
 const PLAN_QUOTAS = { starter: 5000, business: 30000 } as const;
 const PLAN_PRICES = { starter: 199000, business: 499000 } as const;
 const PLAN_RATE_LIMITS = { starter: 60, business: 600 } as const;
+const DEFAULT_SHOW_KEY_GRACE_MINUTES = 60;
 
 type Session = { sub: string; role: string };
+
+function safeSecurityMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(["showId", "replacementKeyId", "graceMinutes", "kind", "until"].flatMap((key) =>
+    key in record ? [[key, record[key]]] : []
+  ));
+}
 
 @Injectable()
 export class DeveloperService {
@@ -44,16 +54,20 @@ export class DeveloperService {
     return { key: this.publicKey(updated) };
   }
 
-  async rotate(session: Session, id: string, password?: string) {
+  async rotate(session: Session, id: string, password?: string, graceMinutes = DEFAULT_SHOW_KEY_GRACE_MINUTES, req?: Request) {
     await this.requirePassword(session.sub, password);
     const old = await this.keyForUser(session, id);
-    if (!old.rentalId) throw new BadRequestException({ error: "missing_rental", message: "Legacy user-level keys cannot be rotated; create a rental-attached key instead" });
-    const revokeAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    if (!old.rentalId && !old.showId) throw new BadRequestException({ error: "missing_scope_owner", message: "This key is not attached to a rental or show" });
+    if (!Number.isInteger(graceMinutes) || graceMinutes < 1 || graceMinutes > 1440) {
+      throw new BadRequestException({ error: "invalid_grace_minutes", message: "grace_minutes must be an integer between 1 and 1440" });
+    }
+    const isShowKey = Boolean(old.showId);
+    const revokeAt = new Date(Date.now() + (isShowKey ? graceMinutes * 60 * 1000 : 7 * 24 * 60 * 60 * 1000));
     const issued = await this.prisma.$transaction(async tx => {
       await tx.apiKey.update({ where: { id: old.id }, data: { status: "deprecated", revokeAt } });
       return this.keys.issueKey({
         userId: old.userId,
-        rentalId: old.rentalId!,
+        ...(old.rentalId ? { rentalId: old.rentalId } : { showId: old.showId! }),
         scopes: (Array.isArray(old.scopes) ? old.scopes : FULL_API_KEY_SCOPES) as never[],
         quota: old.quota,
         mode: old.isTest ? "test" : "live",
@@ -62,18 +76,25 @@ export class DeveloperService {
         tx
       });
     });
-    await this.activity.record({ session, action: "ROTATE_API_KEY", targetType: "ApiKey", targetId: old.id, metadata: { replacementKeyId: issued.key.id } });
-    return { api_key_once: issued.api_key_once, key: this.publicKey(issued.key) };
+    await this.activity.record({
+      session,
+      action: isShowKey ? "ROTATE_SHOW_SCAN_KEY" : "ROTATE_API_KEY",
+      targetType: "ApiKey",
+      targetId: old.id,
+      metadata: { ...(isShowKey ? { showId: old.showId, graceMinutes } : {}), replacementKeyId: issued.key.id },
+      req
+    });
+    return { api_key_once: issued.api_key_once, key: this.publicKey(issued.key), old_revoke_at: revokeAt.toISOString() };
   }
 
-  async revoke(session: Session, id: string) {
+  async revoke(session: Session, id: string, req?: Request) {
     const key = await this.keyForUser(session, id);
     const updated = await this.prisma.apiKey.update({ where: { id: key.id }, data: { status: "revoked", revokeAt: new Date() } });
-    await this.activity.record({ session, action: "REVOKE_API_KEY", targetType: "ApiKey", targetId: key.id });
+    await this.activity.record({ session, action: "REVOKE_API_KEY", targetType: "ApiKey", targetId: key.id, req });
     return { key: this.publicKey(updated) };
   }
 
-  async suspend(session: Session, id: string, until?: string) {
+  async suspend(session: Session, id: string, until?: string, req?: Request) {
     const key = await this.keyForUser(session, id);
     const suspendedUntil = until ? new Date(until) : new Date(Date.now() + 24 * 60 * 60 * 1000);
     if (Number.isNaN(suspendedUntil.getTime()) || suspendedUntil <= new Date()) {
@@ -81,14 +102,14 @@ export class DeveloperService {
     }
 
     const updated = await this.prisma.apiKey.update({ where: { id: key.id }, data: { status: "suspended", suspendUntil: suspendedUntil } });
-    await this.activity.record({ session, action: "SUSPEND_API_KEY", targetType: "ApiKey", targetId: key.id, metadata: { until: suspendedUntil.toISOString() } });
+    await this.activity.record({ session, action: "SUSPEND_API_KEY", targetType: "ApiKey", targetId: key.id, metadata: { until: suspendedUntil.toISOString() }, req });
     return { key: this.publicKey(updated) };
   }
 
-  async resume(session: Session, id: string) {
+  async resume(session: Session, id: string, req?: Request) {
     const key = await this.keyForUser(session, id);
     const updated = await this.prisma.apiKey.update({ where: { id: key.id }, data: { status: "active", suspendUntil: null } });
-    await this.activity.record({ session, action: "RESUME_API_KEY", targetType: "ApiKey", targetId: key.id });
+    await this.activity.record({ session, action: "RESUME_API_KEY", targetType: "ApiKey", targetId: key.id, req });
     return { key: this.publicKey(updated) };
   }
 
@@ -128,7 +149,7 @@ export class DeveloperService {
     return { rental: this.publicRental(updated) };
   }
 
-  async rotateSecret(session: Session, rentalId: string, kind: "signing" | "webhook", password?: string) {
+  async rotateSecret(session: Session, rentalId: string, kind: "signing" | "webhook", password?: string, req?: Request) {
     await this.requirePassword(session.sub, password);
     const rental = await this.rentalForUser(session, rentalId);
     const secret = generateSecret(kind === "signing" ? "sigsec_" : "whsec_");
@@ -136,14 +157,14 @@ export class DeveloperService {
       where: { id: rental.id },
       data: kind === "signing" ? { signingSecret: sealSecret(secret), signingEnabled: true } : { webhookSecret: sealSecret(secret) }
     });
-    await this.activity.record({ session, action: "ROTATE_RENTAL_SECRET", targetType: "ApiRentalOrder", targetId: rental.id, metadata: { kind } });
+    await this.activity.record({ session, action: "ROTATE_RENTAL_SECRET", targetType: "ApiRentalOrder", targetId: rental.id, metadata: { kind }, req });
     return { secret_once: secret, rental: this.publicRental(updated) };
   }
 
-  async revealSecrets(session: Session, rentalId: string, password?: string) {
+  async revealSecrets(session: Session, rentalId: string, password?: string, req?: Request) {
     await this.requirePassword(session.sub, password);
     const rental = await this.rentalForUser(session, rentalId);
-    await this.activity.record({ session, action: "REVEAL_RENTAL_SECRETS", targetType: "ApiRentalOrder", targetId: rental.id });
+    await this.activity.record({ session, action: "REVEAL_RENTAL_SECRETS", targetType: "ApiRentalOrder", targetId: rental.id, req });
     return {
       signing_secret: rental.signingSecret ? openSecret(rental.signingSecret) : null,
       webhook_secret: rental.webhookSecret ? openSecret(rental.webhookSecret) : null
@@ -212,6 +233,34 @@ export class DeveloperService {
       this.prisma.apiRequestLog.count({ where })
     ]);
     return { items, total, page };
+  }
+
+  async securityEvents(userId: string, query: { from?: string; to?: string; action?: string; page?: string }) {
+    const actions = ["ROTATE_API_KEY", "ROTATE_SHOW_SCAN_KEY", "REVOKE_API_KEY", "SUSPEND_API_KEY", "RESUME_API_KEY", "ROTATE_RENTAL_SECRET", "REVEAL_RENTAL_SECRETS"];
+    const page = Math.max(1, Number(query.page || 1));
+    const where: Prisma.ActivityLogWhereInput = { userId, action: query.action && actions.includes(query.action) ? query.action : { in: actions } };
+    if (query.from || query.to) where.createdAt = {
+      ...(query.from ? { gte: new Date(query.from) } : {}),
+      ...(query.to ? { lte: new Date(query.to) } : {})
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.activityLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * 50, take: 50 }),
+      this.prisma.activityLog.count({ where })
+    ]);
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        action: item.action,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        ip: item.ip,
+        userAgent: item.userAgent,
+        createdAt: item.createdAt,
+        metadata: safeSecurityMetadata(item.metadata)
+      })),
+      total,
+      page
+    };
   }
 
   async auditCsv(userId: string, query: { from?: string; to?: string; endpoint?: string; status?: string; is_test?: string }) {

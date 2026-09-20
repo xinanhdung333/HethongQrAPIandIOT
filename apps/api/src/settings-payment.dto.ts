@@ -42,6 +42,7 @@ export class PaymentStatusDto {
 export class AdminApiPlatformSettingsDto {
   @IsOptional() @IsInt() @Min(0) @Max(5000) commission_rate_bp?: number;
   @IsOptional() @IsArray() @ArrayMaxSize(10) quota_warning_thresholds?: number[];
+  @IsOptional() @IsObject() quota_burst?: { window_minutes?: number; threshold_percent?: number; enabled?: boolean };
   @IsOptional() @IsObject() feature_flags?: Record<string, boolean>;
   @IsOptional() @IsObject() plan_limits?: Record<string, { max_keys?: number; quota?: number; rate_limit?: number; price?: number }>;
 }

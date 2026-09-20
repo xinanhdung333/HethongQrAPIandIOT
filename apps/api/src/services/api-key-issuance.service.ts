@@ -28,8 +28,10 @@ export class ApiKeyIssuanceService {
     if (input.showId) {
       const show = await tx.show.findFirst({ where: { id: input.showId, ownerId: input.userId } });
       if (!show) throw new NotFoundException({ error: "show_not_found", message: "Show not found for this user" });
-      const existing = await tx.apiKey.findFirst({ where: { showId: show.id, status: { in: ["active", "deprecated"] } } });
+      const existing = await tx.apiKey.findFirst({ where: { showId: show.id, status: "active" } });
       if (existing) throw new ForbiddenException({ error: "show_scan_key_exists", message: "This show already has an active scanner key" });
+      const keyCount = await tx.apiKey.count({ where: { showId: show.id, status: { in: ["active", "deprecated"] } } });
+      if (keyCount >= 2) throw new ForbiddenException({ error: "show_scan_key_limit", message: "A show can have at most one active and one deprecated scanner key" });
       const raw = this.auth.createApiKey("live");
       const key = await tx.apiKey.create({
         data: {

@@ -5,15 +5,17 @@ import { AuthService } from "../security/auth.service";
 import { ApiKeyIssuanceService } from "../services/api-key-issuance.service";
 import { PrismaService } from "../services/prisma.service";
 import { RedisService } from "../services/redis.service";
+import { ActivityLogService } from "../services/activity-log.service";
 
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly prisma: PrismaService, private readonly auth: AuthService, private readonly redis: RedisService, private readonly keys: ApiKeyIssuanceService) {}
+  constructor(private readonly prisma: PrismaService, private readonly auth: AuthService, private readonly redis: RedisService, private readonly keys: ApiKeyIssuanceService, private readonly activity: ActivityLogService) {}
 
   @Get("summary")
   async summary(@Headers("authorization") authorization?: string) {
     await this.assertAdmin(authorization);
-    const [users, products, rentals, shows, ticketOrders, tickets, apiKeys, payouts, staticPages, activityLogs] = await Promise.all([
+    const day = new Date().toISOString().slice(0, 10);
+    const [users, products, rentals, shows, ticketOrders, tickets, apiKeys, payouts, staticPages, activityLogs, previousHits, sha256Hits] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.product.count(),
       this.prisma.rentalOrder.count(),
@@ -23,7 +25,9 @@ export class AdminController {
       this.prisma.apiKey.count(),
       this.prisma.payout.count(),
       this.prisma.staticPage.count(),
-      this.prisma.activityLog.count()
+      this.prisma.activityLog.count(),
+      this.redis.get(`apikey:legacy-hash:count:previous:${day}`),
+      this.redis.get(`apikey:legacy-hash:count:sha256:${day}`)
     ]);
     const revenue = await this.prisma.ticketOrder.aggregate({
       where: { status: "PAID" },
@@ -35,6 +39,10 @@ export class AdminController {
         total: revenue._sum.totalAmount ?? 0,
         payout: revenue._sum.payoutAmount ?? 0,
         fee: revenue._sum.platformFee ?? 0
+      },
+      legacy_api_key_hashes: {
+        previous_hits_today: Number(previousHits ?? "0"),
+        sha256_hits_today: Number(sha256Hits ?? "0")
       }
     };
   }
@@ -83,7 +91,7 @@ export class AdminController {
   async shows(@Headers("authorization") authorization?: string) {
     await this.assertAdmin(authorization);
     return this.prisma.show.findMany({
-      include: { owner: { select: { id: true, email: true } }, apiKeys: { select: { prefix: true, status: true } } },
+      include: { owner: { select: { id: true, email: true } }, apiKeys: { select: { prefix: true, status: true, revokeAt: true } } },
       orderBy: { createdAt: "desc" },
       take: 100
     });
@@ -106,17 +114,29 @@ export class AdminController {
   }
 
   @Post("shows/:id/scan-key/rotate")
-  async rotateShowScanKey(@Param("id") id: string, @Headers("authorization") authorization?: string) {
-    await this.assertAdmin(authorization);
+  async rotateShowScanKey(@Param("id") id: string, @Body() body: { grace_minutes?: number }, @Headers("authorization") authorization?: string) {
+    const admin = await this.assertAdmin(authorization);
     const show = await this.prisma.show.findUnique({ where: { id } });
     if (!show) throw new NotFoundException("Không tìm thấy show");
-
-    await this.prisma.apiKey.updateMany({
-      where: { showId: show.id, status: { in: ["active", "deprecated"] } },
-      data: { status: "revoked", revokeAt: new Date() }
+    const graceMinutes = body?.grace_minutes ?? 60;
+    if (!Number.isInteger(graceMinutes) || graceMinutes < 1 || graceMinutes > 1440) {
+      throw new NotFoundException("Thời gian chuyển key phải từ 1 đến 1440 phút");
+    }
+    const old = await this.prisma.apiKey.findFirst({ where: { showId: show.id, status: "active" } });
+    if (!old) throw new NotFoundException("Show chưa có key máy quét đang hoạt động");
+    const revokeAt = new Date(Date.now() + graceMinutes * 60 * 1000);
+    const issued = await this.prisma.$transaction(async tx => {
+      await tx.apiKey.update({ where: { id: old.id }, data: { status: "deprecated", revokeAt } });
+      return this.keys.issueKey({ userId: show.ownerId, showId: show.id, scopes: ["ticket:verify"], source: "admin", tx });
     });
-    const issued = await this.keys.issueKey({ userId: show.ownerId, showId: show.id, scopes: ["ticket:verify"], source: "admin" });
-    return { api_key_once: issued.api_key_once, show_id: show.id, key_prefix: issued.key.prefix };
+    await this.activity.record({
+      session: admin,
+      action: "ROTATE_SHOW_SCAN_KEY",
+      targetType: "ApiKey",
+      targetId: old.id,
+      metadata: { showId: show.id, replacementKeyId: issued.key.id, graceMinutes }
+    });
+    return { api_key_once: issued.api_key_once, show_id: show.id, key_prefix: issued.key.prefix, old_revoke_at: revokeAt.toISOString() };
   }
 
   @Patch("shows/:id/installation")

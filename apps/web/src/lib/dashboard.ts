@@ -19,7 +19,7 @@ export type DashboardData = {
   rentals: Array<{ id: string; status: string; total: number; quantity: number; duration?: number; gateIds?: string[]; createdAt?: string; product?: { name: string } }>;
   apiRentals: Array<{ id: string; appName: string; website?: string | null; callbackUrl?: string | null; plan: string; duration: number; quota: number; scopes?: string[]; total: number; status: string; apiKeyPrefix?: string | null; signingEnabled?: boolean; billingMode?: string; createUnitPrice?: number; verifyUnitPrice?: number; createdAt?: string }>;
   shows: Array<{ id: string; slug: string; name: string; status?: string; installationStatus?: string; scannerCount?: number; installationNote?: string | null; soldTickets: number; totalTickets: number; ticketPrice: number; location?: string; startAt?: string; createdAt?: string }>;
-  apiKeys: Array<{ id: string; prefix: string; quota: number; scopes?: string[]; rentalId?: string | null; status?: string; isTest?: boolean; allowedIps?: string[]; rateLimit?: number; revokeAt?: string | null; createdAt?: string }>;
+  apiKeys: Array<{ id: string; prefix: string; quota: number; scopes?: string[]; rentalId?: string | null; showId?: string | null; status?: string; isTest?: boolean; allowedIps?: string[]; rateLimit?: number; revokeAt?: string | null; createdAt?: string }>;
   ticketOrders: DashboardTicketOrder[];
   purchasedTicketOrders: DashboardTicketOrder[];
   payouts: Array<{ id: string; amount: number; status: string }>;

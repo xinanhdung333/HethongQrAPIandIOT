@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
+    "prebuild": "node scripts/write-build-timestamp.mjs",
     "build": "nest build",
     "test:integration": "node --test test/*.integration.mjs",
     "start": "node dist/main.js"

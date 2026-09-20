@@ -11,6 +11,7 @@ import {
   Loader2,
   Power,
   Radio,
+  RotateCcw,
   Search,
   Ticket,
   type LucideIcon
@@ -38,6 +39,13 @@ export default function ShowsDashboardPage() {
   const [error, setError] = useState("");
   const [endingId, setEndingId] = useState("");
   const [openShowId, setOpenShowId] = useState("");
+  const [rotateShow, setRotateShow] = useState<{ id: string; name: string } | null>(null);
+  const [rotatePassword, setRotatePassword] = useState("");
+  const [graceMinutes, setGraceMinutes] = useState("60");
+  const [rotating, setRotating] = useState(false);
+  const [rawScannerKey, setRawScannerKey] = useState("");
+  const [oldKeyRevokeAt, setOldKeyRevokeAt] = useState<string | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -63,7 +71,42 @@ export default function ShowsDashboardPage() {
     } finally {
       setEndingId("");
     }
+  }
 
+  async function submitRotateShow() {
+      if (!rotateShow || !rotatePassword) return setError("Nhập mật khẩu hiện tại để xoay key quét.");
+      const grace = Number(graceMinutes);
+      if (!Number.isInteger(grace) || grace < 1 || grace > 1440) return setError("Thời gian ân hạn phải từ 1 đến 1440 phút.");
+      setRotating(true);
+      try {
+        const key = data.apiKeys.find(item => item.showId === rotateShow.id && item.status === "active");
+        if (!key) throw new Error("Show chưa có key quét đang hoạt động.");
+        const result = await api<{ api_key_once: string; old_revoke_at: string }>(`/api/v1/developer/keys/${key.id}/rotate`, {
+          method: "POST",
+          body: JSON.stringify({ password: rotatePassword, grace_minutes: grace })
+        });
+        setRawScannerKey(result.api_key_once);
+        setOldKeyRevokeAt(result.old_revoke_at);
+        setRotateShow(null);
+        setRotatePassword("");
+        await load();
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "Không xoay được key quét.");
+      } finally {
+        setRotating(false);
+      }
+    }
+
+  useEffect(() => {
+    if (!oldKeyRevokeAt) return;
+    const update = () => setRemainingSeconds(Math.max(0, Math.ceil((new Date(oldKeyRevokeAt).getTime() - Date.now()) / 1000)));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [oldKeyRevokeAt]);
+
+  async function copyScannerKey() {
+    await navigator.clipboard.writeText(rawScannerKey);
   }
 
   const ordersByShow = useMemo(() => {
@@ -141,6 +184,7 @@ export default function ShowsDashboardPage() {
                     <p className="font-medium text-zinc-900">Thiết bị quét</p>
                     <p className="mt-1 text-zinc-600">Trạng thái: {installationLabel(show.installationStatus)} · {show.scannerCount ?? 0} máy</p>
                     {show.installationNote && <p className="mt-1 text-xs text-zinc-500">{show.installationNote}</p>}
+                    {data.apiKeys.some(key => key.showId === show.id) && <button className="btn btn-secondary mt-3 text-sm" onClick={() => { setRotateShow({ id: show.id, name: show.name }); setError(""); setGraceMinutes("60"); }}><RotateCcw size={15} /> Xoay key quét</button>}
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -167,6 +211,10 @@ export default function ShowsDashboardPage() {
           Người mua ngoài hệ thống vẫn nhập tên, email, SĐT ở link public. Khi đơn demo paid, vé QR sẽ nằm ngay dưới show tương ứng.
         </p>
       </section>
+
+      {rawScannerKey && <section className="panel mt-6 border-emerald-200 bg-emerald-50 p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-emerald-900">Key quét mới - chỉ hiện một lần</h2><p className="mt-1 text-sm text-emerald-800">Lưu lại ngay, sẽ không hiện lại.</p>{oldKeyRevokeAt && <p className="mt-1 text-xs text-amber-800">Key cũ hết ân hạn sau {remainingSeconds === null ? "..." : `${Math.floor(remainingSeconds / 60)} phút ${remainingSeconds % 60} giây`}.</p>}</div><div className="flex gap-2"><button className="btn btn-secondary bg-white text-sm" onClick={() => void copyScannerKey()}><Copy size={15} /> Copy</button><button className="btn btn-secondary bg-white text-sm" onClick={() => setRawScannerKey("")}>Ẩn</button></div></div><pre className="mt-3 overflow-auto rounded-lg bg-white p-3 text-xs text-emerald-950">{rawScannerKey}</pre></section>}
+
+      {rotateShow && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4"><form className="panel w-full max-w-md p-6" onSubmit={event => { event.preventDefault(); void submitRotateShow(); }}><h2 className="text-lg font-semibold">Xoay key quét</h2><p className="mt-2 text-sm text-zinc-600">{rotateShow.name} · key cũ vẫn hoạt động trong thời gian ân hạn.</p><label className="mt-4 grid gap-2 text-sm font-medium">Mật khẩu hiện tại<input className="field" type="password" value={rotatePassword} onChange={event => setRotatePassword(event.target.value)} required autoFocus /></label><label className="mt-4 grid gap-2 text-sm font-medium">Thời gian ân hạn (phút)<input className="field" type="number" min={1} max={1440} value={graceMinutes} onChange={event => setGraceMinutes(event.target.value)} /></label><div className="mt-6 flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setRotateShow(null)} disabled={rotating}>Hủy</button><button className="btn btn-primary" disabled={rotating}>{rotating ? "Đang xoay..." : "Xoay key"}</button></div></form></div>}
     </div>
   );
 }

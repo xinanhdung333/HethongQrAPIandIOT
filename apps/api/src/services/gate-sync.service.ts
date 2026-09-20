@@ -29,8 +29,13 @@ export class GateSyncService {
     const tenantId = resolveTenantId(key);
     const rows = await this.prisma.revokedResource.findMany({
       where: {
-        tenantId,
+        ...(key.rentalId
+          ? { OR: [{ tenantId }, { tenantId: key.userId, resourceType: "ticket" }] }
+          : { tenantId }),
         isTest: key.isTest,
+        ...(key.showId
+          ? { showId: key.showId, resourceType: "ticket" }
+          : {}),
         revokedAt: { gt: since }
       },
       select: { resourceType: true, jti: true, revokedAt: true },
@@ -45,9 +50,28 @@ export class GateSyncService {
 
   async reportUsageEvents(key: IntegrationKey, events: UsageEvent[]) {
     const accepted: string[] = [];
+    const rejected: { jti: string; reason: "out_of_show_scope" }[] = [];
     const conflicts: { jti: string; first_gate: string; reported_gate: string }[] = [];
 
+    if (key.showId && events.some((event) => event.resource_type === "external_qr")) {
+      throw new ForbiddenException({
+        error: "show_key_external_qr",
+        message: "Scanner key chỉ được đồng bộ vé của show"
+      });
+    }
+
+    const inScopeTicketJtis = key.showId
+      ? new Set((await this.prisma.ticket.findMany({
+        where: { showId: key.showId, jti: { in: events.map((event) => event.jti) } },
+        select: { jti: true }
+      })).map((ticket) => ticket.jti))
+      : null;
+
     for (const event of events) {
+      if (inScopeTicketJtis && !inScopeTicketJtis.has(event.jti)) {
+        rejected.push({ jti: event.jti, reason: "out_of_show_scope" });
+        continue;
+      }
       const tenantId = this.redisTenantId(key, event.resource_type);
       const redisKey = `gate:used:${tenantId}:${event.jti}`;
       const claim = `${event.gate_id}|${event.used_at}`;
@@ -64,7 +88,7 @@ export class GateSyncService {
         }
       }
     }
-    return { accepted_count: accepted.length, conflicts };
+    return { accepted_count: accepted.length, conflicts, rejected };
   }
 
   private async markUsedInDb(key: IntegrationKey, event: UsageEvent) {
@@ -94,10 +118,10 @@ export class GateSyncService {
   }
 
   async listConflicts(key: IntegrationKey) {
-    const tenantIds = Array.from(new Set([
-      this.redisTenantId(key, "external_qr"),
-      this.redisTenantId(key, "ticket")
-    ]));
+    const resourceTypes: GateUsageResourceType[] = key.showId
+      ? ["ticket"]
+      : ["external_qr", "ticket"];
+    const tenantIds = Array.from(new Set(resourceTypes.map((resourceType) => this.redisTenantId(key, resourceType))));
     const redisKeys = (await Promise.all(tenantIds.map((tenantId) => this.redis.keys(`gate:conflict:${tenantId}:*`)))).flat();
     const result: { redis_key: string; reported_gate: string; used_at: string }[] = [];
     for (const redisKey of redisKeys) {
@@ -116,6 +140,7 @@ export class GateSyncService {
   }
 
   private tenantTicketWhere(key: IntegrationKey): Prisma.TicketWhereInput {
+    if (key.showId) return { showId: key.showId };
     // Show tickets are owned by the show tenant, not by an API rental. API-rental
     // keys therefore fall back to their userId for ticket usage sync.
     return { show: { ownerId: key.userId } };

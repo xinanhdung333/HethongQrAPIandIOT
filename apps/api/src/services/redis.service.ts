@@ -56,6 +56,17 @@ export class RedisService implements OnModuleDestroy {
     this.localCache.delete(key);
   }
 
+  async incr(key: string, ttlSeconds?: number) {
+    if (this.redis?.status === "ready") {
+      const value = await this.redis.incr(key);
+      if (ttlSeconds && value === 1) await this.redis.expire(key, ttlSeconds);
+      return value;
+    }
+    const current = Number(await this.get(key) ?? "0") + 1;
+    await this.set(key, String(current), ttlSeconds);
+    return current;
+  }
+
   async keys(pattern: string) {
     if (this.redis?.status === "ready") return this.redis.keys(pattern);
     const prefix = pattern.replace(/\*.*$/, "");

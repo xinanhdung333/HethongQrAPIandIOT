@@ -575,8 +575,8 @@ export class PlatformService {
     const revokedAt = new Date();
     await this.prisma.revokedResource.upsert({
       where: { resourceType_jti: { resourceType: "ticket", jti: ticket.jti } },
-      create: { resourceType: "ticket", jti: ticket.jti, revokedAt, tenantId: ticket.show.ownerId, userId: ticket.show.ownerId, isTest: false },
-      update: { revokedAt }
+      create: { resourceType: "ticket", jti: ticket.jti, revokedAt, tenantId: ticket.show.ownerId, showId: ticket.showId, userId: ticket.show.ownerId, isTest: false },
+      update: { revokedAt, showId: ticket.showId }
     });
     return { revoked: true, ticket_id: ticket.id, jti: ticket.jti, revoked_at: revokedAt.toISOString() };
   }

@@ -14,6 +14,7 @@ export class DeveloperCreateKeyDto {
 
 export class DeveloperRotateKeyDto {
   @IsString() password!: string;
+  @IsOptional() @IsInt() @Min(1) @Max(1440) grace_minutes?: number;
 }
 
 export class DeveloperRentalSettingsDto {
@@ -45,5 +46,4 @@ export class DeveloperAnalyticsQueryDto {
   @IsOptional() @IsString() key_id?: string;
   @IsOptional() @IsString() is_test?: string;
 }
-
 

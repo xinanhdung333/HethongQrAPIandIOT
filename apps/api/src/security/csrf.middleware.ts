@@ -2,6 +2,8 @@ import { ForbiddenException, Injectable, NestMiddleware } from "@nestjs/common";
 import { randomBytes, timingSafeEqual } from "crypto";
 import { NextFunction, Request, Response } from "express";
 
+// This is a low-cost defense for cookie-authenticated browser requests. API clients
+// under /api/v1 use explicit bearer/API-key headers and stay exempt to avoid breaking SDKs.
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const PUBLIC_PREFIXES = ["/api/v1/", "/webhooks/", "/api/thanh-toan/"];
 

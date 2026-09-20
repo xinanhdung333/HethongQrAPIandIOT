@@ -3,6 +3,34 @@ export const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || API_URL;
 
 export class NetworkError extends Error {}
 
+let csrfTokenCache: string | null = null;
+let csrfTokenRequest: Promise<string> | null = null;
+
+export function clearCsrfToken() {
+  csrfTokenCache = null;
+}
+
+export async function getCsrfToken(force = false) {
+  if (typeof window === "undefined") throw new NetworkError("CSRF token chỉ khả dụng trong trình duyệt.");
+  if (!force && csrfTokenCache) return csrfTokenCache;
+  if (!force && csrfTokenRequest) return csrfTokenRequest;
+  const request = fetch(`${API_URL}/api/csrf-token`, {
+    credentials: "include",
+    signal: AbortSignal.timeout(10000)
+  }).then(async (response) => {
+    if (!response.ok) throw new NetworkError("Không lấy được CSRF token.");
+    const token = (await response.json() as { token?: string }).token;
+    if (!token || !/^[a-f0-9]{64}$/i.test(token)) throw new NetworkError("CSRF token không hợp lệ.");
+    csrfTokenCache = token;
+    return token;
+  });
+  if (force) return request;
+  csrfTokenRequest = request.finally(() => {
+    csrfTokenRequest = null;
+  });
+  return csrfTokenRequest;
+}
+
 export type Product = {
   id: string;
   slug: string;
@@ -54,16 +82,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const shouldRevalidate = !init?.method && !init?.cache;
   const token = typeof window !== "undefined" ? window.localStorage.getItem("smartqr_token") : null;
   const isStateChanging = Boolean(init?.method && !["GET", "HEAD", "OPTIONS"].includes(init.method.toUpperCase()));
-  let csrfToken: string | null = null;
-  if (isStateChanging && typeof window !== "undefined") {
-    const csrfResponse = await fetch(`${API_URL}/api/csrf-token`, { credentials: "include", signal: AbortSignal.timeout(10000) });
-    if (!csrfResponse.ok) throw new NetworkError("Không lấy được CSRF token.");
-    csrfToken = (await csrfResponse.json() as { token?: string }).token ?? null;
-    if (!csrfToken) throw new NetworkError("CSRF token không hợp lệ.");
-  }
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${path}`, {
+  const send = async (csrfToken: string | null) => fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
@@ -74,8 +93,20 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       credentials: "include",
       signal: init?.signal ?? AbortSignal.timeout(10000),
       next: shouldRevalidate ? { revalidate: 30 } : undefined
-    });
+  });
+  let res: Response;
+  try {
+    const csrfToken = isStateChanging && typeof window !== "undefined" ? await getCsrfToken() : null;
+    res = await send(csrfToken);
+    if (isStateChanging && res.status === 403) {
+      const body = await res.clone().json().catch(() => null) as { error?: string } | null;
+      if (body?.error === "csrf_invalid") {
+        clearCsrfToken();
+        res = await send(await getCsrfToken(true));
+      }
+    }
   } catch (error) {
+    if (error instanceof NetworkError) throw error;
     const message = error instanceof DOMException && error.name === "TimeoutError"
       ? "API phản hồi quá lâu. Thử tải lại hoặc kiểm tra backend."
       : `Không kết nối được API tại ${API_URL}. Kiểm tra backend đang chạy.`;

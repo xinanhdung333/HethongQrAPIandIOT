@@ -94,6 +94,7 @@ model Show {
   installationNote String?    @map("installation_note")
   owner         User          @relation(fields: [ownerId], references: [id])
   apiKeys       ApiKey[]
+  revokedResources RevokedResource[]
   ticketOrders  TicketOrder[]
   tickets       Ticket[]
   createdAt     DateTime      @default(now()) @map("created_at")
@@ -240,12 +241,15 @@ model RevokedResource {
   jti          String
   revokedAt    DateTime @default(now()) @map("revoked_at")
   tenantId     String   @map("tenant_id")
+  showId       String?  @map("show_id")
   isTest       Boolean  @default(false) @map("is_test")
   userId       String?  @map("user_id")
+  show         Show?    @relation(fields: [showId], references: [id], onDelete: Cascade)
   user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([resourceType, jti])
   @@index([tenantId, revokedAt])
+  @@index([showId, revokedAt])
   @@map("revoked_resources")
 }
 

@@ -59,6 +59,16 @@ export class AdminSettingsPaymentsController {
     const session = await this.assertAdmin(authorization);
     const result = await this.settings.updateApiPlatform(dto, session.sub);
     await this.activity.record({ session, action: "UPDATE_SYSTEM_SETTINGS", targetType: "SystemSetting", targetId: "api_platform", metadata: result as never, req });
+    if (JSON.stringify(result.before.quota_burst) !== JSON.stringify(result.after.quota_burst)) {
+      await this.activity.record({
+        session,
+        action: "UPDATE_QUOTA_BURST_SETTINGS",
+        targetType: "SystemSetting",
+        targetId: "api_platform",
+        metadata: { before: result.before.quota_burst, after: result.after.quota_burst },
+        req
+      });
+    }
     return { api_platform: result.after, version: result.version };
   }
 

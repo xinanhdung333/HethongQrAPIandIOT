@@ -92,8 +92,10 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async enqueueQuotaBurstWarnings(now: Date) {
-    const windowMinutes = Math.max(1, Number(process.env.API_QUOTA_BURST_WINDOW_MINUTES ?? 15));
-    const thresholdPercent = Math.max(1, Number(process.env.API_QUOTA_BURST_PERCENT ?? 10));
+    const settings = await this.settings.apiPlatform();
+    if (!settings.quota_burst.enabled) return 0;
+    const windowMinutes = settings.quota_burst.window_minutes;
+    const thresholdPercent = settings.quota_burst.threshold_percent;
     const since = new Date(now.getTime() - windowMinutes * 60 * 1000);
     const rentals = await this.prisma.apiRentalOrder.findMany({ where: { status: RentalStatus.ACTIVE } });
     let count = 0;

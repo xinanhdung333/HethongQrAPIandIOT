@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Headers, Post, Req, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Headers, Post, Req, UnauthorizedException } from "@nestjs/common";
 import crypto from "crypto";
 import { Request } from "express";
 import { PayosWebhookDto } from "../dto";
@@ -12,14 +12,17 @@ export class WebhooksController {
   @Post("payos-demo")
   async webhook(@Body() dto: PayosWebhookDto, @Headers("x-payos-timestamp") timestamp?: string, @Headers("x-payos-nonce") nonce?: string, @Headers("x-payos-signature") signature?: string, @Headers("x-payment-expires") paymentExpires?: string, @Headers("x-payment-signature") paymentSignature?: string, @Req() req?: Request & { rawBody?: Buffer }) {
     if (paymentExpires && paymentSignature) {
-      this.verifyPaymentLink(dto.order_id, dto.kind, paymentExpires, paymentSignature);
+      await this.verifyPaymentLink(dto.order_id, dto.kind, paymentExpires, paymentSignature);
     } else {
       await this.verifyPayosDemo(timestamp, nonce, signature, req?.rawBody ?? Buffer.from(JSON.stringify(dto)));
     }
     return this.platform.webhook(dto.order_id, dto.kind);
   }
 
-  private verifyPaymentLink(orderId: string, kind: PayosWebhookDto["kind"], expires: string, signature: string) {
+  private async verifyPaymentLink(orderId: string, kind: PayosWebhookDto["kind"], expires: string, signature: string) {
+    if (process.env.PAYMENT_DEMO_MODE !== "true" || process.env.NODE_ENV === "production") {
+      throw new ForbiddenException({ error: "demo_payment_disabled", message: "Demo payment callbacks are disabled" });
+    }
     const expiry = Number(expires);
     if (!Number.isInteger(expiry) || expiry < Math.floor(Date.now() / 1000)) {
       throw new UnauthorizedException({ error: "payment_link_expired", message: "Payment link has expired" });
@@ -31,6 +34,10 @@ export class WebhooksController {
     const right = Buffer.from(expected);
     if (left.length !== right.length || !crypto.timingSafeEqual(left, right)) {
       throw new UnauthorizedException({ error: "invalid_payment_link", message: "Payment link signature is invalid" });
+    }
+    const ttlSeconds = Math.max(1, expiry - Math.floor(Date.now() / 1000));
+    if (!(await this.redis.setIfAbsent(`payment:link:${signature}`, "1", ttlSeconds))) {
+      throw new UnauthorizedException({ error: "payment_link_replayed", message: "Payment link has already been used" });
     }
   }
 

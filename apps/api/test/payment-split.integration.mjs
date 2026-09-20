@@ -11,6 +11,8 @@ const port = Number(process.env.TEST_PAYMENT_API_PORT || 4513);
 const baseUrl = `http://127.0.0.1:${port}`;
 if (!databaseUrl) throw new Error("TEST_DATABASE_URL is required");
 const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+let csrfCookie = "";
+let csrfToken = "";
 
 function hashApiKey(raw) { return crypto.createHash("sha256").update(raw).digest("hex"); }
 async function waitForServer(child, logs) {
@@ -22,8 +24,8 @@ async function waitForServer(child, logs) {
   }
   throw new Error(`API did not start\n${logs.join("")}`);
 }
-async function post(path, { key, token, body, idempotencyKey } = {}) {
-  const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { "X-API-KEY": key } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: JSON.stringify(body ?? {}) });
+async function post(path, { key, token, body, idempotencyKey, csrf = false } = {}) {
+  const response = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { "X-API-KEY": key } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}), ...(csrf ? { "X-CSRF-Token": csrfToken, Cookie: csrfCookie } : {}) }, body: JSON.stringify(body ?? {}) });
   const text = await response.text();
   let data = text; try { data = text ? JSON.parse(text) : undefined; } catch {}
   return { response, data };
@@ -38,7 +40,10 @@ async function createUser(email, role = "CUSTOMER") {
   return prisma.user.create({ data: { email, passwordHash: await bcrypt.hash("test-password", 4), role } });
 }
 async function login(email) {
-  const res = await post("/auth/login", { body: { email, password: "test-password" } });
+  const csrfResponse = await fetch(`${baseUrl}/api/csrf-token`);
+  csrfToken = (await csrfResponse.json()).token;
+  csrfCookie = csrfResponse.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const res = await post("/auth/login", { csrf: true, body: { email, password: "test-password" } });
   assert.equal(res.response.status, 201, JSON.stringify(res.data));
   return res.data.access_token;
 }

@@ -15,6 +15,17 @@ export interface Verification {
   valid: boolean; reason?: string; metadata?: Record<string, unknown>;
   [key: string]: unknown;
 }
+export interface GateUsageEvent {
+  jti: string; gate_id: string; used_at: string; resource_type: "external_qr" | "ticket";
+}
+export interface GateUsageRejection {
+  jti: string; reason: "out_of_show_scope";
+}
+export interface GateUsageSyncResult {
+  accepted_count: number;
+  conflicts: { jti: string; first_gate: string; reported_gate: string }[];
+  rejected: GateUsageRejection[];
+}
 export class SmartQrError extends Error {
   code: string; status: number; requestId?: string; retryAfter?: string; body?: unknown;
 }

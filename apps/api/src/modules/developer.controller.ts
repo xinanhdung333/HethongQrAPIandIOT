@@ -25,27 +25,27 @@ export class DeveloperController {
   }
 
   @Post("keys/:id/rotate")
-  async rotate(@Param("id") id: string, @Body() dto: DeveloperRotateKeyDto, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async rotate(@Param("id") id: string, @Body() dto: DeveloperRotateKeyDto, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
-    return session ? this.developer.rotate(session, id, dto.password) : undefined;
+    return session ? this.developer.rotate(session, id, dto.password, dto.grace_minutes, req) : undefined;
   }
 
   @Post("keys/:id/revoke")
-  async revoke(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async revoke(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
-    return session ? this.developer.revoke(session, id) : undefined;
+    return session ? this.developer.revoke(session, id, req) : undefined;
   }
 
   @Post("keys/:id/suspend")
-  async suspend(@Param("id") id: string, @Body() dto: { until?: string }, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async suspend(@Param("id") id: string, @Body() dto: { until?: string }, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
-    return session ? this.developer.suspend(session, id, dto.until) : undefined;
+    return session ? this.developer.suspend(session, id, dto.until, req) : undefined;
   }
 
   @Post("keys/:id/resume")
-  async resume(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async resume(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
-    return session ? this.developer.resume(session, id) : undefined;
+    return session ? this.developer.resume(session, id, req) : undefined;
   }
 
   @Post("rentals/:id/test-key")
@@ -67,15 +67,15 @@ export class DeveloperController {
   }
 
   @Post("rentals/:id/secrets")
-  async secret(@Param("id") id: string, @Body() dto: DeveloperSecretDto, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async secret(@Param("id") id: string, @Body() dto: DeveloperSecretDto, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
-    return session ? this.developer.rotateSecret(session, id, dto.kind, dto.password) : undefined;
+    return session ? this.developer.rotateSecret(session, id, dto.kind, dto.password, req) : undefined;
   }
 
   @Post("rentals/:id/secrets/reveal")
-  async secrets(@Param("id") id: string, @Body() dto: { password?: string }, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async secrets(@Param("id") id: string, @Body() dto: { password?: string }, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.session(authorization, res);
-    return session ? this.developer.revealSecrets(session, id, dto.password) : undefined;
+    return session ? this.developer.revealSecrets(session, id, dto.password, req) : undefined;
   }
 
   @Patch("rentals/:id/plan")
@@ -104,6 +104,12 @@ export class DeveloperController {
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", "attachment; filename=smartqr-audit.csv");
     return res.send(csv);
+  }
+
+  @Get("security-events")
+  async securityEvents(@Query() query: { from?: string; to?: string; action?: string; page?: string }, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+    const session = await this.session(authorization, res);
+    return session ? this.developer.securityEvents(session.sub, query) : undefined;
   }
 
   @Get("webhooks")

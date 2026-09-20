@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -7,18 +7,37 @@ import { RedisService } from "../services/redis.service";
 import { PrismaService } from "../services/prisma.service";
 import { ApiKeyScope } from "./api-key.decorator";
 import { assertActiveKey } from "./api-security";
+import { BUILD_TIMESTAMP } from "../generated/build-timestamp";
 
 export const FULL_API_KEY_SCOPES: ApiKeyScope[] = ["qr:create", "qr:read", "ticket:verify"];
+const moduleImportedAt = Date.now();
+
+function rolloverUntil(name: string, legacyDaysName: string) {
+  const configured = process.env[name];
+  if (configured) return new Date(configured).getTime();
+  const buildTimestamp = process.env.BUILD_TIMESTAMP ?? BUILD_TIMESTAMP;
+  const base = buildTimestamp ? new Date(buildTimestamp).getTime() : moduleImportedAt;
+  const days = Math.max(0, Number(process.env[legacyDaysName] ?? 30));
+  return base + days * 24 * 60 * 60 * 1000;
+}
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly jwt = new JwtService({ secret: process.env.JWT_SECRET ?? "dev-secret" });
   private readonly qrSecret = process.env.QR_JWT_SECRET ?? process.env.JWT_SECRET ?? "dev-secret";
   private readonly legacyQrSecret = process.env.JWT_SECRET ?? "dev-secret";
-  private readonly qrLegacyFallbackUntil = Date.now() +
-    Math.max(0, Number(process.env.QR_JWT_LEGACY_FALLBACK_DAYS ?? 30)) * 24 * 60 * 60 * 1000;
+  private readonly qrLegacyFallbackUntil = rolloverUntil("QR_JWT_LEGACY_FALLBACK_UNTIL", "QR_JWT_LEGACY_FALLBACK_DAYS");
+  private readonly apiKeyPepperRolloverUntil = rolloverUntil("API_KEY_PEPPER_ROLLOVER_UNTIL", "API_KEY_PEPPER_ROLLOVER_DAYS");
+  private readonly legacySha256Until = process.env.API_KEY_LEGACY_SHA256_UNTIL
+    ? new Date(process.env.API_KEY_LEGACY_SHA256_UNTIL).getTime()
+    : Number.POSITIVE_INFINITY;
 
-  constructor(private readonly redis: RedisService, private readonly prisma: PrismaService) {}
+  constructor(private readonly redis: RedisService, private readonly prisma: PrismaService) {
+    if (!process.env.QR_JWT_LEGACY_FALLBACK_UNTIL || !process.env.API_KEY_PEPPER_ROLLOVER_UNTIL) {
+      this.logger.warn("Legacy rollover dates are not absolute; configure *_UNTIL to avoid reset on redeploy.");
+    }
+  }
 
   hashPassword(password: string) {
     return bcrypt.hash(password, 12);
@@ -29,7 +48,11 @@ export class AuthService {
   }
 
   hashApiKey(apiKey: string) {
-    return crypto.createHmac("sha256", this.apiKeyPepper()).update(apiKey).digest("hex");
+    return this.hashApiKeyWithPepper(apiKey, this.apiKeyPepper());
+  }
+
+  private hashApiKeyWithPepper(apiKey: string, pepper: string) {
+    return crypto.createHmac("sha256", pepper).update(apiKey).digest("hex");
   }
 
   private legacyHashApiKey(apiKey: string) {
@@ -52,12 +75,27 @@ export class AuthService {
   }
 
   async getApiKey(apiKey: string) {
-    const hash = this.hashApiKey(apiKey);
-    let key = await this.prisma.apiKey.findUnique({ where: { keyHash: hash }, include: { rental: true } });
+    const currentHash = this.hashApiKey(apiKey);
+    let key = await this.prisma.apiKey.findUnique({ where: { keyHash: currentHash }, include: { rental: true } });
     if (!key) {
-      const legacyHash = this.legacyHashApiKey(apiKey);
-      key = await this.prisma.apiKey.findUnique({ where: { keyHash: legacyHash }, include: { rental: true } });
-      if (key) await this.prisma.apiKey.update({ where: { id: key.id }, data: { keyHash: hash } });
+      const previousPepper = process.env.API_KEY_PEPPER_PREVIOUS;
+      const rolloverActive = Date.now() <= this.apiKeyPepperRolloverUntil;
+      const previousHash = previousPepper && rolloverActive
+        ? this.hashApiKeyWithPepper(apiKey, previousPepper)
+        : null;
+      const legacyHash = Date.now() <= this.legacySha256Until ? this.legacyHashApiKey(apiKey) : null;
+      key = previousHash
+        ? await this.prisma.apiKey.findUnique({ where: { keyHash: previousHash }, include: { rental: true } })
+        : null;
+      let legacySource: "previous" | "sha256" | null = key ? "previous" : null;
+      if (!key && legacyHash) {
+        key = await this.prisma.apiKey.findUnique({ where: { keyHash: legacyHash }, include: { rental: true } });
+        if (key) legacySource = "sha256";
+      }
+      if (key && legacySource) {
+        await this.prisma.apiKey.update({ where: { id: key.id }, data: { keyHash: currentHash } });
+        await this.recordLegacyApiKeyHit(key.id, key.prefix, legacySource);
+      }
     }
     if (key) {
       if (key.status === "suspended" && key.suspendUntil && key.suspendUntil <= new Date()) {
@@ -66,6 +104,16 @@ export class AuthService {
       assertActiveKey(key);
     }
     return key;
+  }
+
+  private async recordLegacyApiKeyHit(keyId: string, prefix: string, source: "previous" | "sha256") {
+    const hour = new Date().toISOString().slice(0, 13);
+    const logKey = `apikey:legacy-hash:${keyId}:${hour}`;
+    if (await this.redis.setIfAbsent(logKey, source, 3600)) {
+      this.logger.warn(`API key ${keyId} (${prefix}) matched ${source} hash and was rehashed`);
+    }
+    const dayKey = `apikey:legacy-hash:count:${source}:${new Date().toISOString().slice(0, 10)}`;
+    await this.redis.incr(dayKey, 40 * 24 * 60 * 60);
   }
 
   apiKeyHasScope(scopes: unknown, scope: ApiKeyScope) {

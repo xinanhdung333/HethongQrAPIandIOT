@@ -272,7 +272,6 @@ test("SmartQR API platform integration: scopes, sandbox, quota, bulk, rate and s
   const showOwner = await prisma.user.create({
     data: { email: `offline-show-${Date.now()}@test.local`, passwordHash: await bcrypt.hash("test-password", 4), role: "CUSTOMER" }
   });
-  const showKey = await createKeyForUser({ user: showOwner, email: `offline-show-key-${Date.now()}@test.local` });
   await prisma.tenantSettings.upsert({
     where: { tenantId: showOwner.id },
     update: { offlineCapable: true, enabledAt: new Date(), enabledBy: showOwner.id },
@@ -293,6 +292,21 @@ test("SmartQR API platform integration: scopes, sandbox, quota, bulk, rate and s
       payoutAccount: {}
     }
   });
+  const showRaw = rawKey("live", `offline-show-${Date.now()}`);
+  const showKey = {
+    raw: showRaw,
+    key: await prisma.apiKey.create({
+      data: {
+        userId: showOwner.id,
+        showId: show.id,
+        keyHash: hashApiKey(showRaw),
+        prefix: showRaw.slice(0, 20),
+        quota: 100000,
+        scopes: ["ticket:verify"],
+        rateLimit: 600
+      }
+    })
+  };
   const ticketOrder = await prisma.ticketOrder.create({
     data: {
       showId: show.id,

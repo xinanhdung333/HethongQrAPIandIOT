@@ -10,7 +10,7 @@ type AdminData = {
   users: Array<{ id: string; email: string; role: string; createdAt: string }>;
   products: Array<{ id: string; slug: string; name: string; type: string; priceSell: number; priceRentMonth: number; depositFee: number; stock: number; images?: string[] }>;
   orders: Array<{ id: string; type: string; status: string; quantity: number; total: number; user?: { email: string }; product?: { name: string } }>;
-  shows: Array<{ id: string; slug: string; name: string; status: string; soldTickets: number; totalTickets: number; ticketPrice: number; installationStatus: string; scannerCount: number; installationNote?: string | null; apiKeys?: Array<{ prefix: string; status: string }>; owner?: { email: string } }>;
+  shows: Array<{ id: string; slug: string; name: string; status: string; soldTickets: number; totalTickets: number; ticketPrice: number; installationStatus: string; scannerCount: number; installationNote?: string | null; apiKeys?: Array<{ prefix: string; status: string; revokeAt?: string | null }>; owner?: { email: string } }>;
   tickets: Array<{ id: string; status: string; quantity: number; totalAmount: number; payoutAmount: number; show: { name: string }; tickets: Array<{ id: string; isUsed: boolean }> }>;
   apiKeys: Array<{ id: string; prefix: string; quota: number; userId: string; rentalId: string | null; scopes: string[]; rateLimit: number; createdAt: string; user?: { email: string }; rental?: { appName: string; plan: string } | null }>;
   staticPages: StaticPage[];
@@ -50,6 +50,15 @@ const visitorLinks = [
   ["Tạo show", "/tao-show", Radio]
 ] as const;
 
+function formatRemaining(value: string, now = Date.now()) {
+  const seconds = Math.max(0, Math.ceil((new Date(value).getTime() - now) / 1000));
+  if (seconds <= 0) return "đã hết hạn";
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) return `${hours} giờ ${minutes % 60} phút`;
+  return `${minutes} phút ${seconds % 60} giây`;
+}
+
 export function AdminConsole() {
   const [token, setToken] = useState("");
   const [data, setData] = useState<AdminData>(emptyData);
@@ -58,11 +67,17 @@ export function AdminConsole() {
   const [message, setMessage] = useState("");
   const [onceKey, setOnceKey] = useState("");
   const [copied, setCopied] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const saved = window.localStorage.getItem("smartqr_token") ?? "";
     setToken(saved);
     if (saved) void load(saved);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const adminUser = useMemo(() => data.users.find((user) => user.role === "ADMIN"), [data.users]);
@@ -201,9 +216,9 @@ export function AdminConsole() {
   async function rotateShowScanKey(showId: string) {
     setMessage("");
     try {
-      const created = await request<{ api_key_once: string }>(`/admin/shows/${showId}/scan-key/rotate`, { method: "POST", body: "{}" });
+      const created = await request<{ api_key_once: string; old_revoke_at?: string }>(`/admin/shows/${showId}/scan-key/rotate`, { method: "POST", body: JSON.stringify({ grace_minutes: 60 }) });
       setOnceKey(created.api_key_once);
-      setMessage("Đã thu hồi key cũ và cấp key mới. Raw key chỉ hiển thị một lần.");
+      setMessage(`Đã cấp key mới. Key cũ còn hiệu lực ${created.old_revoke_at ? formatRemaining(created.old_revoke_at, now) : "trong thời gian chuyển đổi"}. Raw key chỉ hiển thị một lần.`);
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể cấp key mới.");
@@ -393,7 +408,12 @@ export function AdminConsole() {
                     <button className="btn btn-secondary text-sm">Lưu lắp đặt</button>
                   </form>
                   <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600">
-                    <span>Key máy quét: {show.apiKeys?.find((key) => ["active", "deprecated"].includes(key.status))?.prefix ?? "chưa cấp"}</span>
+                    <span>Key máy quét: {show.apiKeys?.find((key) => key.status === "active")?.prefix ?? "chưa cấp"}</span>
+                    {show.apiKeys?.find((key) => key.status === "deprecated" && key.revokeAt)?.revokeAt && (
+                      <span className="text-amber-700">
+                        Key cũ hết hạn sau {formatRemaining(show.apiKeys.find((key) => key.status === "deprecated")!.revokeAt!, now)}
+                      </span>
+                    )}
                     {show.apiKeys?.some((key) => ["active", "deprecated"].includes(key.status)) ? (
                       <button className="btn btn-secondary text-xs" onClick={() => void rotateShowScanKey(show.id)}>Cấp key mới</button>
                     ) : (

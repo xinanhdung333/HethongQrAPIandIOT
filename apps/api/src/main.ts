@@ -4,8 +4,10 @@ import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { HttpExceptionFilter } from "./filters/http-exception.filter";
 import { AppModule } from "./modules/app.module";
+import { validateEnv } from "./config/env-validation";
 
 async function bootstrap() {
+  validateEnv();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   if (process.env.TRUST_PROXY_HOPS) app.getHttpAdapter().getInstance().set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
   app.enableCors({

@@ -11,7 +11,8 @@ const sections = [
   { id: "secrets", label: "Rental secrets", icon: ShieldCheck },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "webhooks", label: "Webhook", icon: Webhook },
-  { id: "audit", label: "Audit logs", icon: Download }
+  { id: "audit", label: "Audit logs", icon: Download },
+  { id: "security", label: "Nhật ký bảo mật", icon: ShieldCheck }
 ] as const;
 type SectionId = typeof sections[number]["id"];
 
@@ -24,6 +25,8 @@ type AuditRow = { id: string; method: string; endpoint: string; statusCode: numb
 type OfflineSettings = { tenant_id: string; offline_capable: boolean; enabled_at: string | null };
 
 type Audit = { items: AuditRow[]; total: number; page: number };
+type SecurityEvent = { id: string; action: string; targetType: string | null; targetId: string | null; ip: string | null; userAgent: string | null; createdAt: string; metadata: Record<string, unknown> };
+type SecurityEvents = { items: SecurityEvent[]; total: number; page: number };
 type AuditFilter = { endpoint: string; status: string; from: string; to: string; is_test: string };
 const emptyAuditFilter: AuditFilter = { endpoint: "", status: "", from: "", to: "", is_test: "" };
 
@@ -32,6 +35,7 @@ export default function ApiKeysPage() {
   const [analytics, setAnalytics] = useState<Analytics>({ totals: { requests: 0, qr_created: 0, verify_success: 0, verify_failed: 0, billed_amount: 0 }, daily: [] });
   const [webhooks, setWebhooks] = useState<WebhookLog[]>([]);
   const [audit, setAudit] = useState<Audit>({ items: [], total: 0, page: 1 });
+  const [securityEvents, setSecurityEvents] = useState<SecurityEvents>({ items: [], total: 0, page: 1 });
   const [message, setMessage] = useState("");
   const [rawKey, setRawKey] = useState("");
   const [rawKeyRevokeAt, setRawKeyRevokeAt] = useState<string | null>(null);
@@ -50,16 +54,18 @@ export default function ApiKeysPage() {
   const [offlineLoading, setOfflineLoading] = useState(false);
 
   async function load(nextAuditFilter = auditFilter) {
-    const [nextOverview, nextAnalytics, nextWebhooks, nextAudit] = await Promise.all([
+    const [nextOverview, nextAnalytics, nextWebhooks, nextAudit, nextSecurityEvents] = await Promise.all([
       api<DeveloperOverview>("/api/v1/developer/overview", { cache: "no-store" }),
       api<Analytics>("/api/v1/developer/analytics", { cache: "no-store" }),
       api<{ items: WebhookLog[] }>("/api/v1/developer/webhooks", { cache: "no-store" }),
-      api<Audit>(`/api/v1/developer/audit${auditQs(nextAuditFilter)}`, { cache: "no-store" })
+      api<Audit>(`/api/v1/developer/audit${auditQs(nextAuditFilter)}`, { cache: "no-store" }),
+      api<SecurityEvents>("/api/v1/developer/security-events", { cache: "no-store" })
     ]);
     setOverview(nextOverview);
     setAnalytics(nextAnalytics);
     setWebhooks(nextWebhooks.items ?? []);
     setAudit(nextAudit);
+    setSecurityEvents(nextSecurityEvents);
   }
 
   function auditQs(filter = auditFilter) {
@@ -342,6 +348,7 @@ export default function ApiKeysPage() {
       {activeSection === "webhooks" && <section id="webhooks" className="panel mt-6 overflow-hidden"><div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-5 py-4"><Webhook size={18} /><h2 className="font-semibold">Webhook delivery logs</h2></div><div className="divide-y divide-zinc-200">{webhooks.map((item) => <article key={item.id} className="p-5 text-sm"><div className="flex flex-wrap justify-between gap-3"><b>{item.event}</b><span>{item.status} - {item.attempts} attempts - manual {item.manualReplayCount}/5</span></div><p className="mt-1 text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString("vi-VN")}</p>{item.logs[0] && <p className="mt-2 text-zinc-600">Latest: HTTP {item.logs[0].statusCode ?? "-"} {item.logs[0].error ?? ""}</p>}<button className="btn btn-secondary mt-3 text-sm" disabled={item.manualReplayCount >= 5} onClick={() => void retryWebhook(item.id)}>Replay</button></article>)}{!webhooks.length && <p className="p-5 text-sm text-zinc-500">Chua co webhook nao.</p>}</div></section>}
 
       {activeSection === "audit" && <section id="audit" className="panel mt-6 overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 p-5"><div><h2 className="font-semibold">Audit logs</h2><p className="mt-1 text-sm text-zinc-600">{audit.total.toLocaleString("vi-VN")} request theo bo loc hien tai.</p></div><button className="btn btn-secondary text-sm" onClick={exportAudit}><Download size={16} /> CSV 10k</button></div><div className="grid gap-3 border-b border-zinc-200 p-5 md:grid-cols-6"><input className="field" placeholder="Endpoint" value={auditFilter.endpoint} onChange={e => setAuditFilter(v => ({ ...v, endpoint: e.target.value }))} /><input className="field" placeholder="Status 403/429" value={auditFilter.status} onChange={e => setAuditFilter(v => ({ ...v, status: e.target.value }))} /><input className="field" type="date" value={auditFilter.from} onChange={e => setAuditFilter(v => ({ ...v, from: e.target.value }))} /><input className="field" type="date" value={auditFilter.to} onChange={e => setAuditFilter(v => ({ ...v, to: e.target.value }))} /><select className="field" value={auditFilter.is_test} onChange={e => setAuditFilter(v => ({ ...v, is_test: e.target.value }))}><option value="">Live + test</option><option value="false">Live only</option><option value="true">Test only</option></select><div className="flex gap-2"><button className="btn btn-primary flex-1 text-sm" onClick={() => void load(auditFilter)}>Loc</button><button className="btn btn-secondary px-3 text-sm" onClick={() => { setAuditFilter(emptyAuditFilter); void load(emptyAuditFilter); }}>Reset</button></div></div><div className="overflow-auto"><table className="w-full min-w-[920px] text-left text-sm"><tbody className="divide-y divide-zinc-200">{audit.items.map(row => <tr key={row.id}><td className="px-5 py-3">{new Date(row.createdAt).toLocaleString("vi-VN")}</td><td className="px-5 py-3">{row.method}</td><td className="px-5 py-3">{row.endpoint}</td><td className="px-5 py-3">{row.statusCode}</td><td className="px-5 py-3">{row.durationMs}ms</td><td className="px-5 py-3">{row.isTest ? "test" : "live"}</td><td className="px-5 py-3">{row.ip ?? "-"}</td><td className="px-5 py-3">{row.error ?? ""}</td></tr>)}{!audit.items.length && <tr><td className="px-5 py-6 text-zinc-500">Chua co audit log.</td></tr>}</tbody></table></div></section>}
+      {activeSection === "security" && <section id="security" className="panel mt-6 overflow-hidden"><div className="border-b border-zinc-200 bg-zinc-50 p-5"><h2 className="font-semibold">Nhật ký bảo mật</h2><p className="mt-1 text-sm text-zinc-600">Các thao tác key và secret của riêng tài khoản này.</p></div><div className="overflow-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b border-zinc-200"><th className="px-5 py-3">Thời gian</th><th className="px-5 py-3">Hành động</th><th className="px-5 py-3">IP</th><th className="px-5 py-3">Thiết bị</th><th className="px-5 py-3">Metadata</th></tr></thead><tbody className="divide-y divide-zinc-200">{securityEvents.items.map(item => <tr key={item.id}><td className="px-5 py-3">{new Date(item.createdAt).toLocaleString("vi-VN")}</td><td className="px-5 py-3 font-medium">{item.action}</td><td className="px-5 py-3">{item.ip ?? "-"}</td><td className="max-w-xs truncate px-5 py-3">{item.userAgent ?? "-"}</td><td className="px-5 py-3">{Object.entries(item.metadata).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "-"}</td></tr>)}{!securityEvents.items.length && <tr><td colSpan={5} className="px-5 py-6 text-zinc-500">Chưa có sự kiện bảo mật.</td></tr>}</tbody></table></div></section>}
       {rotateTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="rotate-key-title">
           <form className="panel w-full max-w-md p-6" onSubmit={(event) => { event.preventDefault(); void submitRotate(); }}>
