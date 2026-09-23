@@ -17,13 +17,158 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PACKAGE: "@smartqr/api"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://smartqr:1@postgres:5432/smartqr?schema=public
+    command: ["npm", "run", "db:migrate:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PACKAGE: "@smartqr/api"
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      DATABASE_URL: postgresql://smartqr:1@postgres:5432/smartqr?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret
+      QR_JWT_SECRET: qr-jwt-dev-secret
+      API_KEY_PEPPER: local-development-api-key-pepper
+      API_SECRET_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      PAYMENT_LINK_SECRET: payment-link-dev-secret
+      PAYOS_WEBHOOK_SECRET: payos-demo-dev-secret
+      WEB_ORIGIN: http://localhost:3000
+      PAYMENT_DEMO_MODE: "true"
+      TICKET_SERVICE_URL: http://ticket-service:3003
+      RENTAL_SERVICE_URL: http://rental-service:3004
+      QR_SERVICE_URL: http://qr-service:3005
+      INTERNAL_SERVICE_TOKEN: docker-internal-service-token
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      ticket-service:
+        condition: service_started
+      rental-service:
+        condition: service_started
+      qr-service:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PACKAGE: "@smartqr/web"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+
+  ticket-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PACKAGE: "@smartqr/ticket-service"
+    environment:
+      NODE_ENV: development
+      PORT: "3003"
+      DATABASE_URL: postgresql://smartqr:1@postgres:5432/smartqr?schema=public
+      JWT_SECRET: dev-secret
+      QR_JWT_SECRET: qr-jwt-dev-secret
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  rental-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PACKAGE: "@smartqr/rental-service"
+    environment:
+      NODE_ENV: development
+      PORT: "3004"
+      DATABASE_URL: postgresql://smartqr:1@postgres:5432/smartqr?schema=public
+      INTERNAL_SERVICE_TOKEN: docker-internal-service-token
+    ports:
+      - "3004:3004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  qr-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PACKAGE: "@smartqr/qr-service"
+    environment:
+      NODE_ENV: development
+      PORT: "3005"
+      DATABASE_URL: postgresql://smartqr:1@postgres:5432/smartqr?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret
+      QR_JWT_SECRET: qr-jwt-dev-secret
+      API_KEY_PEPPER: local-development-api-key-pepper
+      API_SECRET_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      PAYMENT_LINK_SECRET: payment-link-dev-secret
+      PAYOS_WEBHOOK_SECRET: payos-demo-dev-secret
+      WEB_ORIGIN: http://localhost:3000
+      RENTAL_SERVICE_URL: http://rental-service:3004
+      INTERNAL_SERVICE_TOKEN: docker-internal-service-token
+      API_PUBLIC_URL: http://localhost:4000
+    ports:
+      - "3005:3005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      rental-service:
+        condition: service_started
+
 volumes:
   postgres_data:
+  redis_data:

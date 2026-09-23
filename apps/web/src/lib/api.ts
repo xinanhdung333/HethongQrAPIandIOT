@@ -123,8 +123,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       window.localStorage.removeItem("smartqr_token");
       const next = `${window.location.pathname}${window.location.search}`;
       window.location.href = `/dang-nhap?next=${encodeURIComponent(next)}`;
+      return new Promise<T>(() => {});
     }
-    return new Promise<T>(() => {});
+    throw new NetworkError(`API yêu cầu đăng nhập cho ${path}.`);
   }
   if (!res.ok) {
     const text = await res.text();

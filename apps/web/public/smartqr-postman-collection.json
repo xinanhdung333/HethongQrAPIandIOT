@@ -4,17 +4,58 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:4000" },
-    { "key": "adminToken", "value": "" },
-    { "key": "userToken", "value": "" },
-    { "key": "apiKey", "value": "" },
-    { "key": "productId", "value": "prod_gm65" },
-    { "key": "rentalId", "value": "" },
-    { "key": "showId", "value": "" },
-    { "key": "showSlug", "value": "dem-nhac-abc" },
-    { "key": "ticketOrderId", "value": "" },
-    { "key": "qrJwt", "value": "" },
-    { "key": "userId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": "prod_gm65"
+    },
+    {
+      "key": "rentalId",
+      "value": ""
+    },
+    {
+      "key": "showId",
+      "value": ""
+    },
+    {
+      "key": "showSlug",
+      "value": "dem-nhac-abc"
+    },
+    {
+      "key": "ticketOrderId",
+      "value": ""
+    },
+    {
+      "key": "qrJwt",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "csrf_token",
+      "value": ""
+    },
+    {
+      "key": "csrf_cookie",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -24,34 +65,63 @@
           "name": "Register user",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/register",
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"new-user@smartqr.vn\",\n  \"password\": \"demo123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new-user@smartqr.vn\",\n  \"password\": \"demo123456\"\n}"
+            }
           }
         },
         {
           "name": "Login admin",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/login",
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@smartqr.vn\",\n  \"password\": \"admin123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@smartqr.vn\",\n  \"password\": \"admin123456\"\n}"
+            }
           }
         },
         {
           "name": "Login user",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/auth/login",
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"demo@smartqr.vn\",\n  \"password\": \"demo123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@smartqr.vn\",\n  \"password\": \"demo123456\"\n}"
+            }
           }
         },
         {
           "name": "Me",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/auth/me"
           }
         },
@@ -60,18 +130,32 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{userToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
             ],
             "url": "{{baseUrl}}/auth/profile",
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"demo@smartqr.vn\",\n  \"password\": \"demo123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@smartqr.vn\",\n  \"password\": \"demo123456\"\n}"
+            }
           }
         },
         {
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/auth/logout"
           }
         }
@@ -80,14 +164,28 @@
     {
       "name": "Public Store",
       "item": [
-        { "name": "Get products", "request": { "method": "GET", "url": "{{baseUrl}}/products" } },
+        {
+          "name": "Get products",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/products"
+          }
+        },
         {
           "name": "Buy component",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/products/{{productId}}/buy",
-            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 1,\n  \"shipping_address\": {\n    \"address\": \"12 Nguyễn Huệ, Quận 1, TP.HCM\",\n    \"phone\": \"0900000000\"\n  }\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1,\n  \"shipping_address\": {\n    \"address\": \"12 Nguyễn Huệ, Quận 1, TP.HCM\",\n    \"phone\": \"0900000000\"\n  }\n}"
+            }
           }
         }
       ]
@@ -95,18 +193,66 @@
     {
       "name": "Rental",
       "item": [
-        { "name": "List rentals", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/rentals" } },
+        {
+          "name": "List rentals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals"
+          }
+        },
         {
           "name": "Create rental",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{userToken}}" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
             "url": "{{baseUrl}}/rentals",
-            "body": { "mode": "raw", "raw": "{\n  \"product_id\": \"prod_sp01\",\n  \"type\": \"rent\",\n  \"duration\": 1,\n  \"quantity\": 1,\n  \"shipping_address\": {\n    \"address\": \"12 Nguyễn Huệ, Quận 1, TP.HCM\",\n    \"phone\": \"0900000000\"\n  },\n  \"agree_damage_terms\": true\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"prod_sp01\",\n  \"type\": \"rent\",\n  \"duration\": 1,\n  \"quantity\": 1,\n  \"shipping_address\": {\n    \"address\": \"12 Nguyễn Huệ, Quận 1, TP.HCM\",\n    \"phone\": \"0900000000\"\n  },\n  \"agree_damage_terms\": true\n}"
+            }
           }
         },
-        { "name": "Get rental detail", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/rentals/{{rentalId}}" } },
-        { "name": "Return rental", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }], "url": "{{baseUrl}}/rentals/{{rentalId}}/return" } }
+        {
+          "name": "Get rental detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals/{{rentalId}}"
+          }
+        },
+        {
+          "name": "Return rental",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals/{{rentalId}}/return"
+          }
+        }
       ]
     },
     {
@@ -116,22 +262,50 @@
           "name": "Create show",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/shows",
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Đêm Nhạc Postman\",\n  \"banner\": \"https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=80\",\n  \"theme_color\": \"#18181b\",\n  \"location\": \"Nhà hát Hòa Bình, TP.HCM\",\n  \"start_at\": \"2026-10-01T20:00:00.000Z\",\n  \"ticket_price\": 100000,\n  \"total_tickets\": 500,\n  \"description\": \"Show tạo từ Postman\",\n  \"payout_account\": {\n    \"bank\": \"DEMO Bank\",\n    \"account\": \"0123456789\",\n    \"name\": \"SMARTQR DEMO\"\n  }\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Đêm Nhạc Postman\",\n  \"banner\": \"https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=80\",\n  \"theme_color\": \"#18181b\",\n  \"location\": \"Nhà hát Hòa Bình, TP.HCM\",\n  \"start_at\": \"2026-10-01T20:00:00.000Z\",\n  \"ticket_price\": 100000,\n  \"total_tickets\": 500,\n  \"description\": \"Show tạo từ Postman\",\n  \"payout_account\": {\n    \"bank\": \"DEMO Bank\",\n    \"account\": \"0123456789\",\n    \"name\": \"SMARTQR DEMO\"\n  }\n}"
+            }
           }
         },
-        { "name": "Get public show", "request": { "method": "GET", "url": "{{baseUrl}}/e/{{showSlug}}" } },
+        {
+          "name": "Get public show",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/e/{{showSlug}}"
+          }
+        },
         {
           "name": "Buy ticket",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/e/{{showSlug}}/buy",
-            "body": { "mode": "raw", "raw": "{\n  \"buyer_name\": \"Nguyễn Văn A\",\n  \"buyer_email\": \"buyer@example.com\",\n  \"quantity\": 1\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"buyer_name\": \"Nguyễn Văn A\",\n  \"buyer_email\": \"buyer@example.com\",\n  \"quantity\": 1\n}"
+            }
           }
         },
-        { "name": "End show", "request": { "method": "PATCH", "url": "{{baseUrl}}/shows/{{showId}}/end" } }
+        {
+          "name": "End show",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/shows/{{showId}}/end"
+          }
+        }
       ]
     },
     {
@@ -141,9 +315,17 @@
           "name": "PayOS demo webhook",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{baseUrl}}/webhooks/payos-demo",
-            "body": { "mode": "raw", "raw": "{\n  \"order_id\": \"{{ticketOrderId}}\",\n  \"kind\": \"ticket\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{ticketOrderId}}\",\n  \"kind\": \"ticket\"\n}"
+            }
           }
         },
         {
@@ -151,11 +333,20 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-API-KEY", "value": "{{apiKey}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{apiKey}}"
+              }
             ],
             "url": "{{baseUrl}}/api/v1/tickets/verify",
-            "body": { "mode": "raw", "raw": "{\n  \"qr_jwt\": \"{{qrJwt}}\",\n  \"gate_id\": \"gate-main\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qr_jwt\": \"{{qrJwt}}\",\n  \"gate_id\": \"gate-main\"\n}"
+            }
           }
         },
         {
@@ -163,66 +354,237 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-DEMO-SCAN", "value": "true" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-DEMO-SCAN",
+                "value": "true"
+              }
             ],
             "url": "{{baseUrl}}/api/v1/tickets/verify",
-            "body": { "mode": "raw", "raw": "{\n  \"qr_jwt\": \"{{qrJwt}}\",\n  \"gate_id\": \"gate-main\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qr_jwt\": \"{{qrJwt}}\",\n  \"gate_id\": \"gate-main\"\n}"
+            }
           }
         }
       ]
     },
     {
       "name": "Dashboard",
-      "item": [{ "name": "Get dashboard", "request": { "method": "GET", "url": "{{baseUrl}}/dashboard" } }]
+      "item": [
+        {
+          "name": "Get dashboard",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/dashboard"
+          }
+        }
+      ]
     },
     {
       "name": "Admin",
       "item": [
-        { "name": "Summary", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/summary" } },
-        { "name": "Users", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/users" } },
-        { "name": "Products", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/products" } },
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/summary"
+          }
+        },
+        {
+          "name": "Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/users"
+          }
+        },
+        {
+          "name": "Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/products"
+          }
+        },
         {
           "name": "Update product",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/admin/products/{{productId}}",
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"GM65 QR Scanner\",\n  \"price_sell\": 690000,\n  \"price_rent_month\": 0,\n  \"deposit_fee\": 0,\n  \"stock\": 80\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"GM65 QR Scanner\",\n  \"price_sell\": 690000,\n  \"price_rent_month\": 0,\n  \"deposit_fee\": 0,\n  \"stock\": 80\n}"
+            }
           }
         },
-        { "name": "Orders", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/orders" } },
-        { "name": "Shows", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/shows" } },
+        {
+          "name": "Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/orders"
+          }
+        },
+        {
+          "name": "Shows",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/shows"
+          }
+        },
         {
           "name": "Update show status",
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/admin/shows/{{showId}}/status",
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"ACTIVE\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}"
+            }
           }
         },
-        { "name": "Ticket orders", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/tickets" } },
-        { "name": "API keys", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }], "url": "{{baseUrl}}/admin/api-keys" } },
+        {
+          "name": "Ticket orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/tickets"
+          }
+        },
+        {
+          "name": "API keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/api-keys"
+          }
+        },
         {
           "name": "Create API key",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
             ],
             "url": "{{baseUrl}}/admin/api-keys",
-            "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"quota\": 10000\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"quota\": 10000\n}"
+            }
           }
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const method = pm.request.method.toUpperCase();",
+          "const safeMethods = ['GET', 'HEAD', 'OPTIONS'];",
+          "const baseUrl = pm.variables.replaceIn(pm.collectionVariables.get('baseUrl') || pm.environment.get('baseUrl') || 'http://localhost:4000');",
+          "const requestUrl = pm.variables.replaceIn(pm.request.url.toString());",
+          "let pathname = requestUrl;",
+          "try {",
+          "  pathname = new URL(requestUrl).pathname;",
+          "} catch (error) {",
+          "  pathname = requestUrl.replace(baseUrl, '').split('?')[0];",
+          "}",
+          "",
+          "const csrfExemptPrefixes = ['/api/v1/', '/webhooks/', '/api/thanh-toan/'];",
+          "const needsCsrf = !safeMethods.includes(method) && !csrfExemptPrefixes.some((prefix) => pathname.startsWith(prefix));",
+          "if (needsCsrf) {",
+          "  pm.sendRequest({ url: baseUrl + '/api/csrf-token', method: 'GET' }, function (error, response) {",
+          "    if (error) {",
+          "      throw error;",
+          "    }",
+          "",
+          "    const json = response.json();",
+          "    const token = json && json.token;",
+          "    if (!token) {",
+          "      throw new Error('Missing CSRF token from /api/csrf-token');",
+          "    }",
+          "",
+          "    const setCookie = response.headers.get('Set-Cookie') || '';",
+          "    const cookieValue = (setCookie.match(/csrf_token=([^;]+)/) || [])[1] || token;",
+          "    pm.collectionVariables.set('csrf_token', token);",
+          "    pm.collectionVariables.set('csrf_cookie', cookieValue);",
+          "    pm.request.headers.upsert({ key: 'X-CSRF-Token', value: token });",
+          "    pm.request.headers.upsert({ key: 'Cookie', value: 'csrf_token=' + cookieValue });",
+          "  });",
+          "}"
+        ]
+      }
     }
   ]
 }

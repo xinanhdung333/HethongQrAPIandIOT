@@ -8,11 +8,15 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w @smartqr/api\" \"npm run dev -w @smartqr/web\"",
+    "dev:ticket-service": "npm run dev -w @smartqr/ticket-service",
+    "dev:rental-service": "npm run dev -w @smartqr/rental-service",
+    "dev:qr-service": "npm run dev -w @smartqr/qr-service",
     "start:local": "concurrently \"npm run start -w @smartqr/api\" \"npm run start -w @smartqr/web\"",
     "build": "npm run build -w @smartqr/api && npm run build -w @smartqr/web",
     "lint": "npm run lint -w @smartqr/web",
     "db:generate": "npm run db:generate -w @smartqr/database",
     "db:migrate": "npm run db:migrate -w @smartqr/database",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w @smartqr/database",
     "db:seed": "npm run db:seed -w @smartqr/database",
     "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
   },

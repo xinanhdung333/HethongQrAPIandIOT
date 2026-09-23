@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Req, Res, UnauthorizedException } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpException, Param, Patch, Post, Req, Res, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { Request, Response } from "express";
 import { ApiRentalDto, UpdateApiKeyScopesDto } from "../dto";
 import { AuthService } from "../security/auth.service";
@@ -13,7 +13,7 @@ export class ApiRentalsController {
   async list(@Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.allowCustomerOnly(authorization, res);
     if (!session) return;
-    const orders = await this.platform.listApiRentals(session.sub);
+    const orders = await this.forward("GET", "/api-rentals", session.sub);
     await this.activity.record({ session, action: "LIST_API_RENTALS", targetType: "ApiRentalOrder", metadata: { count: orders.length }, req });
     return orders;
   }
@@ -22,7 +22,7 @@ export class ApiRentalsController {
   async create(@Body() dto: ApiRentalDto, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.allowCustomerOnly(authorization, res);
     if (!session) return;
-    const result = await this.platform.createApiRental(dto, session.sub);
+    const result = await this.forward("POST", "/api-rentals", session.sub, dto);
     await this.activity.record({
       session,
       action: "CREATE_API_RENTAL",
@@ -32,6 +32,26 @@ export class ApiRentalsController {
       req
     });
     return result;
+  }
+
+  private async forward(method: "GET" | "POST", path: string, userId: string, body?: unknown) {
+    const base = process.env.RENTAL_SERVICE_URL ?? "http://localhost:3004";
+    try {
+      const response = await fetch(`${base}${path}`, {
+        method,
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(5000)
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new HttpException(payload ?? { error: "rental_service_error", message: "Rental service request failed" }, response.status);
+      }
+      return payload;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw new ServiceUnavailableException({ error: "rental_service_unavailable", message: "Rental service is unavailable" });
+    }
   }
 
   @Patch("api-keys/:id/scopes")

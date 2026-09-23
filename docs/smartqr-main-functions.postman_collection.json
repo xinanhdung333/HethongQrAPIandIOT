@@ -1,0 +1,1107 @@
+{
+  "info": {
+    "name": "SmartQR - Main Function Tests",
+    "description": "Postman collection test cac chuc nang chinh: auth, profile, products, rental, show, ticket, API rental, developer, QR, payment, status. Chay theo thu tu folder/request tu tren xuong duoi.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "userEmail",
+      "value": "postman-{{$timestamp}}@smartqr.test"
+    },
+    {
+      "key": "userPassword",
+      "value": "demo123456"
+    },
+    {
+      "key": "auth_token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "product_id",
+      "value": "prod_sp01"
+    },
+    {
+      "key": "rental_id",
+      "value": ""
+    },
+    {
+      "key": "api_rental_id",
+      "value": ""
+    },
+    {
+      "key": "api_key_id",
+      "value": ""
+    },
+    {
+      "key": "api_key",
+      "value": ""
+    },
+    {
+      "key": "show_id",
+      "value": ""
+    },
+    {
+      "key": "show_slug",
+      "value": ""
+    },
+    {
+      "key": "ticket_order_id",
+      "value": ""
+    },
+    {
+      "key": "ticket_code",
+      "value": ""
+    },
+    {
+      "key": "qr_jwt",
+      "value": ""
+    },
+    {
+      "key": "qr_id",
+      "value": ""
+    },
+    {
+      "key": "payment_id",
+      "value": ""
+    },
+    {
+      "key": "gate_id",
+      "value": "gate-main"
+    },
+    {
+      "key": "idempotency_key",
+      "value": "pm-{{$timestamp}}"
+    },
+    {
+      "key": "csrf_token",
+      "value": ""
+    },
+    {
+      "key": "csrf_cookie",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const method = pm.request.method.toUpperCase();",
+          "const safeMethods = ['GET', 'HEAD', 'OPTIONS'];",
+          "const baseUrl = pm.variables.replaceIn(pm.collectionVariables.get('baseUrl') || pm.environment.get('baseUrl') || 'http://localhost:4000');",
+          "const requestUrl = pm.variables.replaceIn(pm.request.url.toString());",
+          "let pathname = requestUrl;",
+          "try {",
+          "  pathname = new URL(requestUrl).pathname;",
+          "} catch (error) {",
+          "  pathname = requestUrl.replace(baseUrl, '').split('?')[0];",
+          "}",
+          "",
+          "const csrfExemptPrefixes = ['/api/v1/', '/webhooks/', '/api/thanh-toan/'];",
+          "const needsCsrf = !safeMethods.includes(method) && !csrfExemptPrefixes.some((prefix) => pathname.startsWith(prefix));",
+          "if (needsCsrf) {",
+          "  pm.sendRequest({ url: baseUrl + '/api/csrf-token', method: 'GET' }, function (error, response) {",
+          "    if (error) {",
+          "      throw error;",
+          "    }",
+          "",
+          "    const json = response.json();",
+          "    const token = json && json.token;",
+          "    if (!token) {",
+          "      throw new Error('Missing CSRF token from /api/csrf-token');",
+          "    }",
+          "",
+          "    const setCookie = response.headers.get('Set-Cookie') || '';",
+          "    const cookieValue = (setCookie.match(/csrf_token=([^;]+)/) || [])[1] || token;",
+          "    pm.collectionVariables.set('csrf_token', token);",
+          "    pm.collectionVariables.set('csrf_cookie', cookieValue);",
+          "    pm.request.headers.upsert({ key: 'X-CSRF-Token', value: token });",
+          "    pm.request.headers.upsert({ key: 'Cookie', value: 'csrf_token=' + cookieValue });",
+          "  });",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('HTTP status is not 5xx', function () {",
+          "  pm.expect(pm.response.code).to.be.below(500);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Health / Status",
+      "item": [
+        {
+          "name": "API status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status response has status label', function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('status');",
+                  "  pm.expect(json).to.have.property('checked_at');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Auth",
+      "item": [
+        {
+          "name": "Register customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('register returns token or duplicate error', function () {",
+                  "  pm.expect([200, 201, 400, 409]).to.include(pm.response.code);",
+                  "});",
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const token = json.token || json.access_token || json.accessToken;",
+                  "  if (token) pm.collectionVariables.set('auth_token', token);",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('login success', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const token = json.token || json.access_token || json.accessToken;",
+                  "pm.expect(token, 'token').to.be.ok;",
+                  "pm.collectionVariables.set('auth_token', token);",
+                  "if (json.user && json.user.id) pm.collectionVariables.set('user_id', json.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Negative - Get current user without token",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('missing token is rejected', function () {",
+                  "  pm.expect(pm.response.code).to.equal(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update profile password only",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/profile",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{userPassword}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Products / Rental",
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const items = Array.isArray(json) ? json : (json.items || json.products || []);",
+                  "  if (items[0] && items[0].id) pm.collectionVariables.set('product_id', items[0].id);",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create rental order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"type\": \"rent\",\n  \"duration\": 1,\n  \"quantity\": 1,\n  \"shipping_address\": {\n    \"receiver\": \"Postman Tester\",\n    \"phone\": \"0900000000\",\n    \"address\": \"12 Nguyen Hue, Quan 1, TP.HCM\"\n  },\n  \"agree_damage_terms\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rental order created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const id = json.order_id || json.id || (json.order && json.order.id);",
+                  "if (id) pm.collectionVariables.set('rental_id', id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my rentals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals"
+          }
+        },
+        {
+          "name": "Get rental detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals/{{rental_id}}"
+          }
+        },
+        {
+          "name": "Negative - create rental without accepting terms",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": \"{{product_id}}\",\n  \"type\": \"rent\",\n  \"duration\": 1,\n  \"quantity\": 1,\n  \"shipping_address\": {\n    \"receiver\": \"Postman Tester\",\n    \"phone\": \"0900000000\",\n    \"address\": \"12 Nguyen Hue, Quan 1, TP.HCM\"\n  },\n  \"agree_damage_terms\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('invalid rental is rejected or business rule returns non-success', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([400, 401, 403, 422]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Show / Ticket",
+      "item": [
+        {
+          "name": "Create show",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/shows",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Show {{$timestamp}}\",\n  \"banner\": \"https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=80\",\n  \"theme_color\": \"#18181b\",\n  \"location\": \"Nha hat Hoa Binh, TP.HCM\",\n  \"start_at\": \"2026-10-01T20:00:00.000Z\",\n  \"end_at\": \"2026-10-01T23:00:00.000Z\",\n  \"ticket_price\": 100000,\n  \"total_tickets\": 50,\n  \"description\": \"Show test tu Postman\",\n  \"payout_account\": {\n    \"method\": \"bank\",\n    \"bankName\": \"DEMO Bank\",\n    \"accountNumber\": \"0123456789\",\n    \"accountName\": \"SMARTQR DEMO\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('show created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const id = json.show_id || json.id || (json.show && json.show.id);",
+                  "const slug = json.slug || json.show_slug || (json.show && json.show.slug);",
+                  "if (id) pm.collectionVariables.set('show_id', id);",
+                  "if (slug) pm.collectionVariables.set('show_slug', slug);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get public show by slug",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/e/{{show_slug}}"
+          }
+        },
+        {
+          "name": "Buy ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/e/{{show_slug}}/buy",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"buyer_name\": \"Nguyen Van A\",\n  \"buyer_email\": \"buyer-{{$timestamp}}@example.com\",\n  \"buyer_phone\": \"0900000001\",\n  \"buyer_note\": \"Postman test\",\n  \"quantity\": 1\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('ticket order created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const orderId = json.order_id || json.id || (json.order && json.order.id);",
+                  "if (orderId) pm.collectionVariables.set('ticket_order_id', orderId);",
+                  "const firstTicket = (json.tickets && json.tickets[0]) || (json.order && json.order.tickets && json.order.tickets[0]);",
+                  "if (firstTicket) {",
+                  "  if (firstTicket.ticket_code || firstTicket.code) pm.collectionVariables.set('ticket_code', firstTicket.ticket_code || firstTicket.code);",
+                  "  if (firstTicket.qr_jwt) pm.collectionVariables.set('qr_jwt', firstTicket.qr_jwt);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Demo PayOS webhook - mark ticket paid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/webhooks/payos-demo",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{ticket_order_id}}\",\n  \"kind\": \"ticket\"\n}"
+            }
+          }
+        },
+        {
+          "name": "End show",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/shows/{{show_id}}/end"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - API Rental / Developer",
+      "item": [
+        {
+          "name": "Create API rental",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api-rentals",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_name\": \"Postman App {{$timestamp}}\",\n  \"website\": \"https://example.com\",\n  \"callback_url\": \"https://example.com/webhooks/smartqr\",\n  \"plan\": \"starter\",\n  \"duration\": 1,\n  \"scopes\": [\"qr:create\", \"qr:read\", \"ticket:verify\"]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('api rental created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const id = json.order_id || json.id || (json.rental && json.rental.id);",
+                  "if (id) pm.collectionVariables.set('api_rental_id', id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List API rentals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api-rentals"
+          }
+        },
+        {
+          "name": "Developer overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/overview"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const rentals = json.rentals || json.api_rentals || [];",
+                  "  if (!pm.collectionVariables.get('api_rental_id') && rentals[0] && rentals[0].id) pm.collectionVariables.set('api_rental_id', rentals[0].id);",
+                  "  const keys = json.keys || [];",
+                  "  if (keys[0]) {",
+                  "    if (keys[0].id) pm.collectionVariables.set('api_key_id', keys[0].id);",
+                  "    if (keys[0].key || keys[0].api_key || keys[0].secret) pm.collectionVariables.set('api_key', keys[0].key || keys[0].api_key || keys[0].secret);",
+                  "  }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create test API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/rentals/{{api_rental_id}}/test-key"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('test key created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const id = json.id || json.key_id || (json.key && json.key.id);",
+                  "const key = json.api_key || json.key || json.secret || (json.key && (json.key.api_key || json.key.secret));",
+                  "if (id) pm.collectionVariables.set('api_key_id', id);",
+                  "if (key && typeof key === 'string') pm.collectionVariables.set('api_key', key);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update API key scopes",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api-rentals/api-keys/{{api_key_id}}/scopes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scopes\": [\"qr:create\", \"qr:read\", \"ticket:verify\"]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - QR API",
+      "item": [
+        {
+          "name": "Create QR code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotency_key}}-qr-create"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_type\": \"order\",\n  \"resource_id\": \"order-{{$timestamp}}\",\n  \"customer_ref\": \"customer-postman\",\n  \"payload\": {\n    \"amount\": 100000,\n    \"currency\": \"VND\"\n  },\n  \"metadata\": {\n    \"source\": \"postman\"\n  },\n  \"ttl_seconds\": 3600,\n  \"max_uses\": 1,\n  \"allowed_gate_ids\": [\"{{gate_id}}\"]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('qr created', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const json = pm.response.json();",
+                  "const id = json.id || json.qr_id || (json.qr && json.qr.id);",
+                  "if (id) pm.collectionVariables.set('qr_id', id);",
+                  "if (json.qr_jwt) pm.collectionVariables.set('qr_jwt', json.qr_jwt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create QR code again with same idempotency key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotency_key}}-qr-create"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_type\": \"order\",\n  \"resource_id\": \"order-{{$timestamp}}\",\n  \"customer_ref\": \"customer-postman\",\n  \"payload\": {\n    \"amount\": 100000,\n    \"currency\": \"VND\"\n  },\n  \"metadata\": {\n    \"source\": \"postman-idempotency\"\n  },\n  \"ttl_seconds\": 3600,\n  \"max_uses\": 1,\n  \"allowed_gate_ids\": [\"{{gate_id}}\"]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get QR detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes/{{qr_id}}"
+          }
+        },
+        {
+          "name": "Get QR SVG",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes/{{qr_id}}/svg"
+          }
+        },
+        {
+          "name": "Bulk create QR codes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotency_key}}-qr-bulk"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes/bulk",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resources\": [\n    {\n      \"resource_type\": \"ticket\",\n      \"resource_id\": \"ticket-{{$timestamp}}-1\",\n      \"ttl_seconds\": 3600\n    },\n    {\n      \"resource_type\": \"ticket\",\n      \"resource_id\": \"ticket-{{$timestamp}}-2\",\n      \"ttl_seconds\": 3600\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Negative - create QR without API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_type\": \"order\",\n  \"resource_id\": \"missing-api-key\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('missing API key is rejected', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke QR code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotency_key}}-qr-revoke"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/qr-codes/{{qr_id}}/revoke"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Ticket Verify / Payment",
+      "item": [
+        {
+          "name": "Verify ticket by ticket_code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotency_key}}-ticket-verify"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/tickets/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_code\": \"{{ticket_code}}\",\n  \"gate_id\": \"{{gate_id}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Negative - verify ticket with wrong gate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/tickets/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_code\": \"{{ticket_code}}\",\n  \"gate_id\": \"wrong-gate\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('wrong gate is rejected or marked invalid', function () {",
+                  "  if (pm.response.code >= 400) {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 401, 403, 404, 409, 422]);",
+                  "  } else {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.valid === false || json.status === 'invalid' || json.allowed === false).to.equal(true);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create payment transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-api-key",
+                "value": "{{api_key}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idempotency_key}}-payment"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/payments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gross_amount\": 100000,\n  \"qr_code_id\": \"{{qr_id}}\",\n  \"metadata\": {\n    \"source\": \"postman\",\n    \"reference\": \"pay-{{$timestamp}}\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const id = json.id || json.payment_id || (json.payment && json.payment.id);",
+                  "  if (id) pm.collectionVariables.set('payment_id', id);",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Developer list payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/payments?page=1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Developer Audit / Webhooks",
+      "item": [
+        {
+          "name": "Developer analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/analytics"
+          }
+        },
+        {
+          "name": "Developer audit",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/audit?page=1"
+          }
+        },
+        {
+          "name": "Developer audit export CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/audit/export"
+          }
+        },
+        {
+          "name": "Developer security events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/security-events?page=1"
+          }
+        },
+        {
+          "name": "Developer webhooks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/webhooks?page=1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Cleanup / Optional",
+      "item": [
+        {
+          "name": "Return rental order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/rentals/{{rental_id}}/return"
+          }
+        },
+        {
+          "name": "Suspend API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/keys/{{api_key_id}}/suspend",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"until\": \"2026-10-01T00:00:00.000Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resume API key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/developer/keys/{{api_key_id}}/resume"
+          }
+        },
+        {
+          "name": "Logout customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auth_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    }
+  ]
+}

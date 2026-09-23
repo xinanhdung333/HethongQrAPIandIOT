@@ -10,6 +10,35 @@ Monorepo cho SmartQR: thue hop quet IoT, white-label show, ban linh kien va API 
 
 ## Chay local
 
+Dung tool `.bat` tren Windows/PowerShell:
+
+```powershell
+.\smartqr-dev-tool.bat
+```
+
+Lenh tren se chay full local app:
+
+- Docker PostgreSQL + Redis co volume.
+- Backend: API `:4000`, ticket service `:3003`, rental service `:3004`, QR service `:3005`.
+- Frontend web `:3000`.
+
+Mot so lenh phu:
+
+```powershell
+.\smartqr-dev-tool.bat all
+.\smartqr-dev-tool.bat db
+.\smartqr-dev-tool.bat ps
+.\smartqr-dev-tool.bat stop 3000
+.\smartqr-dev-tool.bat stop-all
+.\smartqr-dev-tool.bat logs
+.\smartqr-dev-tool.bat menu
+```
+
+Neu dung PowerShell, bat buoc co `.\` truoc ten file `.bat` vi PowerShell
+khong tu chay lenh trong thu muc hien tai.
+
+Chay thu cong:
+
 ```powershell
 docker compose up -d
 npm run db:setup
@@ -18,6 +47,79 @@ npm run dev
 
 Web: `http://localhost:3000`  
 API: `http://localhost:4000`
+
+Ticket service tach rieng:
+
+- App chinh (giu contract cho client): `http://localhost:4000`
+- Ticket service: `http://localhost:3003`
+- Verify qua app chinh: `POST /api/v1/tickets/verify`
+- Verify truc tiep ticket service: `POST /api/v1/tickets/verify`
+
+Chay rieng ticket service:
+
+```powershell
+npm run dev:ticket-service
+```
+
+Can chay app chinh song song de giu endpoint proxy:
+
+```powershell
+npm run dev -w @smartqr/api
+```
+
+Rental service tach rieng:
+
+- App chinh (giu contract cho client): `http://localhost:4000/api-rentals`
+- Rental service: `http://localhost:3004/api-rentals`
+- Consume quota noi bo: `POST http://localhost:3004/internal/rentals/:id/consume-quota`
+- Refund quota noi bo: `POST http://localhost:3004/internal/rentals/:id/refund-quota`
+
+Chay rental service:
+
+```powershell
+npm run dev:rental-service
+```
+
+Endpoint `/internal/*` bat buoc nhan header `x-internal-service-token` trung voi
+`INTERNAL_SERVICE_TOKEN`; khong dung API key cua khach hang.
+
+QR service tach rieng:
+
+- App chinh (giu contract cho client): `http://localhost:4000/api/v1/qr-codes`
+- QR service: `http://localhost:3005/api/v1/qr-codes`
+- SVG qua app chinh: `GET http://localhost:4000/api/v1/qr-codes/:id/svg`
+- SVG truc tiep: `GET http://localhost:3005/api/v1/qr-codes/:id/svg`
+
+Chay QR service:
+
+```powershell
+npm run dev:qr-service
+```
+
+Chay toan bo backend bang Docker Compose:
+
+```powershell
+docker compose up --build
+```
+
+Docker Compose se chay PostgreSQL, Redis, API chinh va ba service tach rieng.
+Trong mang Docker, cac service goi nhau qua ten `ticket-service`, `rental-service`
+va `qr-service`; tu may host van truy cap duoc lan luot tai cong 4000, 3003,
+3004 va 3005. Stack Docker local chay voi `NODE_ENV=development`; khong dung
+cac secrets nay cho production. Dung `docker compose down` de dung stack.
+
+Neu Prisma bao loi khong tim thay OpenSSL trong container, build lai image sau
+khi Dockerfile da cai `openssl`:
+
+```powershell
+docker compose down
+docker compose build --no-cache
+docker compose up
+```
+
+Khi tao QR, QR service goi `RENTAL_SERVICE_URL` de consume quota truoc.
+Neu tao QR that bai, service goi lai endpoint refund quota; neu rental service
+khong san sang thi QR khong duoc tao.
 
 Tai khoan seed:
 

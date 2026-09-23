@@ -8,6 +8,9 @@ build/
 zipfile/
 *.zip
 .env
-.env.local
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 .DS_Store
-.env.example
