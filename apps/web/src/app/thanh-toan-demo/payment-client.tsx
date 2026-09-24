@@ -7,7 +7,7 @@ import { CheckCircle2, Copy, Download, Eye, EyeOff, Loader2, ShieldCheck } from 
 import { useSearchParams } from "next/navigation";
 import { API_URL, api } from "@/lib/api";
 
-type PaidTicket = { id: string; qrJwt: string; isUsed: boolean };
+type PaidTicket = { id: string; qrJwt: string; qrOfflineJwt?: string | null; isUsed: boolean };
 type PaidTicketOrder = {
   id: string;
   status: string;
@@ -221,7 +221,7 @@ function TicketCard({ ticket, index }: { ticket: PaidTicket; index: number }) {
       <div className="mt-5 grid gap-4 sm:grid-cols-[160px_1fr]">
         <div className="relative flex aspect-square items-center justify-center rounded-lg border border-zinc-200 bg-white p-4">
           <div className={revealed ? "" : "blur-md"}>
-            <QRCodeSVG id={qrId} value={ticket.qrJwt} size={128} level="H" includeMargin />
+            <QRCodeSVG id={qrId} value={ticket.qrOfflineJwt ?? ticket.qrJwt} size={128} level="H" includeMargin />
           </div>
           {!revealed && <span className="absolute rounded-lg bg-white/90 px-3 py-1 text-xs font-medium text-zinc-700">Đang che</span>}
         </div>
@@ -229,6 +229,16 @@ function TicketCard({ ticket, index }: { ticket: PaidTicket; index: number }) {
           <label className="grid gap-2 text-sm font-medium">
             Chuỗi code check vé
             <textarea className="field min-h-24 text-xs" value={revealed ? ticket.qrJwt : "Bấm Mở mã để xem chuỗi JWT"} readOnly />
+            {ticket.qrOfflineJwt && (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left">
+                <p className="text-xs font-semibold text-emerald-800">Offline JWT (RS256)</p>
+                <p className="mt-1 line-clamp-2 break-all text-xs text-emerald-700">{ticket.qrOfflineJwt}</p>
+                <button className="btn btn-secondary mt-3 text-xs" onClick={() => void navigator.clipboard.writeText(ticket.qrOfflineJwt!)}>
+                  <Copy size={14} />
+                  Copy offline JWT
+                </button>
+              </div>
+            )}
           </label>
           <div className="flex flex-wrap gap-2">
             <button className="btn btn-secondary text-sm" disabled={!revealed} onClick={copyCode}>

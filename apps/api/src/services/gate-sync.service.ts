@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { ApiKey, ApiRentalOrder, Prisma } from "@prisma/client";
-import { getGateKeyPairForTenant, getLegacyGatePublicKey } from "../security/gate-signing";
+import { getGatePublicKeyForTenant, getLegacyGatePublicKey } from "../security/gate-signing";
 import { gateRedisTenantId, GateUsageResourceType } from "../security/gate-tenant";
 import { isOfflineCapable, resolveTenantId } from "../security/tenant";
 import { PrismaService } from "./prisma.service";
@@ -21,7 +21,7 @@ export class GateSyncService {
     if (!capable) {
       throw new ForbiddenException({ error: "tenant_offline_disabled", message: "Tenant nay chua bat che do quet offline" });
     }
-    const { publicKey } = await getGateKeyPairForTenant(this.prisma, tenantId);
+    const publicKey = await getGatePublicKeyForTenant(this.prisma, tenantId);
     return { public_key: publicKey, algorithm: "RS256", tenant_id: tenantId, legacy_public_key: getLegacyGatePublicKey() };
   }
 

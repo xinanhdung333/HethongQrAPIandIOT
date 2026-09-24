@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { importSPKI, jwtVerify, type KeyLike } from "jose";
+import { decodeProtectedHeader, importSPKI, jwtVerify, type KeyLike } from "jose";
 import { CheckCircle2, Copy, KeyRound, Loader2, RefreshCw, Router, ScanLine, Server, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { readPrunedUsedMap } from "@/lib/offline-scan";
@@ -176,6 +176,8 @@ export function IotDeveloperClient() {
       if (!publicKeyRef.current) throw new Error("Chua co public key cache. Hay bam Sync device khi con mang.");
       const token = offlineTokenFromInput(qrInput);
       if (!token) throw new Error("Khong tim thay qr_offline_jwt trong input");
+      const header = decodeProtectedHeader(token);
+      if (header.alg !== "RS256") throw new Error(`Token nay la ${header.alg ?? "unknown"}, chi dung cho verify online. Offline can qr_offline_jwt ky RS256.`);
       const payload = await verifyOfflineToken(token);
       const expectedTenantId = window.localStorage.getItem(storageKeys.tenantId);
       if (!expectedTenantId) throw new Error("Chua co tenant_id cache");

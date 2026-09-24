@@ -12,7 +12,7 @@ export type DashboardTicketOrder = {
   buyerNote?: string | null;
   createdAt?: string;
   show: { name: string; id: string; slug?: string; startAt?: string; location?: string; totalTickets?: number; soldTickets?: number; ticketPrice?: number };
-  tickets: Array<{ id: string; qrJwt: string; isUsed: boolean }>;
+  tickets: Array<{ id: string; qrJwt: string; qrOfflineJwt?: string | null; isUsed: boolean }>;
 };
 
 export type DashboardData = {
@@ -23,7 +23,7 @@ export type DashboardData = {
   ticketOrders: DashboardTicketOrder[];
   purchasedTicketOrders: DashboardTicketOrder[];
   payouts: Array<{ id: string; amount: number; status: string }>;
-  tickets: Array<{ id: string; qrJwt: string; isUsed: boolean; show: { name: string } }>;
+  tickets: Array<{ id: string; qrJwt: string; qrOfflineJwt?: string | null; isUsed: boolean; show: { name: string } }>;
   externalQrCodes: Array<{
     id: string;
     code: string;

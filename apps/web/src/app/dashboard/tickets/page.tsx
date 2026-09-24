@@ -149,13 +149,19 @@ function TicketQrCards({ order }: { order: DashboardTicketOrder }) {
             <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs font-medium">{ticketItem.isUsed ? "Đã dùng" : "Còn hiệu lực"}</span>
           </div>
           <div className="mt-4 flex justify-center rounded-lg bg-white p-3">
-            <QRCodeSVG value={ticketItem.qrJwt} size={128} level="H" includeMargin />
+            <QRCodeSVG value={ticketItem.qrOfflineJwt ?? ticketItem.qrJwt} size={128} level="H" includeMargin />
           </div>
           <p className="mt-3 line-clamp-2 break-all text-xs text-zinc-500">{ticketItem.qrJwt}</p>
           <button className="btn btn-secondary mt-3 w-full text-xs" onClick={() => void navigator.clipboard.writeText(ticketItem.qrJwt)}>
             <Copy size={14} />
-            Copy code
+            Copy online code
           </button>
+          {ticketItem.qrOfflineJwt && (
+            <button className="btn btn-secondary mt-2 w-full text-xs" onClick={() => void navigator.clipboard.writeText(ticketItem.qrOfflineJwt!)}>
+              <Copy size={14} />
+              Copy offline JWT
+            </button>
+          )}
         </div>
       ))}
     </div>

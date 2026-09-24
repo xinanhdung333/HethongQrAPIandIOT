@@ -37,6 +37,17 @@ export async function getGateKeyPairForTenant(prisma: PrismaService, tenantId: s
   }
 }
 
+export async function getGatePublicKeyForTenant(prisma: PrismaService, tenantId: string) {
+  const cached = keyCache.get(tenantId);
+  if (cached) return cached.publicKey;
+
+  const existing = await prisma.tenantGateKey.findUnique({ where: { tenantId } });
+  if (existing) return normalizePem(existing.publicKey);
+
+  const { publicKey } = await getGateKeyPairForTenant(prisma, tenantId);
+  return publicKey;
+}
+
 export function getLegacyGatePublicKey() {
   return process.env.GATE_RSA_PUBLIC_KEY ? normalizePem(process.env.GATE_RSA_PUBLIC_KEY) : null;
 }

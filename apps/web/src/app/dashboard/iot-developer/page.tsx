@@ -1,5 +1,5 @@
-import { IotDeveloperClient } from "./iot-developer-client";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <IotDeveloperClient />;
+  redirect("/iot-developer");
 }

@@ -271,8 +271,8 @@ export function AdminConsole() {
 
   return (
     <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-      <aside className="border-b border-zinc-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex h-full flex-col gap-6 p-4">
+      <aside className="border-b border-zinc-200 bg-white lg:sticky lg:top-0 lg:h-dvh lg:overflow-hidden lg:border-b-0 lg:border-r">
+        <div className="flex h-full min-h-0 flex-col gap-6 p-4">
           <div className="flex items-center gap-3 rounded-lg border border-zinc-200 p-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-900 text-white">
               <ShieldCheck size={18} />
@@ -283,7 +283,7 @@ export function AdminConsole() {
             </div>
           </div>
 
-          <nav className="grid gap-6">
+          <nav className="grid min-h-0 flex-1 gap-6 overflow-y-auto pr-1">
             <div>
               <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-normal text-zinc-400">Quản trị</p>
               <div className="flex gap-2 overflow-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
@@ -316,7 +316,7 @@ export function AdminConsole() {
             </div>
           </nav>
 
-          <button className="btn btn-secondary mt-auto text-sm" onClick={logout}>
+          <button className="btn btn-secondary mt-auto shrink-0 text-sm" onClick={logout}>
             <LogOut size={16} />
             Đăng xuất admin
           </button>

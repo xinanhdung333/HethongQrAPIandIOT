@@ -8,19 +8,134 @@ Monorepo cho SmartQR: thue hop quet IoT, white-label show, ban linh kien va API 
 - Thue API QR: `/thue-api`
 - Developer console: `/dashboard/api-keys`
 
-## Chay local
+## Tai source va chay local
 
-Dung tool `.bat` tren Windows/PowerShell:
+Yeu cau chung:
+
+- Node.js 20+
+- npm 10+
+- Git
+- Docker Desktop neu muon chay bang Docker
+
+Tai source:
+
+```powershell
+git clone <repo-url>
+cd HeThongQRthongminh
+```
+
+Neu ban dang co san folder source thi chi can mo terminal tai thu muc project:
+
+```powershell
+cd C:\HeThongQRthongminh
+```
+
+Neu chay khong dung Docker cho app thi cai dependencies tren may host:
+
+```powershell
+npm install
+```
+
+### Cach 1: Chay bang Docker
+
+Docker Compose se chay day du PostgreSQL, Redis, API chinh, web va cac service tach rieng.
+
+```powershell
+docker compose up --build
+```
+
+Mo app:
+
+- Web: `http://localhost:3000`
+- API chinh: `http://localhost:4000`
+- Ticket service: `http://localhost:3003`
+- Rental service: `http://localhost:3004`
+- QR service: `http://localhost:3005`
+
+Dung stack Docker:
+
+```powershell
+docker compose down
+```
+
+Xoa ca database/redis volume local neu muon reset sach du lieu:
+
+```powershell
+docker compose down -v
+```
+
+Neu Prisma bao loi khong tim thay OpenSSL trong container, build lai image:
+
+```powershell
+docker compose down
+docker compose build --no-cache
+docker compose up
+```
+
+### Cach 2: Chay khong dung Docker cho app
+
+Cach nay van can PostgreSQL va Redis. Ban co the cai PostgreSQL/Redis truc tiep tren may, hoac chi dung Docker cho database:
+
+```powershell
+docker compose up -d postgres redis
+```
+
+Tao file env cho API neu chua co:
+
+```powershell
+Copy-Item apps\api\.env.example apps\api\.env
+```
+
+Sau do sua `apps\api\.env` cho dung local. Gia tri mac dinh de dev:
+
+```env
+DATABASE_URL="postgresql://smartqr:1@localhost:5432/smartqr?schema=public"
+REDIS_URL="redis://localhost:6379"
+JWT_SECRET="smartqr-local-dev-secret-change-in-production"
+PAYMENT_DEMO_MODE="true"
+WEB_ORIGIN="http://localhost:3000"
+TICKET_SERVICE_URL="http://localhost:3003"
+RENTAL_SERVICE_URL="http://localhost:3004"
+QR_SERVICE_URL="http://localhost:3005"
+```
+
+Generate Prisma, migrate va seed database:
+
+```powershell
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+```
+
+Chay app chinh o che do dev:
+
+```powershell
+npm run dev
+```
+
+Lenh tren chay API chinh `:4000` va web `:3000`. Neu can chay day du cac service tach rieng cho luong verify/quota/QR, mo them cac terminal khac:
+
+```powershell
+npm run dev:ticket-service
+npm run dev:rental-service
+npm run dev:qr-service
+```
+
+Mo app:
+
+- Web: `http://localhost:3000`
+- API chinh: `http://localhost:4000`
+- Ticket service: `http://localhost:3003`
+- Rental service: `http://localhost:3004`
+- QR service: `http://localhost:3005`
+
+### Cach nhanh tren Windows
+
+Repo co san tool `.bat` de chay nhanh local tren Windows/PowerShell:
 
 ```powershell
 .\smartqr-dev-tool.bat
 ```
-
-Lenh tren se chay full local app:
-
-- Docker PostgreSQL + Redis co volume.
-- Backend: API `:4000`, ticket service `:3003`, rental service `:3004`, QR service `:3005`.
-- Frontend web `:3000`.
 
 Mot so lenh phu:
 
@@ -34,19 +149,7 @@ Mot so lenh phu:
 .\smartqr-dev-tool.bat menu
 ```
 
-Neu dung PowerShell, bat buoc co `.\` truoc ten file `.bat` vi PowerShell
-khong tu chay lenh trong thu muc hien tai.
-
-Chay thu cong:
-
-```powershell
-docker compose up -d
-npm run db:setup
-npm run dev
-```
-
-Web: `http://localhost:3000`  
-API: `http://localhost:4000`
+Neu dung PowerShell, bat buoc co `.\` truoc ten file `.bat` vi PowerShell khong tu chay lenh trong thu muc hien tai.
 
 Ticket service tach rieng:
 

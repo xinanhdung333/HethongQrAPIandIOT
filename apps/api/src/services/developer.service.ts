@@ -188,37 +188,64 @@ export class DeveloperService {
     const isTest = query.is_test === "true";
     const start = new Date(`${month}-01T00:00:00.000Z`);
     const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
-    const where: Prisma.ApiUsageEventWhereInput = { userId, isTest, createdAt: { gte: start, lt: end }, ...(query.key_id ? { apiKeyId: query.key_id } : {}) };
-    const [events, periods] = await Promise.all([
-      this.prisma.apiUsageEvent.findMany({ where, orderBy: { createdAt: "asc" } }),
-      this.prisma.apiUsagePeriod.findMany({ where: { month, isTest } })
+    const keyFilter = query.key_id ? Prisma.sql`AND api_key_id = ${query.key_id}` : Prisma.empty;
+    const [daily, resourceTypes, totals, periods] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ date: string; requests: number; qr_created: number; verify_success: number; verify_failed: number; cost: number }>>(Prisma.sql`
+        SELECT
+          TO_CHAR(created_at::date, 'YYYY-MM-DD') AS date,
+          COUNT(*)::int AS requests,
+          COALESCE(SUM(CASE WHEN action = 'qr.create' THEN units ELSE 0 END), 0)::int AS qr_created,
+          COALESCE(SUM(CASE WHEN action = 'qr.verify' AND success = true THEN 1 ELSE 0 END), 0)::int AS verify_success,
+          COALESCE(SUM(CASE WHEN action = 'qr.verify' AND success = false THEN 1 ELSE 0 END), 0)::int AS verify_failed,
+          COALESCE(SUM(cost), 0)::int AS cost
+        FROM api_usage_events
+        WHERE user_id = ${userId}
+          AND is_test = ${isTest}
+          AND created_at >= ${start}
+          AND created_at < ${end}
+          ${keyFilter}
+        GROUP BY created_at::date
+        ORDER BY created_at::date ASC
+      `),
+      this.prisma.$queryRaw<Array<{ resource_type: string; count: number }>>(Prisma.sql`
+        SELECT resource_type, COALESCE(SUM(units), 0)::int AS count
+        FROM api_usage_events
+        WHERE user_id = ${userId}
+          AND is_test = ${isTest}
+          AND created_at >= ${start}
+          AND created_at < ${end}
+          AND resource_type IS NOT NULL
+          ${keyFilter}
+        GROUP BY resource_type
+        ORDER BY count DESC
+      `),
+      this.prisma.apiUsageEvent.aggregate({
+        where: { userId, isTest, createdAt: { gte: start, lt: end }, ...(query.key_id ? { apiKeyId: query.key_id } : {}) },
+        _count: { _all: true },
+        _sum: { cost: true, units: true }
+      }),
+      this.prisma.apiUsagePeriod.findMany({ where: { month, isTest, scopeId: { in: await this.userUsageScopeIds(userId, query.key_id) } } })
     ]);
-    const daily = new Map<string, { date: string; requests: number; qr_created: number; verify_success: number; verify_failed: number; cost: number }>();
-    const resourceTypes = new Map<string, number>();
-    let billed = 0;
-    let qrCreated = 0;
-    let verifySuccess = 0;
-    let verifyFailed = 0;
-    for (const event of events) {
-      const date = event.createdAt.toISOString().slice(0, 10);
-      const row = daily.get(date) ?? { date, requests: 0, qr_created: 0, verify_success: 0, verify_failed: 0, cost: 0 };
-      row.requests += 1;
-      row.cost += event.cost;
-      billed += event.cost;
-      if (event.action === "qr.create") { row.qr_created += event.units; qrCreated += event.units; }
-      if (event.action === "qr.verify" && event.success) { row.verify_success += 1; verifySuccess += 1; }
-      if (event.action === "qr.verify" && !event.success) { row.verify_failed += 1; verifyFailed += 1; }
-      if (event.resourceType) resourceTypes.set(event.resourceType, (resourceTypes.get(event.resourceType) ?? 0) + event.units);
-      daily.set(date, row);
-    }
+    const qrCreated = daily.reduce((sum, row) => sum + row.qr_created, 0);
+    const verifySuccess = daily.reduce((sum, row) => sum + row.verify_success, 0);
+    const verifyFailed = daily.reduce((sum, row) => sum + row.verify_failed, 0);
     return {
       month,
       is_test: isTest,
-      totals: { requests: events.length, qr_created: qrCreated, verify_success: verifySuccess, verify_failed: verifyFailed, billed_amount: billed },
-      daily: Array.from(daily.values()),
-      resource_types: Array.from(resourceTypes, ([resource_type, count]) => ({ resource_type, count })).sort((a, b) => b.count - a.count),
+      totals: { requests: totals._count._all, qr_created: qrCreated, verify_success: verifySuccess, verify_failed: verifyFailed, billed_amount: totals._sum.cost ?? 0 },
+      daily,
+      resource_types: resourceTypes,
       usage: periods.map(period => ({ scope_id: period.scopeId, quota: 0, qr_created: period.qrCreated, billed_amount: period.billedAmount }))
     };
+  }
+
+  private async userUsageScopeIds(userId: string, keyId?: string) {
+    if (keyId) {
+      const key = await this.prisma.apiKey.findFirst({ where: { id: keyId, userId }, select: { rentalId: true, showId: true, id: true } });
+      return key ? [key.rentalId, key.showId, key.id].filter(Boolean) as string[] : [];
+    }
+    const keys = await this.prisma.apiKey.findMany({ where: { userId }, select: { rentalId: true, showId: true, id: true } });
+    return Array.from(new Set(keys.flatMap(key => [key.rentalId, key.showId, key.id]).filter(Boolean) as string[]));
   }
 
   async audit(userId: string, query: { from?: string; to?: string; endpoint?: string; status?: string; page?: string; is_test?: string }) {
