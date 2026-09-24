@@ -153,6 +153,25 @@ Tinh nang API:
 - Metadata tu do, multi-use QR, allowed gate IDs, not-before, revoke.
 - Audit log moi request qua API key.
 
+## Roadmap bao mat ve / QR
+
+Hien tai he thong dung:
+
+- `qrJwt` ky HMAC/HS256 bang `QR_JWT_SECRET` cho verify online.
+- `qrOfflineJwt` ky RSA/RS256 cho gate offline, gate chi giu public key.
+- Show Scan Key rieng cho may quet tung show, scope `ticket:verify`.
+- DB/Redis check tiep: dung show, chua used, chua revoke, chua het han.
+
+Cac nang cap nen lam sau de tien gan mo hinh Ticketmaster SafeTix / Google Wallet:
+
+- Rotating QR/barcode: ma hien thi thay doi moi 15-60 giay de giam rui ro screenshot/resale ngoai he thong.
+- Per-ticket rotating secret: moi ve co secret rieng de sinh ma dong, secret khong dua vao JWT/public payload.
+- Wallet pass: xuat Apple Wallet / Google Wallet event ticket, pass duoc ky bang certificate/issuer key.
+- Online + offline hybrid: online check DB realtime; offline dung RSA public key, revoked-delta va usage sync khi co mang.
+- Key rotation cho offline tenant: ho tro `kid`/key version de gate chap nhan key cu trong grace window roi cat dan.
+- Replay protection manh hon cho offline: gate luu local `jti` da quet, sync conflict ve server khi online lai.
+- Admin/operator runbook: quy trinh revoke ve, rotate key, cap lai show scan key, va xu ly may quet bi mat.
+
 ## Chay test
 
 ```powershell

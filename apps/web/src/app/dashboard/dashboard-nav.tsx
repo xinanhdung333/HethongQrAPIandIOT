@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Banknote, BarChart3, ChevronDown, FileClock, FileText, KeyRound, Radio, ScanLine, Settings, ShieldCheck, Ticket, Truck, UserRound, Webhook, WifiOff } from "lucide-react";
+import { Activity, Banknote, BarChart3, ChevronDown, Cpu, FileClock, FileText, KeyRound, Radio, ScanLine, Settings, ShieldCheck, Ticket, Truck, UserRound, Webhook, WifiOff } from "lucide-react";
 
 const nav = [
   ["Tổng quan", "/dashboard", Activity],
@@ -15,6 +15,7 @@ const nav = [
   ["Vé đã mua", "/dashboard/tickets", Ticket],
   ["Tài liệu", "/dashboard/documents", FileText],
   ["Quét thử", "/dashboard/scan", ScanLine],
+  ["IoT developer", "/dashboard/iot-developer", Cpu],
   ["Demo cong offline", "/dashboard/gate-offline", WifiOff],
   ["Cá nhân", "/dashboard/profile", UserRound]
 ] as const;

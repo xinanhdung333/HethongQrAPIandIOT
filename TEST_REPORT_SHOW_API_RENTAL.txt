@@ -1,0 +1,105 @@
+Bao cao test tao show + mua ve + thue API
+Thoi gian chay: 2026-09-23T16:57:21.340Z
+Moi truong: local API http://127.0.0.1:4000, PostgreSQL local, Redis local, rental-service http://localhost:3004
+
+1. Tai khoan test
+- User ID: cmuecip5h00j65phct48nwkc2
+- Email: report-1790182634069@smartqr.test
+- Dang ky/login qua API thanh cong, lay duoc access token.
+
+2. Luong tao show
+- Endpoint: POST /shows
+- Ket qua:
+  - show_id: cmuecip6s00ja5phc95yzycie
+  - public_url: /e/bao-cao-e2e-show-1790182634069
+  - embed_code: iframe tro ve public URL
+- Kiem tra public show truoc khi mua:
+  - slug: bao-cao-e2e-show-1790182634069
+  - soldTickets: 0
+  - totalTickets: 20
+
+3. Luong mua ve show
+- Endpoint: POST /e/:slug/buy
+- So ve mua: 2
+- Gia ve: 120000 VND
+- Ket qua tao payment demo:
+  - order_id: cmuecip7d00je5phci2t0cp12
+  - payment_url: duoc tao dung dang /thanh-toan-demo?order_id=...&kind=ticket&expires=...&signature=...
+- Sau 6.5 giay demo paid tu dong:
+  - TicketOrder.status: PAID
+  - quantity: 2
+  - totalAmount: 240000
+  - platformFee: 12000
+  - payoutAmount: 228000
+  - tickets sinh ra: 2
+  - Moi ticket co qrJwt: true
+  - Moi ticket co qrOfflineJwt: true
+- Show sau paid:
+  - soldTickets: 2
+  - totalTickets: 20
+
+Nhan xet luong show:
+- Tao show tra dung public_url va embed_code.
+- Public show doc duoc truoc khi mua.
+- Mua ve tao order va payment link hop le.
+- Demo paid da sinh dung so luong ve, cap nhat soldTickets va tinh phi 5% dung.
+- Offline QR duoc sinh do tenant/show owner da bat offline capability khi tao show.
+
+4. Luong thue API
+- Endpoint: POST /api-rentals
+- Body test:
+  - app_name: IoT Bao cao 1790182634069
+  - plan: starter
+  - duration: 1
+  - scopes: qr:create, qr:read, ticket:verify
+- Ket qua tao don:
+  - order_id: cmueciueq00013bbh8ht2zfcf
+  - payment_url: duoc tao dung dang /thanh-toan-demo?order_id=...&kind=api&expires=...&signature=...
+  - monthly_price: 199000
+  - duration: 1
+  - quota: 5000
+  - total: 199000
+
+5. Xac nhan thanh toan demo don thue API
+- Endpoint: POST /webhooks/payos-demo
+- Header ky payment link:
+  - X-Payment-Expires: hop le
+  - X-Payment-Signature: HMAC hop le voi PAYMENT_LINK_SECRET local
+- Ket qua:
+  - ApiRentalOrder.status: ACTIVE
+  - apiKeyPrefix: sq_live_f9735562cd70
+  - api_key_once_present: true
+- DB sau paid:
+  - rental id: cmueciueq00013bbh8ht2zfcf
+  - status: ACTIVE
+  - plan: starter
+  - duration: 1
+  - quota: 5000
+  - scopes: qr:create, qr:read, ticket:verify
+  - total: 199000
+- API key trong DB:
+  - id: cmueciug300jr5phcpv0p8p3l
+  - prefix: sq_live_f9735562cd70
+  - scopes: qr:create, qr:read, ticket:verify
+  - quota: 5000
+  - status: active
+  - DB chi luu keyHash, raw key chi tra mot lan qua api_key_once.
+- List endpoint /api-rentals tra ve 1 don cho user test.
+
+Nhan xet luong thue API:
+- Tao don thue API thanh cong qua API chinh forward sang rental-service.
+- Payment demo ky bang HMAC duoc verify thanh cong.
+- Don chuyen ACTIVE va cap API key mot lan dung ky vong.
+- Prefix key duoc luu de hien dashboard; raw key khong nen hien lai.
+
+6. Nhan xet bao mat nhanh
+- Cac mutation web nhu /shows va /api-rentals can CSRF token; script test phai lay /api/csrf-token truoc.
+- /api/v1/* cho thiet bi/API client duoc mien CSRF va bao ve bang X-API-KEY + scope.
+- Payment demo callback khong chap nhan goi trong production va co HMAC signature + expires + replay key Redis.
+- Ticket QR co qrJwt HMAC va qrOfflineJwt RSA; payload co jti rieng cho tung ve.
+- API rental key cap ra mot lan; DB luu hash, khong luu raw key.
+
+7. Ket luan
+- Luong tao show -> public URL -> mua ve -> paid demo -> sinh QR ve: PASS.
+- Luong thue API -> payment demo -> ACTIVE -> cap API key: PASS.
+- Khong phat hien loi nghiep vu trong hai luong test nay.

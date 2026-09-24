@@ -4,7 +4,7 @@ import crypto from "crypto";
 import QRCode from "qrcode";
 import { AuthService, FULL_API_KEY_SCOPES } from "../security/auth.service";
 import { ApiKeyScope } from "../security/api-key.decorator";
-import { signOfflineQrToken } from "../security/gate-signing";
+import { getGateKeyPairForTenant, signOfflineQrToken } from "../security/gate-signing";
 import { gateRedisTenantId } from "../security/gate-tenant";
 import { enableOfflineCapable, isOfflineCapable } from "../security/tenant";
 import { ApiRentalDto, BuyProductDto, CreateExternalQrDto, LoginDto, RegisterDto, RentalDto, ShowDto, UpdateApiKeyScopesDto, UpdateProfileDto, VerifyTicketDto } from "../dto";
@@ -195,6 +195,7 @@ export class PlatformService {
       }
     });
     await enableOfflineCapable(this.prisma, userId, userId);
+    await getGateKeyPairForTenant(this.prisma, userId);
     return {
       show_id: show.id,
       public_url: `/e/${show.slug}`,
