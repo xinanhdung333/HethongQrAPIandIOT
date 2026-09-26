@@ -310,3 +310,13 @@ select {
 .field:focus {
   border-color: #18181b;
 }
+
+@media (min-width: 1024px) {
+  .dashboard-content {
+    transition: margin-left 200ms ease;
+  }
+
+  .dashboard-sidebar-collapsed .dashboard-content {
+    margin-left: 5rem;
+  }
+}

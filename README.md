@@ -80,6 +80,28 @@ Cach nay van can PostgreSQL va Redis. Ban co the cai PostgreSQL/Redis truc tiep 
 docker compose up -d postgres redis
 ```
 
+Neu PostgreSQL va Redis da duoc cai/chay ben ngoai Docker tren may moi, co the dung file tu dong:
+
+```powershell
+.\smartqr-no-docker-setup.bat
+```
+
+Mac dinh file nay ket noi:
+
+- PostgreSQL: `postgresql://smartqr:1@localhost:5432/smartqr?schema=public`
+- Redis: `redis://localhost:6379`
+
+Lenh tren se tao `.env` local cho cac app, chay `npm install`, Prisma generate/migrate/seed, roi mo web/API/services. Cac lenh phu:
+
+```powershell
+.\smartqr-no-docker-setup.bat setup
+.\smartqr-no-docker-setup.bat start
+.\smartqr-no-docker-setup.bat backend
+.\smartqr-no-docker-setup.bat web
+.\smartqr-no-docker-setup.bat check
+.\smartqr-no-docker-setup.bat stop
+```
+
 Tao file env cho API neu chua co:
 
 ```powershell

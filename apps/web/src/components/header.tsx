@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Cpu, UserRound } from "lucide-react";
-import { motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
 import { API_URL } from "@/lib/api";
 
@@ -15,7 +14,7 @@ const links = [
   ["Bảng giá", "/bang-gia"],
   ["Thuê API", "/thue-api"],
   ["Tài liệu", "/docs"]
-];
+] as const;
 
 export function Header() {
   const pathname = usePathname();
@@ -52,20 +51,23 @@ export function Header() {
           </span>
           SmartQR
         </Link>
+
         <nav className="hidden items-center gap-5 text-sm text-zinc-600 md:flex">
-          {links.map(([label, href]) => (
-            <Link key={href} href={href} className="focus-ring relative rounded-lg px-2 py-1 transition hover:text-zinc-950">
-              {(pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))) && (
-                <motion.span
-                  layoutId="nav-active"
-                  className="absolute inset-0 -z-10 rounded-lg bg-zinc-100"
-                  transition={{ type: "spring", stiffness: 380, damping: 34 }}
-                />
-              )}
-              <span>{label}</span>
-            </Link>
-          ))}
+          {links.map(([label, href]) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`focus-ring rounded-lg px-2 py-1 transition hover:text-zinc-950 ${active ? "bg-zinc-100 text-zinc-950" : ""}`}
+              >
+                {label}
+              </Link>
+            );
+          })}
         </nav>
+
         <div className="flex items-center gap-2">
           <Link href="/dashboard" className="btn btn-secondary focus-ring bg-white/80 text-sm">
             <UserRound size={16} />
