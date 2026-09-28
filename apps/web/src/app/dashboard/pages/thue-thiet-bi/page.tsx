@@ -1,1 +1,7 @@
-export { default, dynamic } from "@/app/thue-thiet-bi/page";
+import RentalPage, { dynamic } from "./rental-page";
+
+export { dynamic };
+
+export default function DashboardRentalPage() {
+  return <RentalPage />;
+}

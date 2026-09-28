@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { OrderType, Prisma, RentalStatus, TicketOrderStatus, UserRole } from "@prisma/client";
 import crypto from "crypto";
 import QRCode from "qrcode";
@@ -25,6 +25,8 @@ const GATE_USED_TTL_SECONDS = 60 * 60 * 24 * 400;
 
 @Injectable()
 export class PlatformService {
+  private readonly logger = new Logger(PlatformService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
@@ -194,8 +196,12 @@ export class PlatformService {
         payoutAccount: dto.payout_account as Prisma.InputJsonValue
       }
     });
-    await enableOfflineCapable(this.prisma, userId, userId);
-    await getGateKeyPairForTenant(this.prisma, userId);
+    try {
+      await enableOfflineCapable(this.prisma, userId, userId);
+      await getGateKeyPairForTenant(this.prisma, userId);
+    } catch (error) {
+      this.logger.warn(error instanceof Error ? error.message : "Cannot prepare offline gate keys for show");
+    }
     return {
       show_id: show.id,
       public_url: `/e/${show.slug}`,

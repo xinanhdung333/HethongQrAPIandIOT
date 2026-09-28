@@ -1,0 +1,27 @@
+[
+  {
+    "id": "5326e6d8-2675-4638-bdb8-accf0ebbb01d",
+    "bookId": "demo",
+    "pageNumber": 1,
+    "imageUrl": "/uploads/books/demo/1790486035760-f7e80795-27a7-4398-914b-b5b37e9cc6da.webp",
+    "title": "HAY",
+    "content": "HMGJN",
+    "createdAt": "2026-09-27T05:13:55.828Z"
+  },
+  {
+    "id": "b08487e7-82e9-4a26-b0e7-a6720110641a",
+    "bookId": "demo",
+    "pageNumber": 2,
+    "imageUrl": "/uploads/books/demo/1790486486305-100ab920-ab76-4a5d-8966-a2a659f34071.webp",
+    "title": "HMM",
+    "content": "UỴ",
+    "createdAt": "2026-09-27T05:21:26.355Z"
+  },
+  {
+    "id": "d78c1d5f-d97c-42bf-bab3-ec2d3809a6a9",
+    "bookId": "demo",
+    "pageNumber": 3,
+    "imageUrl": "/uploads/books/demo/1790487531297-12eb3e3e-0436-4f44-bd21-580049898c10.webp",
+    "createdAt": "2026-09-27T05:38:51.592Z"
+  }
+]
