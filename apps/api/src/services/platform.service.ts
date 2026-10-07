@@ -359,7 +359,9 @@ export class PlatformService {
     const order = await this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
     if (stage === "remaining") {
       if (!order || order.type !== OrderType.RENT) return order;
-      return this.prisma.rentalOrder.update({ where: { id: orderId }, data: { remainingPaidAmount: order.remainingAmount, remainingPaymentStatus: "PAID", remainingPaidAt: new Date() } });
+      const paidAt = new Date();
+      const shouldActivate = !order.startDate || order.startDate <= paidAt;
+      return this.prisma.rentalOrder.update({ where: { id: orderId }, data: { remainingPaidAmount: order.remainingAmount, remainingPaymentStatus: "PAID", remainingPaidAt: paidAt, ...(shouldActivate && order.status === RentalStatus.DEPOSIT_PAID ? { status: RentalStatus.ACTIVE } : {}) } });
     }
     if (!order || order.status !== RentalStatus.PENDING) return order;
     const nextStatus = order.type === OrderType.BUY ? RentalStatus.PAID : (order.startDate && order.startDate > new Date() ? RentalStatus.DEPOSIT_PAID : RentalStatus.ACTIVE);
