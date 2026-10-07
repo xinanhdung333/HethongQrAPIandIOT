@@ -39,6 +39,7 @@ export function PaymentClient() {
   const [rental, setRental] = useState<RentalCheckout | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [switchingMethod, setSwitchingMethod] = useState(false);
+  const [started, setStarted] = useState(false);
   const backHref = useMemo(() => kind === "rental" ? "/dashboard/rentals" : kind === "api" ? "/thue-api" : "/dashboard/tickets", [kind]);
 
   useEffect(() => {
@@ -48,24 +49,39 @@ export function PaymentClient() {
 
   async function switchPaymentMethod(method: PaymentMethod) {
     setPaymentMethod(method);
-    if (kind !== "rental" || paymentStage !== "remaining" || method === "payos_demo") return;
+  }
+
+  async function continuePayment() {
+    if (!paymentMethod) return;
+    if (kind !== "rental" || paymentStage !== "remaining" || paymentMethod === "payos_demo") {
+      setStarted(true);
+      return;
+    }
     setSwitchingMethod(true);
     try {
-      const result = await api<{ payment_demo_url: string }>(`/rentals/${orderId}/pay-remaining`, { method: "POST", body: JSON.stringify({ payment_method: method }) });
+      const result = await api<{ payment_demo_url: string }>(`/rentals/${orderId}/pay-remaining`, { method: "POST", body: JSON.stringify({ payment_method: paymentMethod }) });
       window.location.assign(result.payment_demo_url);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Không thể đổi phương thức thanh toán."); } finally { setSwitchingMethod(false); }
   }
 
   useEffect(() => {
-    if (kind === "rental" && !paymentMethod) return;
+    if (kind === "rental" && (!paymentMethod || !started)) return;
     if (gateway === "momo") {
-      setSeconds(0);
       setStatus("momo_returned");
       setMessage("Da quay lai tu MoMo sandbox. Trang thai don hang se duoc cap nhat khi backend nhan IPN MoMo hop le.");
+      if (kind === "rental" && paymentStage === "remaining") {
+        void api(`/rentals/${orderId}/pay-remaining/confirm-demo`, { method: "POST", body: "{}" }).then(() => setMessage("Thanh toan MoMo sandbox da duoc ghi nhan cho don thue."));
+      }
       return;
     }
     const timer = window.setTimeout(async () => {
       try {
+        if (kind === "rental" && paymentStage === "remaining") {
+          await api(`/rentals/${orderId}/pay-remaining/confirm-demo`, { method: "POST", body: "{}" });
+          setStatus("paid");
+          setMessage("Thanh toán phần còn lại đã được ghi nhận.");
+          return;
+        }
         const body = JSON.stringify({ order_id: orderId, kind, payment_stage: paymentStage });
         const result = await api<PaidTicketOrder | unknown>("/webhooks/payos-demo", {
           method: "POST",
@@ -97,11 +113,11 @@ export function PaymentClient() {
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "Không thể xác nhận thanh toán demo.");
       }
-    }, 5000);
+    }, kind === "rental" && paymentStage === "remaining" ? 300 : 5000);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage, paymentMethod]);
+  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage, paymentMethod, started]);
 
   return (
     <main className="shell py-16">
@@ -111,8 +127,8 @@ export function PaymentClient() {
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{status === "paid" ? "Da thanh toan demo" : status === "error" ? "Thanh toan demo loi" : status === "momo_returned" ? "MoMo da quay ve" : "PayOS DEMO MOCK"}</h1>
         <p className="mt-3 text-zinc-600">Đơn {orderId}. Số tiền được xác nhận từ dữ liệu đơn hàng.</p>
-        {kind === "rental" && rental && <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-left"><p className="font-semibold">{rental.product?.name} · {rental.quantity} thiết bị · {rental.duration} tháng</p><div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Giá gốc đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between"><span className="text-zinc-500">Tiền cọc đã trả</span><b className="text-emerald-700">− {money(rental.depositAmount)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Phần còn phải trả</span><b className="text-xl text-amber-700">{money(paymentStage === "remaining" ? rental.remainingAmount : rental.depositAmount)}</b></div></div></div>}
-        {kind === "rental" && <div className="mx-auto mt-4 max-w-xl text-left"><PaymentMethodSelect value={paymentMethod ?? "payos_demo"} onChange={(value) => void switchPaymentMethod(value)} />{!paymentMethod && <p className="mt-2 text-sm font-medium text-amber-700">Vui lòng chọn phương thức thanh toán để tiếp tục.</p>}{switchingMethod && <p className="mt-2 text-sm text-zinc-500">Đang chuyển sang cổng thanh toán...</p>}</div>}
+        {kind === "rental" && rental && <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-left"><p className="font-semibold">{rental.product?.name} · {rental.quantity} thiết bị · {rental.duration} tháng</p>{paymentStage === "remaining" ? <div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Giá gốc đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between"><span className="text-zinc-500">Tiền cọc đã trả</span><b className="text-emerald-700">− {money(rental.depositAmount)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Phần còn phải trả</span><b className="text-xl text-amber-700">{money(rental.remainingAmount)}</b></div></div> : <div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Tổng giá trị đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Tiền cọc cần thanh toán</span><b className="text-xl text-amber-700">{money(rental.depositAmount)}</b></div></div>}</div>}
+        {kind === "rental" && <div className="mx-auto mt-4 max-w-xl text-left"><PaymentMethodSelect value={paymentMethod} onChange={(value) => void switchPaymentMethod(value)} /><button type="button" disabled={!paymentMethod || switchingMethod} onClick={() => void continuePayment()} className="btn btn-primary mt-4 w-full">{switchingMethod ? "Đang chuyển sang cổng thanh toán..." : "Thanh toán tiếp tục"}</button>{!paymentMethod && <p className="mt-2 text-sm font-medium text-amber-700">Vui lòng chọn phương thức thanh toán để tiếp tục.</p>}</div>}
         {message && <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">{message}</p>}
         {status === "momo_returned" && <Link href={backHref} className="btn btn-primary mt-5">Ve don hang</Link>}
       </section>

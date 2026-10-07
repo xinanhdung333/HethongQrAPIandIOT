@@ -22,7 +22,8 @@ export class WebhooksController {
   @Post("momo")
   async momo(@Body() dto: Record<string, unknown>) {
     this.verifyMomoIpn(dto);
-    const orderId = String(dto.orderId ?? "");
+    const rawOrderId = String(dto.orderId ?? "");
+    const orderId = rawOrderId.includes("-remaining-") ? rawOrderId.split("-remaining-")[0] : rawOrderId;
     if (!orderId) throw new BadRequestException({ error: "invalid_momo_order", message: "MoMo orderId is required" });
     if (Number(dto.resultCode) !== 0) {
       return { received: true, paid: false, order_id: orderId, result_code: dto.resultCode };

@@ -52,12 +52,28 @@ export class RentalsController {
     return result;
   }
 
+  @Post(":id/pay-remaining/confirm-demo")
+  async confirmRemainingDemo(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Res({ passthrough: true }) res: Response) {
+    const session = await this.allowCustomerOnly(authorization, res);
+    if (!session) return;
+    return this.platform.confirmRemainingPaymentDemo(id, session.sub);
+  }
+
   @Patch(":id/return")
   async returnOrder(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.allowCustomerOnly(authorization, res);
     if (!session) return;
     const result = await this.platform.returnRental(id, session.sub);
     await this.activity.record({ session, action: "RETURN_RENTAL", targetType: "RentalOrder", targetId: id, metadata: { status: result?.status }, req });
+    return result;
+  }
+
+  @Patch(":id/cancel")
+  async cancel(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const session = await this.allowCustomerOnly(authorization, res);
+    if (!session) return;
+    const result = await this.platform.cancelRentalWithRefund(id, session.sub);
+    await this.activity.record({ session, action: "CANCEL_RENTAL_REFUND", targetType: "RentalOrder", targetId: id, req });
     return result;
   }
 

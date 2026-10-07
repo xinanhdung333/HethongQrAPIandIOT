@@ -39,8 +39,12 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async forfeitUnpaidRentals(now: Date) {
+    await this.prisma.rentalOrder.updateMany({
+      where: { type: "RENT", status: RentalStatus.DEPOSIT_FORFEITED, startDate: { gt: now }, remainingPaymentStatus: "PENDING" },
+      data: { status: RentalStatus.DEPOSIT_PAID }
+    });
     const result = await this.prisma.rentalOrder.updateMany({
-      where: { type: "RENT", status: RentalStatus.DEPOSIT_PAID, paymentDueAt: { lt: now } },
+      where: { type: "RENT", status: RentalStatus.DEPOSIT_PAID, startDate: { lte: now }, remainingPaymentStatus: "PENDING" },
       data: { status: RentalStatus.DEPOSIT_FORFEITED }
     });
     return result.count;

@@ -5,19 +5,27 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 import { HttpExceptionFilter } from "./filters/http-exception.filter";
 import { AppModule } from "./modules/app.module";
 import { validateEnv } from "./config/env-validation";
+import { getAllowedOrigins } from "./security/cors-origins";
 
 async function bootstrap() {
   validateEnv();
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   if (process.env.TRUST_PROXY_HOPS) app.getHttpAdapter().getInstance().set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
   app.enableCors({
-    origin: Array.from(new Set([
-      process.env.WEB_ORIGIN ?? "http://localhost:3000",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      "https://smartqr.vn"
-    ])),
+    origin: getAllowedOrigins(),
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-API-KEY",
+      "X-TIMESTAMP",
+      "X-SIGNATURE",
+      "Idempotency-Key",
+      "X-API-Explorer",
+      "X-Demo-Scan",
+      "X-CSRF-Token"
+    ],
     exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After", "X-Request-Id", "Idempotency-Replayed"]
   });
   app.useBodyParser("json", { limit: "8mb" });

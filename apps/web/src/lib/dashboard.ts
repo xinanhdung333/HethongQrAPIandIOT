@@ -23,6 +23,8 @@ export type DashboardData = {
     total: number;
     quantity: number;
     duration?: number;
+    startDate?: string;
+    paymentDueAt?: string;
     depositAmount?: number;
     remainingAmount?: number;
     remainingPaidAmount?: number;

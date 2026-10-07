@@ -24,6 +24,7 @@ import {
   Moon,
   Package,
   Radio,
+  QrCode,
   ReceiptText,
   ScanLine,
   Search,
@@ -46,6 +47,7 @@ const pageNav = [
   ["Linh kiện", "/dashboard/pages/linh-kien", Boxes],
   ["Bảng giá", "/dashboard/pages/bang-gia", Tags],
   ["Thuê API", "/dashboard/pages/thue-api", Code2],
+  ["QR & Vé", "/dashboard/pages/qr-ve", QrCode],
   ["Tài liệu", "/dashboard/pages/docs", BookOpen]
 ] as const;
 

@@ -201,9 +201,19 @@ export class PlatformService {
     if (order.type !== OrderType.RENT) throw new ForbiddenException("Only rental orders can pay remaining balance");
     const remaining = order.remainingAmount;
     if (!remaining) throw new BadRequestException("Rental has no remaining balance");
-    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method, stage: "remaining" });
+    const paymentWindow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    if (order.startDate && order.startDate > paymentWindow) {
+      throw new BadRequestException("Chi duoc thanh toan phan con lai trong vong 24 gio truoc ngay thue");
+    }
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method, stage: "remaining", gatewayOrderId: method === "momo" ? `${order.id}-remaining-${Date.now()}` : undefined });
     if (payment) setTimeout(() => void this.markRentalPaid(order.id), 5000);
     return { order_id: order.id, payment_demo_url: payment.paymentUrl, remaining_amount: remaining };
+  }
+
+  async confirmRemainingPaymentDemo(id: string, userId: string) {
+    const order = await this.prisma.rentalOrder.findFirst({ where: { id, userId } });
+    if (!order || order.type !== OrderType.RENT) throw new NotFoundException("Rental not found");
+    return this.markRentalPaid(id, "remaining");
   }
 
   async createShow(dto: ShowDto, userId: string) {
@@ -327,6 +337,19 @@ export class PlatformService {
     return { payment_url: payment.paymentUrl, order_id: order.id };
   }
 
+  async cancelRentalWithRefund(id: string, userId: string) {
+    const order = await this.prisma.rentalOrder.findFirst({ where: { id, userId } });
+    if (!order) throw new NotFoundException("Rental not found");
+    if (order.type !== OrderType.RENT || order.status !== RentalStatus.DEPOSIT_PAID) throw new ForbiddenException("Only unpaid remaining rentals can be cancelled with refund");
+    if (order.paymentDueAt && order.paymentDueAt <= new Date()) throw new ForbiddenException("Cancellation refund window has expired");
+    return this.prisma.$transaction(async tx => {
+      const updated = await tx.rentalOrder.updateMany({ where: { id, userId, status: RentalStatus.DEPOSIT_PAID }, data: { status: RentalStatus.CANCELLED, remainingPaymentStatus: "NOT_REQUIRED", depositRefundedAt: new Date() } });
+      if (!updated.count) throw new ForbiddenException("Rental can no longer be cancelled");
+      await tx.product.update({ where: { id: order.productId }, data: { stock: { increment: order.quantity } } });
+      return tx.rentalOrder.findUnique({ where: { id } });
+    });
+  }
+
   private async releaseTicketReservation(orderId: string) {
     await this.prisma.$transaction(async tx => {
       const order = await tx.ticketOrder.findUnique({ where: { id: orderId }, select: { showId: true, quantity: true, status: true } });
@@ -360,7 +383,7 @@ export class PlatformService {
     if (stage === "remaining") {
       if (!order || order.type !== OrderType.RENT) return order;
       const paidAt = new Date();
-      const shouldActivate = !order.startDate || order.startDate <= paidAt;
+      const shouldActivate = order.status === RentalStatus.DEPOSIT_PAID || order.status === RentalStatus.PENDING;
       return this.prisma.rentalOrder.update({ where: { id: orderId }, data: { remainingPaidAmount: order.remainingAmount, remainingPaymentStatus: "PAID", remainingPaidAt: paidAt, ...(shouldActivate && order.status === RentalStatus.DEPOSIT_PAID ? { status: RentalStatus.ACTIVE } : {}) } });
     }
     if (!order || order.status !== RentalStatus.PENDING) return order;
@@ -699,7 +722,7 @@ export class PlatformService {
 
     const empty = { rentals: [], apiRentals: [], shows: [], apiKeys: [], ticketOrders: [], purchasedTicketOrders: [], payouts: [], tickets: [], externalQrCodes: [] };
     if (view === "rentals") {
-      return { ...empty, rentals: await this.prisma.rentalOrder.findMany({ where: { userId }, select: { id: true, type: true, status: true, total: true, quantity: true, duration: true, gateIds: true, createdAt: true, product: { select: { name: true, type: true } } }, orderBy: { createdAt: "desc" } }) };
+      return { ...empty, rentals: await this.prisma.rentalOrder.findMany({ where: { userId }, select: { id: true, type: true, status: true, total: true, quantity: true, duration: true, startDate: true, paymentDueAt: true, depositAmount: true, remainingAmount: true, remainingPaidAmount: true, remainingPaymentStatus: true, gateIds: true, createdAt: true, product: { select: { name: true, type: true } } }, orderBy: { createdAt: "desc" } }) };
     }
     if (view === "api-rentals") {
       return { ...empty, apiRentals: await this.prisma.apiRentalOrder.findMany({ where: { userId }, select: { id: true, appName: true, website: true, plan: true, duration: true, quota: true, scopes: true, total: true, status: true, apiKeyPrefix: true, createdAt: true }, orderBy: { createdAt: "desc" } }) };

@@ -3,7 +3,7 @@ import crypto from "crypto";
 
 export type PaymentMethod = "payos_demo" | "momo";
 type PaymentKind = "rental" | "ticket" | "api";
-type PaymentLinkInput = { orderId: string; amount: number; kind: PaymentKind; method?: PaymentMethod; stage?: "initial" | "remaining" };
+type PaymentLinkInput = { orderId: string; amount: number; kind: PaymentKind; method?: PaymentMethod; stage?: "initial" | "remaining"; gatewayOrderId?: string };
 
 @Injectable()
 export class PayosMockService {
@@ -34,6 +34,7 @@ export class PayosMockService {
     const endpoint = process.env.MOMO_ENDPOINT?.trim() || "https://test-payment.momo.vn/v2/gateway/api/create";
     const baseUrl = process.env.WEB_ORIGIN?.trim() || "http://localhost:3000";
     const apiUrl = process.env.API_PUBLIC_URL?.trim() || `http://localhost:${process.env.PORT ?? 4000}`;
+    const gatewayOrderId = input.gatewayOrderId ?? input.orderId;
     const requestId = `${partnerCode}${Date.now()}`;
     const orderInfo = `SmartQR ${input.kind} ${input.orderId}`;
     const redirectUrl = `${baseUrl}/thanh-toan-demo?order_id=${encodeURIComponent(input.orderId)}&kind=${input.kind}&gateway=momo`;
@@ -41,7 +42,7 @@ export class PayosMockService {
     const requestType = "payWithATM";
     const extraData = "";
     const amount = String(Math.max(1000, Math.round(input.amount)));
-    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${input.orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${gatewayOrderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
     const signature = crypto.createHmac("sha256", secretKey).update(rawSignature).digest("hex");
     const response = await fetch(endpoint, {
       method: "POST",
@@ -51,7 +52,7 @@ export class PayosMockService {
         accessKey,
         requestId,
         amount,
-        orderId: input.orderId,
+        orderId: gatewayOrderId,
         orderInfo,
         redirectUrl,
         ipnUrl,

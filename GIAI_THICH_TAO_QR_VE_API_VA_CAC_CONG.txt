@@ -1,0 +1,336 @@
+GIẢI THÍCH LUỒNG TẠO QR, VÉ SHOW, API THUÊ VÀ CÁC CỔNG DỊCH VỤ
+================================================================
+
+Tài liệu này mô tả theo code hiện tại trong repo SmartQR. "Cổng" trong tài liệu
+có thể là cổng HTTP của microservice (3003/3004/3005), hoặc cổng/máy quét vé
+thực tế; hai khái niệm này khác nhau.
+
+1. TÓM TẮT NHANH
+----------------
+
+- Vé Show được tạo sau khi đơn mua vé thanh toán thành công.
+- Mã vé online là JWT, ký HS256 (HMAC-SHA256) bằng QR_JWT_SECRET.
+- Vé offline (nếu tenant đã bật offline) được ký thêm bằng RSA RS256:
+  backend giữ private key, gate nhận public key để xác minh.
+- Chuỗi QR JWT là nội dung được mã hóa thành hình QR. Hình QR không phải là khóa.
+- Show scanner API key chỉ cho phép gọi API verify; nó không ký mã vé.
+- API rental cấp API key riêng cho ứng dụng tích hợp. API key không phải mã QR.
+- QR cho bên thuê API cũng là JWT HS256 ký bằng QR_JWT_SECRET; ngoài ra có
+  ticket_code ngắn dạng SQR-... để tra cứu QR trong database.
+- Rental API key được tạo từ random bytes, database lưu HMAC-SHA256 với
+  API_KEY_PEPPER. Raw key chỉ trả về một lần.
+
+2. CÁC LOẠI MÃ/KHÓA KHÔNG NÊN NHẦM LẪN
+--------------------------------------
+
+2.1. show.slug
+    Mã URL công khai của Show, ví dụ /e/<slug>. Không phải secret, không ký QR.
+
+2.2. jti
+    ID ngẫu nhiên của từng QR/vé (18 bytes random, mã hóa hex). Dùng để gắn
+    token với bản ghi DB, truy vết và revoke. jti không phải API key.
+
+2.3. Vé/QR JWT
+    Token chứa claim nghiệp vụ, thời hạn và chữ ký. Online dùng HS256 với
+    QR_JWT_SECRET. Backend giữ secret; không gửi secret này cho người mua/gate.
+
+2.4. ticket_code
+    Mã tra cứu ngắn, hiện tại có dạng SQR- + 8 bytes random mã hóa hex viết hoa.
+    Code này được lưu trong database cùng với QR bên thuê API. Đây là mã nhận
+    dạng để tra cứu, không phải khóa ký số. Verify có thể gửi qr_jwt hoặc
+    ticket_code tùy endpoint và luồng xử lý.
+
+2.5. API key
+    Bí mật client gửi trong header X-API-Key để được xác thực và kiểm tra scope,
+    status, quota, rate limit. Show scanner key gắn showId; API rental key gắn
+    rentalId. API key không được dùng làm nội dung QR và không ký vé.
+
+2.6. Signing/webhook secret của API rental
+    Signing secret chỉ dùng nếu rental bật request signing; ký request HMAC.
+    Webhook secret dùng để bên nhận xác minh webhook. Cả hai khác API key và
+    khác QR_JWT_SECRET.
+
+3. LUỒNG VÉ SHOW: TẠO SHOW -> ĐẶT VÉ -> SINH VÉ/QR
+--------------------------------------------------
+
+Bước 1 - Tạo Show:
+    POST /shows, chủ Show đăng nhập bằng session JWT (JWT_SECRET).
+    Backend tạo Show.id và slug. Bước này chưa tạo từng vé hay QR vé.
+
+Bước 2 - Đặt vé:
+    Khách mua vé qua POST /e/:slug/buy. Backend tạo TicketOrder dạng PENDING,
+    đặt chỗ số lượng vé và tạo liên kết thanh toán. Request mua vé công khai
+    không cần Show scanner API key.
+
+Bước 3 - Thanh toán thành công:
+    PlatformService.markTicketOrderPaid() xử lý đơn hàng. Với mỗi vé:
+      a) Sinh jti bằng crypto.randomBytes(18).toString("hex").
+      b) Tạo claim như show_id, buyer, type=ticket, sub và jti.
+      c) Ký claim thành JWT online bằng QR_JWT_SECRET.
+      d) Nếu tenant bật offline, tạo thêm QR offline bằng private RSA key tenant.
+      e) Lưu jti, qrJwt và qrOfflineJwt vào bản ghi Ticket.
+    Cập nhật đơn và số vé trong transaction để tránh webhook thanh toán lặp
+    tạo ra vé trùng.
+
+Bước 4 - Hiển thị/quét:
+    Giao diện web dùng QRCodeSVG từ gói qrcode.react, với giá trị là
+    qrOfflineJwt nếu có, nếu không thì qrJwt. Hình QR chỉ là cách đóng gói dữ
+    liệu; app quét đọc lại chuỗi token từ hình. qrcode.react không tạo token
+    hay chữ ký.
+
+4. KIỂM TRA VÉ SHOW ONLINE VÀ OFFLINE
+-------------------------------------
+
+Online:
+    Gate gửi qr_jwt (hoặc ticket_code theo endpoint) và gate_id đến
+    POST /api/v1/tickets/verify, kèm X-API-Key của scanner.
+
+    API chính kiểm tra scope ticket:verify, sau đó chuyển request đến
+    Ticket Service. Ticket Service:
+      1) Xác thực API key và scope ticket:verify.
+      2) Xác minh chữ ký JWT bằng QR_JWT_SECRET (có hỗ trợ legacy fallback).
+      3) Tìm Ticket trong database và đối chiếu jti/showId.
+      4) Từ chối vé sai Show hoặc đã sử dụng.
+      5) Dùng update có điều kiện isUsed=false để chỉ chấp nhận một lần.
+
+    API key là quyền gọi endpoint; QR_JWT_SECRET là khóa xác minh JWT. Hai thứ
+    này làm hai việc riêng.
+
+    CẦN LƯU Ý VỀ REVOKE SHOW: endpoint verify đang forward đến
+    TicketVerificationService. Code service này không truy vấn RevokedResource
+    cho nhánh ticket; endpoint revoke thì có ghi RevokedResource. Vì vậy, theo
+    code hiện tại, revoke ticket có thể chưa làm POST /api/v1/tickets/verify từ
+    chối vé ngay. Không nên coi revoke là được enforce trên nhánh verify này
+    cho đến khi implementation được bổ sung/kiểm thử.
+
+Offline:
+    Khi tenant được bật offline, backend ký thêm qrOfflineJwt bằng RSA-2048,
+    thuật toán RS256. Private key tenant được mã hóa khi lưu ở server; gate
+    nhận public key qua endpoint public-key và tự xác minh chữ ký tại chỗ.
+    Trong scanner demo hiện tại, public key và tenant id được cache trên browser;
+    scanner kiểm tra RS256, tenant_id, type=ticket_offline, exp và jti, rồi ghi
+    jti đã quét vào localStorage và xếp usage event để đồng bộ sau. Bản offline
+    này chỉ chặn quét lặp trên cùng browser/device; không có thông tin revoke
+    mới khi đang mất mạng, và hai máy quét offline riêng lẻ không tự động chia
+    sẻ danh sách đã dùng. Khi kết nối lại, event được gửi lên server. Cần đồng
+    bộ trước khi mất mạng và chấp nhận rủi ro dữ liệu cũ.
+    Không đưa private key hoặc QR_JWT_SECRET cho gate.
+
+5. SHOW SCANNER API KEY
+-----------------------
+
+Scanner key là API key riêng gắn với showId, scope ticket:verify, rateLimit
+mặc định phía issuance là 600. Endpoint verify kiểm tra showId của key và vé
+có trùng nhau không. Key này không tạo vé, không ký JWT, không thay thế session
+JWT của chủ Show.
+
+Cấp/rotate scanner key: apps/api/src/modules/admin.controller.ts
+  POST /admin/shows/:id/scan-key
+  POST /admin/shows/:id/scan-key/rotate
+Raw key được trả một lần; rotate cho phép key cũ hết hạn sau khoảng grace time.
+
+6. API THUÊ: TẠO API KEY VÀ TẠO QR CHO HỆ THỐNG BÊN NGOÀI
+---------------------------------------------------------
+
+6.1. Tạo API rental và cấp key
+
+    Người dùng tạo API rental qua API chính. API chính chuyển một số thao tác
+    rental sang Rental Service. Sau khi thanh toán rental thành công, backend
+    phát hành API key gắn rentalId, scope được phép, quota và rate limit theo
+    plan.
+
+    API key sinh dạng sq_live_<random> hoặc sq_test_<random>. Phần random là
+    24 bytes từ crypto.randomBytes(). Hệ thống chỉ trả raw key lúc cấp/rotate;
+    database lưu HMAC-SHA256 của key với API_KEY_PEPPER để so khớp khi client
+    gọi API. Không thể lấy lại raw key từ giá trị HMAC.
+
+6.2. Ứng dụng tích hợp gọi API
+
+    Client gửi X-API-Key. API guard tìm key và kiểm tra:
+      - key có tồn tại, status/revoke/suspend;
+      - IP whitelist (nếu cấu hình);
+      - signing HMAC nếu rental bật signing;
+      - scope endpoint, rate limit.
+    QR create cần scope qr:create; đọc/SVG cần qr:read; verify cần
+    ticket:verify. Test key bị cách ly khỏi dữ liệu live.
+
+6.3. Tạo QR bên thuê API
+
+    POST /api/v1/qr-codes hoặc POST /api/v1/qr-codes/bulk (tối đa 500 mã).
+    API chính proxy request đến QR Service. QR Service:
+      a) Kiểm tra API key, scope qr:create, input và quota.
+      b) Tạo jti 18 bytes ngẫu nhiên.
+      c) Tạo ticket_code dạng SQR- + 8 bytes random hex.
+      d) Ký payload JWT online bằng QR_JWT_SECRET, claim có resource_type,
+         resource_id, owner/tenant, is_test, jti và TTL.
+      e) Lưu external QR vào database, bao gồm qrJwt, code, metadata/payload,
+         expiry, số lần dùng, gate được phép.
+      f) Nếu tenant bật offline, có thể trả thêm qr_offline_jwt ký bằng private
+         RSA key tenant.
+      g) Trả qr_jwt, ticket_code và URL lấy ảnh SVG.
+
+    TTL mặc định 30 ngày, giới hạn từ 60 giây đến 365 ngày. Mức sử dụng,
+    giới hạn gate, not_before, revoke, idempotency và quota được quản lý riêng
+    với chữ ký token.
+
+6.4. Render hình QR
+
+    Endpoint GET /api/v1/qr-codes/:id/svg tạo SVG từ qr_jwt bằng thư viện
+    qrcode, error correction H, kích thước 256. SVG là representation để quét;
+    chuỗi QR JWT mới là payload được ký.
+
+6.5. Verify QR bên thuê
+
+    Client/gate gửi X-API-Key và qr_jwt hoặc ticket_code đến endpoint verify.
+    Cần phân biệt code verify và đường HTTP đang được gọi:
+
+      - QR Service có hàm verifyExternal() với transaction/idempotency và các
+        check revoke, expiresAt, notBefore, allowedGateIds, maxUses, ownership,
+        usage/quota. Tuy nhiên controller QR Service hiện không expose route
+        verify; API chính đang comment luồng cũ gọi hàm này.
+      - Đường đang hoạt động là POST /api/v1/tickets/verify tại API chính
+        forward tới Ticket Service. Nhánh external QR ở Ticket Service xác
+        minh QR_JWT, tìm code/JWT trong DB, kiểm tra owner, revoke, expiresAt,
+        isUsed, rồi đánh dấu đã dùng. Hiện tại nhánh này chưa áp dụng
+        notBefore, allowedGateIds hay maxUses và chưa tách ownership theo
+        rentalId; do đó các option này có thể chưa được enforcement trên route
+        verify đang public.
+
+      - Scanner/API verifier phải có key scope ticket:verify. Pay-as-you-go,
+        ghi usage event và webhook được xử lý trong luồng QR Service nếu hàm
+        verifyExternal được gọi; không nên mặc định rằng route public hiện tại
+        đang sử dụng các phần đó.
+
+    Đây là khác biệt implementation cần biết khi đối chiếu tài liệu với code.
+
+7. FILE CODE LIÊN QUAN
+----------------------
+
+VÉ SHOW:
+  apps/api/src/modules/shows.controller.ts
+    POST /shows, GET /e/:slug, POST /e/:slug/buy.
+  apps/api/src/services/platform.service.ts
+    buyTickets(): tạo đơn và thanh toán; markTicketOrderPaid(): sinh jti,
+    qrJwt, qrOfflineJwt và bản ghi vé; verifyTicket(): luồng verify legacy.
+  apps/web/src/app/dashboard/tickets/page.tsx
+  apps/web/src/app/thanh-toan-demo/payment-client.tsx
+    Render QR vé bằng QRCodeSVG từ qrcode.react; ưu tiên qrOfflineJwt nếu có.
+  apps/api/src/security/auth.service.ts
+    signQrJwt()/verifyQrJwt(); JWT online ký bằng QR_JWT_SECRET.
+  apps/api/src/modules/tickets.controller.ts
+    POST /api/v1/tickets/verify proxy sang Ticket Service.
+  apps/ticket-service/src/services/ticket-verification.service.ts
+    Xác thực scanner key, verify JWT và cập nhật vé đã dùng.
+
+VÉ OFFLINE:
+  apps/api/src/security/gate-signing.ts
+    Tạo RSA-2048 keypair theo tenant, mã hóa private key, ký JWT offline RS256.
+  apps/api/src/modules/gates.controller.ts
+    Public key, tenant settings và revoked-delta cho gate.
+  apps/api/src/services/gate-sync.service.ts
+    Đồng bộ thông tin revoke/usage cho gate.
+
+API RENTAL / QR NGOÀI:
+  apps/api/src/modules/api-rentals.controller.ts
+    Proxy tạo/liệt kê API rental sang Rental Service.
+  apps/api/src/services/api-key-issuance.service.ts
+    Phát hành API key gắn rentalId/showId, scope và quota.
+  apps/api/src/security/auth.service.ts
+    createApiKey(), HMAC-SHA256 key hash, signQrJwt()/verifyQrJwt().
+  apps/api/src/security/api-key.guard.ts
+    Kiểm tra API key, scope, signing secret, rate limit.
+  apps/api/src/modules/qr-codes.controller.ts
+    Route QR công khai và proxy sang QR Service, route SVG.
+  apps/qr-service/src/services/qr-platform.service.ts
+    Tạo QR/JTI/code, quota, database, bulk, revoke, SVG và hàm verifyExternal().
+    Hàm verifyExternal hiện không được route public gọi theo controller hiện tại.
+  apps/web/src/app/dashboard/scan/scanner-client.tsx
+    Scanner demo online/offline; offline verify RSA trên browser, lưu JTI/
+    usage queue localStorage và đồng bộ event khi online lại.
+  apps/rental-service/src/services/rental-quota.service.ts
+    Kiểm tra rental active, quota tháng và refund quota.
+  apps/rental-service/src/modules/internal-rentals.controller.ts
+    Endpoint nội bộ consume/refund quota; yêu cầu internal service token.
+
+CẤU HÌNH/CÁC CỔNG:
+  docker-compose.yml
+    Port và kết nối giữa các container.
+  apps/api/src/main.ts                 PORT mặc định 4000.
+  apps/ticket-service/src/main.ts      PORT mặc định 3003.
+  apps/rental-service/src/main.ts      PORT mặc định 3004.
+  apps/qr-service/src/main.ts          PORT mặc định 3005.
+  Web Next.js trong Docker Compose     port 3000.
+
+8. CÓ TẮT CỔNG KHÁC ĐƯỢC KHÔNG?
+-------------------------------
+
+Nếu "tắt cổng" nghĩa là dừng một microservice/port:
+
+  - Dừng Ticket Service (3003): API verify online vé/QR qua
+    POST /api/v1/tickets/verify sẽ lỗi ticket_service_unavailable. Tạo Show,
+    đặt vé và phát hành vé vẫn do API chính xử lý, không phải Ticket Service.
+    Tuy nhiên không verify online được qua endpoint này.
+
+  - Dừng Rental Service (3004): không tạo/liệt kê API rental được qua các route
+    proxy; việc consume/refund quota cho QR rental cũng thất bại. Vì vậy tạo QR
+    rental có thể trả rental_service_unavailable/quota service unavailable.
+    Show/ticket không dùng Rental Service này cho luồng chính.
+
+  - Dừng QR Service (3005): API QR rental (tạo/bulk/đọc/revoke/SVG) qua API
+    chính không hoạt động. Luồng vé Show và verify Show có các service riêng,
+    nên không nên đánh đồng QR Service với Ticket Service.
+
+  - Dừng API (4000): API backend không truy cập được; web mất các API nghiệp vụ.
+  - Dừng Web (3000): backend vẫn có thể chạy, nhưng giao diện web không vào được.
+  - Dừng PostgreSQL (5432): các luồng cần đọc/ghi vé, QR, key đều dừng.
+  - Dừng Redis (6379): session/JTI, rate limit và một số state/lock/sync có thể
+    lỗi hoặc không hoạt động đúng.
+
+Dừng riêng bằng Docker Compose (chỉ tác động service nếu tên đúng):
+  docker compose stop ticket-service
+  docker compose stop rental-service
+  docker compose stop qr-service
+  docker compose start ticket-service
+
+Không cần sửa mapping port nếu chỉ muốn dừng service. Docker Compose khai báo
+api depends_on các service; depends_on chủ yếu quy định thứ tự khởi động, không
+tự động tắt API khi dừng service sau khi cả hệ thống đã chạy. API trả lỗi 503
+cho route cần service bị tắt.
+
+Nếu muốn ĐỔI SỐ PORT:
+  - Đổi PORT của service và ports mapping trong docker-compose.yml.
+  - Đổi URL từ API sang service tương ứng (TICKET_SERVICE_URL,
+    RENTAL_SERVICE_URL, QR_SERVICE_URL); nếu giao tiếp trong Docker, host URL
+    phải dùng tên service và cổng container mới.
+  - Nếu đổi cổng public API/Web, cập nhật ports, NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_SOCKET_URL và các URL callback/public tương ứng.
+  - Khi chạy local không Docker, cũng phải cập nhật env URL của các service.
+  - Không chỉ sửa ports host mapping: service vẫn lắng nghe theo PORT cũ,
+    route nội bộ có thể không kết nối nếu URL/PORT không đồng bộ.
+
+Nếu "tắt cổng" nghĩa là tắt một MÁY QUÉT/GATE vật lý:
+  - Có thể tắt máy quét, nhưng gate đó sẽ không quét/verify được trong thời
+    gian tắt.
+  - Gate online phụ thuộc API và Ticket Service.
+  - Gate offline chỉ có thể tiếp tục nếu scanner đã cache public key tenant và
+    gate app hỗ trợ verify qr_offline_jwt. Scanner demo hiện tại chỉ chống quét
+    lặp trên cùng browser/device, không check revoke mới khi offline; tắt API
+    thì không nhận được kết quả online hay đồng bộ usage cho đến khi kết nối lại.
+
+Lưu ý: Tắt một cổng service không tự động là cách bảo mật. Nếu đích là không cho
+truy cập từ Internet, nên giới hạn port exposure/firewall và để các service nội
+bộ giao tiếp trong Docker network; vẫn giữ các endpoint nội bộ cần thiết.
+
+9. CÁC NGUYÊN TẮC AN TOÀN
+-------------------------
+
+- Không đưa QR_JWT_SECRET, API_KEY_PEPPER, INTERNAL_SERVICE_TOKEN hoặc private
+  RSA key vào frontend, gate, log, mã QR hay tài liệu công khai.
+- Scanner chỉ cần API key có đúng scope; gate offline chỉ cần public RSA key.
+- Khi lộ scanner/rental API key: revoke/rotate key. Khi lộ key ký QR, cần kế
+  hoạch rotate QR_JWT_SECRET và xử lý token cũ; không thay key tùy tiện vì sẽ
+  làm token cũ không verify được (trừ thời gian legacy rollover).
+- QR code, ticket_code, JWT và API key là các giá trị khác nhau; cần bảo vệ
+  token vé/QR như credential bearer cho đến khi hết hạn/revoke.
+
+Kết thúc.

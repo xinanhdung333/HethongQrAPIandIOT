@@ -93,6 +93,7 @@ model RentalOrder {
   remainingPaidAmount Int        @default(0) @map("remaining_paid_amount")
   remainingPaymentStatus RemainingPaymentStatus @default(PENDING) @map("remaining_payment_status")
   remainingPaidAt DateTime?      @map("remaining_paid_at")
+  depositRefundedAt DateTime?    @map("deposit_refunded_at")
   status          RentalStatus @default(PENDING)
   shippingAddress Json         @map("shipping_address")
   gateIds         Json?        @map("gate_ids")

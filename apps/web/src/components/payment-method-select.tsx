@@ -10,11 +10,11 @@ const methods: Array<{
   description: string;
   icon: typeof CreditCard;
 }> = [
-  { value: "payos_demo", label: "PayOS demo", description: "Tu dong xac nhan sau 5 giay", icon: CreditCard },
+  { value: "payos_demo", label: "PayOS demo", description: "Thanh toán mô phỏng", icon: CreditCard },
   { value: "momo", label: "MoMo sandbox", description: "Tao payUrl bang HMAC MoMo", icon: Smartphone }
 ];
 
-export function PaymentMethodSelect({ value, onChange }: { value: PaymentMethod; onChange: (value: PaymentMethod) => void }) {
+export function PaymentMethodSelect({ value, onChange }: { value: PaymentMethod | null; onChange: (value: PaymentMethod) => void }) {
   return (
     <div className="grid gap-2">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Phuong thuc thanh toan</p>

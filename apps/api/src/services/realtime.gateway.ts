@@ -1,7 +1,8 @@
 import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
+import { getAllowedOrigins } from "../security/cors-origins";
 
-@WebSocketGateway({ cors: { origin: "*" } })
+@WebSocketGateway({ cors: { origin: getAllowedOrigins() } })
 export class RealtimeGateway {
   @WebSocketServer()
   server!: Server;
