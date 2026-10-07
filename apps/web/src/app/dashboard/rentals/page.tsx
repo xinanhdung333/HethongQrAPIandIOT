@@ -65,7 +65,8 @@ export default function RentalsDashboardPage() {
     setActionError("");
     try {
       const result = await api<{ payment_demo_url: string }>(`/rentals/${order.id}/pay-remaining`, { method: "POST", body: "{}" });
-      window.location.href = result.payment_demo_url;
+      if (!result?.payment_demo_url) throw new Error("Khong nhan duoc link thanh toan.");
+      window.location.assign(result.payment_demo_url);
     } catch (reason) {
       setActionError(reason instanceof Error ? reason.message : "Khong the tao thanh toan phan con lai.");
     } finally {
