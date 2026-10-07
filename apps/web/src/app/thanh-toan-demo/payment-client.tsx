@@ -5,7 +5,8 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { CheckCircle2, Copy, Download, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { API_URL, api } from "@/lib/api";
+import { API_URL, api, money } from "@/lib/api";
+import { PaymentMethod, PaymentMethodSelect } from "@/components/payment-method-select";
 
 type PaidTicket = { id: string; qrJwt: string; qrOfflineJwt?: string | null; isUsed: boolean };
 type PaidTicketOrder = {
@@ -20,6 +21,7 @@ type PaidApiRental = {
   api_key_once?: string;
   apiKeyPrefix?: string;
 };
+type RentalCheckout = { id: string; total: number; depositAmount: number; remainingAmount: number; remainingPaidAmount: number; remainingPaymentStatus: string; product?: { name: string }; quantity: number; duration: number };
 
 export function PaymentClient() {
   const search = useSearchParams();
@@ -31,20 +33,37 @@ export function PaymentClient() {
   const paymentStage = search.get("payment_stage") || "initial";
   const enableOfflineRsa = search.get("enable_offline_rsa") === "1";
   const [status, setStatus] = useState<"waiting" | "paid" | "error" | "momo_returned">("waiting");
-  const [seconds, setSeconds] = useState(5);
   const [tickets, setTickets] = useState<PaidTicket[]>([]);
   const [apiKeyOnce, setApiKeyOnce] = useState("");
   const [message, setMessage] = useState("");
+  const [rental, setRental] = useState<RentalCheckout | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [switchingMethod, setSwitchingMethod] = useState(false);
   const backHref = useMemo(() => kind === "rental" ? "/dashboard/rentals" : kind === "api" ? "/thue-api" : "/dashboard/tickets", [kind]);
 
   useEffect(() => {
+    if (kind !== "rental" || !orderId) return;
+    void api<RentalCheckout>(`/rentals/${orderId}`, { cache: "no-store" }).then(setRental).catch(() => undefined);
+  }, [kind, orderId]);
+
+  async function switchPaymentMethod(method: PaymentMethod) {
+    setPaymentMethod(method);
+    if (kind !== "rental" || paymentStage !== "remaining" || method === "payos_demo") return;
+    setSwitchingMethod(true);
+    try {
+      const result = await api<{ payment_demo_url: string }>(`/rentals/${orderId}/pay-remaining`, { method: "POST", body: JSON.stringify({ payment_method: method }) });
+      window.location.assign(result.payment_demo_url);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Không thể đổi phương thức thanh toán."); } finally { setSwitchingMethod(false); }
+  }
+
+  useEffect(() => {
+    if (kind === "rental" && !paymentMethod) return;
     if (gateway === "momo") {
       setSeconds(0);
       setStatus("momo_returned");
       setMessage("Da quay lai tu MoMo sandbox. Trang thai don hang se duoc cap nhat khi backend nhan IPN MoMo hop le.");
       return;
     }
-    const tick = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
     const timer = window.setTimeout(async () => {
       try {
         const body = JSON.stringify({ order_id: orderId, kind, payment_stage: paymentStage });
@@ -77,15 +96,12 @@ export function PaymentClient() {
       } catch (error) {
         setStatus("error");
         setMessage(error instanceof Error ? error.message : "Không thể xác nhận thanh toán demo.");
-      } finally {
-        window.clearInterval(tick);
       }
     }, 5000);
     return () => {
       window.clearTimeout(timer);
-      window.clearInterval(tick);
     };
-  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage]);
+  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage, paymentMethod]);
 
   return (
     <main className="shell py-16">
@@ -95,7 +111,8 @@ export function PaymentClient() {
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{status === "paid" ? "Da thanh toan demo" : status === "error" ? "Thanh toan demo loi" : status === "momo_returned" ? "MoMo da quay ve" : "PayOS DEMO MOCK"}</h1>
         <p className="mt-3 text-zinc-600">Đơn {orderId}. Số tiền được xác nhận từ dữ liệu đơn hàng.</p>
-        {status === "waiting" && <p className="mt-4 text-sm text-zinc-500">Tự paid sau {seconds}s</p>}
+        {kind === "rental" && rental && <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-left"><p className="font-semibold">{rental.product?.name} · {rental.quantity} thiết bị · {rental.duration} tháng</p><div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Giá gốc đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between"><span className="text-zinc-500">Tiền cọc đã trả</span><b className="text-emerald-700">− {money(rental.depositAmount)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Phần còn phải trả</span><b className="text-xl text-amber-700">{money(paymentStage === "remaining" ? rental.remainingAmount : rental.depositAmount)}</b></div></div></div>}
+        {kind === "rental" && <div className="mx-auto mt-4 max-w-xl text-left"><PaymentMethodSelect value={paymentMethod ?? "payos_demo"} onChange={(value) => void switchPaymentMethod(value)} />{!paymentMethod && <p className="mt-2 text-sm font-medium text-amber-700">Vui lòng chọn phương thức thanh toán để tiếp tục.</p>}{switchingMethod && <p className="mt-2 text-sm text-zinc-500">Đang chuyển sang cổng thanh toán...</p>}</div>}
         {message && <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">{message}</p>}
         {status === "momo_returned" && <Link href={backHref} className="btn btn-primary mt-5">Ve don hang</Link>}
       </section>

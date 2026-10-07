@@ -44,10 +44,10 @@ export class RentalsController {
   }
 
   @Post(":id/pay-remaining")
-  async payRemaining(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async payRemaining(@Param("id") id: string, @Body() body: { payment_method?: "payos_demo" | "momo" }, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.allowCustomerOnly(authorization, res);
     if (!session) return;
-    const result = await this.platform.createRemainingRentalPayment(id, session.sub);
+    const result = await this.platform.createRemainingRentalPayment(id, session.sub, body.payment_method ?? "payos_demo");
     await this.activity.record({ session, action: "PAY_RENTAL_REMAINING", targetType: "RentalOrder", targetId: id, metadata: { remaining_amount: result.remaining_amount }, req });
     return result;
   }

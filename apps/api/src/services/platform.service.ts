@@ -195,13 +195,13 @@ export class PlatformService {
     return order;
   }
 
-  async createRemainingRentalPayment(id: string, userId: string) {
+  async createRemainingRentalPayment(id: string, userId: string, method: "payos_demo" | "momo" = "payos_demo") {
     const order = await this.prisma.rentalOrder.findFirst({ where: { id, userId } });
     if (!order) throw new NotFoundException("Rental not found");
     if (order.type !== OrderType.RENT) throw new ForbiddenException("Only rental orders can pay remaining balance");
     const remaining = order.remainingAmount;
     if (!remaining) throw new BadRequestException("Rental has no remaining balance");
-    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method: "payos_demo", stage: "remaining" });
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method, stage: "remaining" });
     if (payment) setTimeout(() => void this.markRentalPaid(order.id), 5000);
     return { order_id: order.id, payment_demo_url: payment.paymentUrl, remaining_amount: remaining };
   }

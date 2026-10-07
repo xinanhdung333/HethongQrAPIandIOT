@@ -64,7 +64,7 @@ export default function RentalsDashboardPage() {
     setPayingId(order.id);
     setActionError("");
     try {
-      const result = await api<{ payment_demo_url: string }>(`/rentals/${order.id}/pay-remaining`, { method: "POST", body: "{}" });
+      const result = await api<{ payment_demo_url: string }>(`/rentals/${order.id}/pay-remaining`, { method: "POST", body: JSON.stringify({ payment_method: "payos_demo" }) });
       if (!result?.payment_demo_url) throw new Error("Khong nhan duoc link thanh toan.");
       window.location.assign(result.payment_demo_url);
     } catch (reason) {
