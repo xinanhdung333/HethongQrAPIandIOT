@@ -28,6 +28,7 @@ export function PaymentClient() {
   const paymentExpires = search.get("expires") || "";
   const paymentSignature = search.get("signature") || "";
   const gateway = search.get("gateway") || "";
+  const paymentStage = search.get("payment_stage") || "initial";
   const enableOfflineRsa = search.get("enable_offline_rsa") === "1";
   const [status, setStatus] = useState<"waiting" | "paid" | "error" | "momo_returned">("waiting");
   const [seconds, setSeconds] = useState(5);
@@ -46,7 +47,7 @@ export function PaymentClient() {
     const tick = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
     const timer = window.setTimeout(async () => {
       try {
-        const body = JSON.stringify({ order_id: orderId, kind });
+        const body = JSON.stringify({ order_id: orderId, kind, payment_stage: paymentStage });
         const result = await api<PaidTicketOrder | unknown>("/webhooks/payos-demo", {
           method: "POST",
           headers: { "X-Payment-Expires": paymentExpires, "X-Payment-Signature": paymentSignature },
@@ -84,7 +85,7 @@ export function PaymentClient() {
       window.clearTimeout(timer);
       window.clearInterval(tick);
     };
-  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature]);
+  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage]);
 
   return (
     <main className="shell py-16">

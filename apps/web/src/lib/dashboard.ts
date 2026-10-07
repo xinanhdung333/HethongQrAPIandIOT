@@ -24,6 +24,9 @@ export type DashboardData = {
     quantity: number;
     duration?: number;
     depositAmount?: number;
+    remainingAmount?: number;
+    remainingPaidAmount?: number;
+    remainingPaymentStatus?: "NOT_REQUIRED" | "PENDING" | "PAID";
     gateIds?: string[];
     createdAt?: string;
     product?: { name: string; type?: "IOT_MINI" | "IOT_PRO" | "COMPONENT" };

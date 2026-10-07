@@ -124,7 +124,7 @@ export default function RentalsDashboardPage() {
               {data.rentals.map((order) => {
                 const kind = orderKind(order);
                 const canReturn = kind.key === "rent" && order.status === "ACTIVE";
-                const remaining = Math.max(0, order.total - (order.depositAmount ?? 0));
+                const remaining = order.remainingAmount ?? Math.max(0, order.total - (order.depositAmount ?? 0));
                 return (
                   <article key={order.id} className="grid grid-cols-[minmax(220px,1.4fr)_160px_150px_150px_180px] items-center gap-4 px-5 py-4">
                     <div className="min-w-0">
@@ -152,7 +152,7 @@ export default function RentalsDashboardPage() {
                     <div className="flex justify-end gap-2">
                       {kind.key === "rent" ? (
                         <>
-                          {remaining > 0 && order.status === "ACTIVE" && <button className="btn btn-primary text-sm" disabled={payingId === order.id} onClick={() => void payRemaining(order)}>{payingId === order.id ? <Loader2 size={16} className="animate-spin" /> : null}Thanh toan con lai</button>}
+                          {remaining > 0 && ["ACTIVE", "DEPOSIT_PAID"].includes(order.status) && order.remainingPaymentStatus !== "PAID" && <button className="btn btn-primary text-sm" disabled={payingId === order.id} onClick={() => void payRemaining(order)}>{payingId === order.id ? <Loader2 size={16} className="animate-spin" /> : null}Thanh toan con lai</button>}
                           <button className="btn btn-secondary text-sm" disabled={!canReturn || returningId === order.id} onClick={() => void returnRental(order.id)}>
                           {returningId === order.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
                           Tra thiet bi

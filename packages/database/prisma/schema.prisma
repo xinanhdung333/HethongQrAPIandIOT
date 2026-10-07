@@ -89,6 +89,10 @@ model RentalOrder {
   paymentDueAt    DateTime?      @map("payment_due_at")
   depositAmount   Int            @default(0) @map("deposit_amount")
   depositPercent  Int            @default(10) @map("deposit_percent")
+  remainingAmount Int            @default(0) @map("remaining_amount")
+  remainingPaidAmount Int        @default(0) @map("remaining_paid_amount")
+  remainingPaymentStatus RemainingPaymentStatus @default(PENDING) @map("remaining_payment_status")
+  remainingPaidAt DateTime?      @map("remaining_paid_at")
   status          RentalStatus @default(PENDING)
   shippingAddress Json         @map("shipping_address")
   gateIds         Json?        @map("gate_ids")
@@ -623,6 +627,12 @@ enum TicketOrderStatus {
   PENDING
   PAID
   EXPIRED
+}
+
+enum RemainingPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
 }
 
 enum CatalogProductType {

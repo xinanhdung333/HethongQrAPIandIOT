@@ -74,6 +74,7 @@ export class BuyTicketDto {
 }
 
 export class PayosWebhookDto {
+  @IsOptional() @IsIn(["initial", "remaining"]) payment_stage?: "initial" | "remaining";
   @IsString() order_id!: string;
   @IsString() @IsOptional() kind?: "rental" | "ticket" | "api";
 }

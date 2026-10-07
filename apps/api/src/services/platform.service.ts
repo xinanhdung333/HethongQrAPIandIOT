@@ -152,14 +152,14 @@ export class PlatformService {
       const depositAmount = isRent ? product.depositFee * dto.quantity : 0;
       const paymentDueAt = startDate ? new Date(startDate.getTime() - 24 * 60 * 60 * 1000) : null;
       const order = await tx.rentalOrder.create({
-        data: { userId, productId: product.id, type: isRent ? OrderType.RENT : OrderType.BUY, duration: dto.duration, quantity: dto.quantity, rentFee, depositFee, installFee: isRent ? INSTALL_FEE : 0, total, startDate, paymentDueAt, depositAmount, depositPercent, shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [], status: RentalStatus.PENDING }
+      data: { userId, productId: product.id, type: isRent ? OrderType.RENT : OrderType.BUY, duration: dto.duration, quantity: dto.quantity, rentFee, depositFee, installFee: isRent ? INSTALL_FEE : 0, total, startDate, paymentDueAt, depositAmount, depositPercent, remainingAmount: Math.max(0, total - depositAmount), remainingPaymentStatus: isRent && total > depositAmount ? "PENDING" : "NOT_REQUIRED", shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [], status: RentalStatus.PENDING }
       });
       return { order, rentFee, depositFee, sellFee, total, depositAmount, paymentDueAt };
     });
     const { order, rentFee, depositFee, sellFee, total, depositAmount, paymentDueAt } = result;
     await this.redis.del("cache:products");
     const paymentMethod = dto.payment_method ?? "payos_demo";
-    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: isRent ? depositAmount : total, kind: "rental", method: paymentMethod });
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: isRent ? depositAmount : total, kind: "rental", method: paymentMethod, stage: "initial" });
     if (paymentMethod === "payos_demo") setTimeout(() => void this.markRentalPaid(order.id), 5000);
     return {
       order_id: order.id,
@@ -199,9 +199,9 @@ export class PlatformService {
     const order = await this.prisma.rentalOrder.findFirst({ where: { id, userId } });
     if (!order) throw new NotFoundException("Rental not found");
     if (order.type !== OrderType.RENT) throw new ForbiddenException("Only rental orders can pay remaining balance");
-    const remaining = Math.max(0, order.total - order.depositAmount);
+    const remaining = order.remainingAmount;
     if (!remaining) throw new BadRequestException("Rental has no remaining balance");
-    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method: "payos_demo" });
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method: "payos_demo", stage: "remaining" });
     if (payment) setTimeout(() => void this.markRentalPaid(order.id), 5000);
     return { order_id: order.id, payment_demo_url: payment.paymentUrl, remaining_amount: remaining };
   }
@@ -355,8 +355,12 @@ export class PlatformService {
     return work();
   }
 
-  async markRentalPaid(orderId: string) {
+  async markRentalPaid(orderId: string, stage: "initial" | "remaining" = "initial") {
     const order = await this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
+    if (stage === "remaining") {
+      if (!order || order.type !== OrderType.RENT) return order;
+      return this.prisma.rentalOrder.update({ where: { id: orderId }, data: { remainingPaidAmount: order.remainingAmount, remainingPaymentStatus: "PAID", remainingPaidAt: new Date() } });
+    }
     if (!order || order.status !== RentalStatus.PENDING) return order;
     const nextStatus = order.type === OrderType.BUY ? RentalStatus.PAID : (order.startDate && order.startDate > new Date() ? RentalStatus.DEPOSIT_PAID : RentalStatus.ACTIVE);
     const claimed = await this.prisma.rentalOrder.updateMany({
@@ -568,8 +572,8 @@ export class PlatformService {
     return result.order;
   }
 
-  async webhook(orderId: string, kind?: "rental" | "ticket" | "api") {
-    if (kind === "rental") return this.markRentalPaid(orderId);
+  async webhook(orderId: string, kind?: "rental" | "ticket" | "api", stage: "initial" | "remaining" = "initial") {
+    if (kind === "rental") return this.markRentalPaid(orderId, stage);
     if (kind === "ticket") return this.markTicketOrderPaid(orderId);
     if (kind === "api") return this.markApiRentalPaid(orderId);
     const ticket = await this.prisma.ticketOrder.findUnique({ where: { id: orderId } });
