@@ -29,6 +29,7 @@ type SecurityEvent = { id: string; action: string; targetType: string | null; ta
 type SecurityEvents = { items: SecurityEvent[]; total: number; page: number };
 type AuditFilter = { endpoint: string; status: string; from: string; to: string; is_test: string };
 const emptyAuditFilter: AuditFilter = { endpoint: "", status: "", from: "", to: "", is_test: "" };
+const AUDIT_PAGE_SIZE = 50;
 
 export default function ApiKeysPage() {
   const [overview, setOverview] = useState<DeveloperOverview>({ keys: [], rentals: [], notifications: [] });
@@ -52,26 +53,45 @@ export default function ApiKeysPage() {
   const [offlineSettings, setOfflineSettings] = useState<OfflineSettings | null>(null);
   const [offlineRawKey, setOfflineRawKey] = useState("");
   const [offlineLoading, setOfflineLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   async function load(nextAuditFilter = auditFilter) {
-    const [nextOverview, nextAnalytics, nextWebhooks, nextAudit, nextSecurityEvents] = await Promise.all([
-      api<DeveloperOverview>("/api/v1/developer/overview", { cache: "no-store" }),
-      api<Analytics>("/api/v1/developer/analytics", { cache: "no-store" }),
-      api<{ items: WebhookLog[] }>("/api/v1/developer/webhooks", { cache: "no-store" }),
-      api<Audit>(`/api/v1/developer/audit${auditQs(nextAuditFilter)}`, { cache: "no-store" }),
-      api<SecurityEvents>("/api/v1/developer/security-events", { cache: "no-store" })
-    ]);
-    setOverview(nextOverview);
-    setAnalytics(nextAnalytics);
-    setWebhooks(nextWebhooks.items ?? []);
-    setAudit(nextAudit);
-    setSecurityEvents(nextSecurityEvents);
+    setLoading(true);
+    try {
+      const [nextOverview, nextAnalytics, nextWebhooks, nextAudit, nextSecurityEvents] = await Promise.all([
+        api<DeveloperOverview>("/api/v1/developer/overview", { cache: "no-store" }),
+        api<Analytics>("/api/v1/developer/analytics", { cache: "no-store" }),
+        api<{ items: WebhookLog[] }>("/api/v1/developer/webhooks", { cache: "no-store" }),
+        api<Audit>(`/api/v1/developer/audit${auditQs(nextAuditFilter, 1)}`, { cache: "no-store" }),
+        api<SecurityEvents>("/api/v1/developer/security-events", { cache: "no-store" })
+      ]);
+      setOverview(nextOverview);
+      setAnalytics(nextAnalytics);
+      setWebhooks(nextWebhooks.items ?? []);
+      setAudit(nextAudit);
+      setSecurityEvents(nextSecurityEvents);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function auditQs(filter = auditFilter) {
+  function auditQs(filter = auditFilter, page?: number) {
     const params = new URLSearchParams();
     Object.entries(filter).forEach(([key, value]) => { if (value) params.set(key, value); });
+    if (page) params.set("page", String(page));
     return params.toString() ? `?${params}` : "";
+  }
+
+  async function loadAudit(nextFilter: AuditFilter, page: number) {
+    setAuditLoading(true);
+    try {
+      setAudit(await api<Audit>(`/api/v1/developer/audit${auditQs(nextFilter, page)}`, { cache: "no-store" }));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Không tải được audit logs.");
+    } finally {
+      setAuditLoading(false);
+    }
   }
 
   useEffect(() => { void load().catch((error) => setMessage(error instanceof Error ? error.message : "Khong tai duoc developer console.")); }, []);
@@ -289,14 +309,18 @@ export default function ApiKeysPage() {
   const keyTotalPages = Math.max(1, Math.ceil(filteredKeys.length / keyPageSize));
   const currentKeyPage = Math.min(keyPage, keyTotalPages);
   const pagedKeys = filteredKeys.slice((currentKeyPage - 1) * keyPageSize, currentKeyPage * keyPageSize);
+  const auditTotalPages = Math.max(1, Math.ceil(audit.total / AUDIT_PAGE_SIZE));
 
   return (
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-zinc-500">Developer console</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">API Keys va van hanh QR</h1></div><Link href="/thue-api" className="btn btn-primary text-sm"><KeyRound size={16} /> Thue API moi</Link></div>
-      {message && <p className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">{message}</p>}
-      {rawKey && <section className="panel mt-5 border-emerald-200 bg-emerald-50 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-emerald-800">Raw key chi hien mot lan</p><p className="mt-1 text-xs text-emerald-700">Copy vao password manager/vault, sau khi dong se khong reveal lai duoc.</p>{rawKeyRevokeAt && <p className="mt-2 text-xs font-medium text-amber-800">Key cu van hoat dong them 7 ngay, hay cap nhat key moi vao he thong truoc khi het han. Han revoke: {new Date(rawKeyRevokeAt).toLocaleDateString("vi-VN")}.</p>}</div><div className="flex gap-2"><button className="btn btn-secondary h-9 bg-white px-3 text-xs" onClick={() => void copyOnce(rawKey, "raw API key")}><Copy size={14} /> Copy</button><button className="btn btn-secondary h-9 bg-white px-3 text-xs" onClick={() => { setRawKey(""); setRawKeyRevokeAt(null); }}><Trash2 size={14} /> An</button></div></div><pre className="mt-3 overflow-auto rounded-lg bg-white p-3 text-xs text-emerald-900">{rawKey}</pre></section>}
+    <main className="mx-auto min-w-0 max-w-[1200px] py-3 md:py-5">
+      <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-zinc-500">Developer Console</p><h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">API keys và vận hành QR</h1><p className="mt-2 text-sm text-zinc-600">Quản lý khóa truy cập, secrets, webhook và nhật ký sử dụng.</p></div><Link href="/dashboard/pages/thue-api" className="btn btn-primary text-sm"><KeyRound size={16} />Thuê API mới</Link></div>
+      {message && <p className="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">{message}</p>}
+      {rawKey && <section className="panel mt-5 border-emerald-200 bg-emerald-50 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-emerald-800">Raw key chỉ hiển thị một lần</p><p className="mt-1 text-xs text-emerald-700">Hãy lưu vào password manager hoặc vault trước khi đóng.</p>{rawKeyRevokeAt && <p className="mt-2 text-xs font-medium text-amber-800">Key cũ còn hiệu lực đến {new Date(rawKeyRevokeAt).toLocaleDateString("vi-VN")}.</p>}</div><div className="flex gap-2"><button className="btn btn-secondary h-9 bg-white px-3 text-xs" onClick={() => void copyOnce(rawKey, "raw API key")}><Copy size={14} />Copy</button><button className="btn btn-secondary h-9 bg-white px-3 text-xs" onClick={() => { setRawKey(""); setRawKeyRevokeAt(null); }}><Trash2 size={14} />Ẩn</button></div></div><pre className="mt-3 overflow-auto rounded-lg bg-white p-3 text-xs text-emerald-900">{rawKey}</pre></section>}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4"><Stat label="Live keys" value={String(liveKeys.length)} /><Stat label="Test keys" value={String(testKeys.length)} /><Stat label="Requests thang nay" value={analytics.totals.requests.toLocaleString("vi-VN")} /><Stat label="Pay-as-you-go" value={money(analytics.totals.billed_amount)} /></div>
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4"><Stat icon={KeyRound} label="Live keys" value={String(liveKeys.length)} tone="emerald" /><Stat icon={ShieldCheck} label="Test keys" value={String(testKeys.length)} tone="violet" /><Stat icon={BarChart3} label="Request tháng này" value={analytics.totals.requests.toLocaleString("vi-VN")} tone="blue" /><Stat icon={Webhook} label="Pay-as-you-go" value={money(analytics.totals.billed_amount)} tone="amber" compact /></div>
+
+      <nav className="mt-6 flex gap-1 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-sm" aria-label="Developer console sections">{sections.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => { setActiveSection(id); window.history.replaceState(null, "", `#${id}`); }} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition ${activeSection === id ? "bg-zinc-950 text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"}`}><Icon size={15} />{label}</button>)}</nav>
+      {loading && <div className="panel mt-6 p-5 text-sm text-zinc-500">Đang tải dữ liệu developer console...</div>}
 
       {activeSection === "keys" && (
         <ApiKeyTable
@@ -347,7 +371,7 @@ export default function ApiKeysPage() {
 
       {activeSection === "webhooks" && <section id="webhooks" className="panel mt-6 overflow-hidden"><div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-5 py-4"><Webhook size={18} /><h2 className="font-semibold">Webhook delivery logs</h2></div><div className="divide-y divide-zinc-200">{webhooks.map((item) => <article key={item.id} className="p-5 text-sm"><div className="flex flex-wrap justify-between gap-3"><b>{item.event}</b><span>{item.status} - {item.attempts} attempts - manual {item.manualReplayCount}/5</span></div><p className="mt-1 text-xs text-zinc-500">{new Date(item.createdAt).toLocaleString("vi-VN")}</p>{item.logs[0] && <p className="mt-2 text-zinc-600">Latest: HTTP {item.logs[0].statusCode ?? "-"} {item.logs[0].error ?? ""}</p>}<button className="btn btn-secondary mt-3 text-sm" disabled={item.manualReplayCount >= 5} onClick={() => void retryWebhook(item.id)}>Replay</button></article>)}{!webhooks.length && <p className="p-5 text-sm text-zinc-500">Chua co webhook nao.</p>}</div></section>}
 
-      {activeSection === "audit" && <section id="audit" className="panel mt-6 overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 p-5"><div><h2 className="font-semibold">Audit logs</h2><p className="mt-1 text-sm text-zinc-600">{audit.total.toLocaleString("vi-VN")} request theo bo loc hien tai.</p></div><button className="btn btn-secondary text-sm" onClick={exportAudit}><Download size={16} /> CSV 10k</button></div><div className="grid gap-3 border-b border-zinc-200 p-5 md:grid-cols-6"><input className="field" placeholder="Endpoint" value={auditFilter.endpoint} onChange={e => setAuditFilter(v => ({ ...v, endpoint: e.target.value }))} /><input className="field" placeholder="Status 403/429" value={auditFilter.status} onChange={e => setAuditFilter(v => ({ ...v, status: e.target.value }))} /><input className="field" type="date" value={auditFilter.from} onChange={e => setAuditFilter(v => ({ ...v, from: e.target.value }))} /><input className="field" type="date" value={auditFilter.to} onChange={e => setAuditFilter(v => ({ ...v, to: e.target.value }))} /><select className="field" value={auditFilter.is_test} onChange={e => setAuditFilter(v => ({ ...v, is_test: e.target.value }))}><option value="">Live + test</option><option value="false">Live only</option><option value="true">Test only</option></select><div className="flex gap-2"><button className="btn btn-primary flex-1 text-sm" onClick={() => void load(auditFilter)}>Loc</button><button className="btn btn-secondary px-3 text-sm" onClick={() => { setAuditFilter(emptyAuditFilter); void load(emptyAuditFilter); }}>Reset</button></div></div><div className="overflow-auto"><table className="w-full min-w-[920px] text-left text-sm"><tbody className="divide-y divide-zinc-200">{audit.items.map(row => <tr key={row.id}><td className="px-5 py-3">{new Date(row.createdAt).toLocaleString("vi-VN")}</td><td className="px-5 py-3">{row.method}</td><td className="px-5 py-3">{row.endpoint}</td><td className="px-5 py-3">{row.statusCode}</td><td className="px-5 py-3">{row.durationMs}ms</td><td className="px-5 py-3">{row.isTest ? "test" : "live"}</td><td className="px-5 py-3">{row.ip ?? "-"}</td><td className="px-5 py-3">{row.error ?? ""}</td></tr>)}{!audit.items.length && <tr><td className="px-5 py-6 text-zinc-500">Chua co audit log.</td></tr>}</tbody></table></div></section>}
+      {activeSection === "audit" && <section id="audit" className="panel mt-6 overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 p-5"><div><h2 className="font-semibold">Audit logs</h2><p className="mt-1 text-sm text-zinc-600">{audit.total.toLocaleString("vi-VN")} request theo bộ lọc hiện tại.</p></div><button className="btn btn-secondary text-sm" onClick={exportAudit}><Download size={16} />CSV 10k</button></div><div className="grid gap-3 border-b border-zinc-200 p-5 md:grid-cols-6"><input className="field" placeholder="Endpoint" value={auditFilter.endpoint} onChange={e => setAuditFilter(v => ({ ...v, endpoint: e.target.value }))} /><input className="field" placeholder="Status 403/429" value={auditFilter.status} onChange={e => setAuditFilter(v => ({ ...v, status: e.target.value }))} /><input className="field" type="date" value={auditFilter.from} onChange={e => setAuditFilter(v => ({ ...v, from: e.target.value }))} /><input className="field" type="date" value={auditFilter.to} onChange={e => setAuditFilter(v => ({ ...v, to: e.target.value }))} /><select className="field" value={auditFilter.is_test} onChange={e => setAuditFilter(v => ({ ...v, is_test: e.target.value }))}><option value="">Live + test</option><option value="false">Chỉ live</option><option value="true">Chỉ test</option></select><div className="flex gap-2"><button className="btn btn-primary flex-1 text-sm" disabled={auditLoading} onClick={() => void loadAudit(auditFilter, 1)}>{auditLoading ? "Đang lọc" : "Lọc"}</button><button className="btn btn-secondary px-3 text-sm" disabled={auditLoading} onClick={() => { setAuditFilter(emptyAuditFilter); void loadAudit(emptyAuditFilter, 1); }}>Đặt lại</button></div></div><div className="overflow-auto"><table className="w-full min-w-[920px] text-left text-sm"><thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500"><tr><th className="px-5 py-3">Thời gian</th><th className="px-5 py-3">Method</th><th className="px-5 py-3">Endpoint</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Độ trễ</th><th className="px-5 py-3">Môi trường</th><th className="px-5 py-3">IP</th><th className="px-5 py-3">Lỗi</th></tr></thead><tbody className={`divide-y divide-zinc-200 ${auditLoading ? "opacity-50" : ""}`}>{audit.items.map(row => <tr key={row.id} className="hover:bg-zinc-50"><td className="whitespace-nowrap px-5 py-3">{new Date(row.createdAt).toLocaleString("vi-VN")}</td><td className="px-5 py-3 font-medium">{row.method}</td><td className="max-w-xs truncate px-5 py-3 font-mono text-xs">{row.endpoint}</td><td className="px-5 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${row.statusCode >= 400 ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{row.statusCode}</span></td><td className="px-5 py-3">{row.durationMs}ms</td><td className="px-5 py-3">{row.isTest ? "test" : "live"}</td><td className="px-5 py-3">{row.ip ?? "-"}</td><td className="max-w-xs truncate px-5 py-3 text-red-600">{row.error ?? ""}</td></tr>)}{!audit.items.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-zinc-500">Chưa có audit log phù hợp.</td></tr>}</tbody></table></div><div className="flex flex-col gap-3 border-t border-zinc-200 px-5 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between"><span>Trang <b className="text-zinc-900">{audit.page}</b>/{auditTotalPages} · tối đa {AUDIT_PAGE_SIZE} dòng/trang</span><div className="flex gap-2"><button className="btn btn-secondary h-9 bg-white px-3 text-xs" disabled={auditLoading || audit.page <= 1} onClick={() => void loadAudit(auditFilter, audit.page - 1)}><ChevronLeft size={15} />Trước</button><button className="btn btn-secondary h-9 bg-white px-3 text-xs" disabled={auditLoading || audit.page >= auditTotalPages} onClick={() => void loadAudit(auditFilter, audit.page + 1)}>Sau<ChevronRight size={15} /></button></div></div></section>}
       {activeSection === "security" && <section id="security" className="panel mt-6 overflow-hidden"><div className="border-b border-zinc-200 bg-zinc-50 p-5"><h2 className="font-semibold">Nhật ký bảo mật</h2><p className="mt-1 text-sm text-zinc-600">Các thao tác key và secret của riêng tài khoản này.</p></div><div className="overflow-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead><tr className="border-b border-zinc-200"><th className="px-5 py-3">Thời gian</th><th className="px-5 py-3">Hành động</th><th className="px-5 py-3">IP</th><th className="px-5 py-3">Thiết bị</th><th className="px-5 py-3">Metadata</th></tr></thead><tbody className="divide-y divide-zinc-200">{securityEvents.items.map(item => <tr key={item.id}><td className="px-5 py-3">{new Date(item.createdAt).toLocaleString("vi-VN")}</td><td className="px-5 py-3 font-medium">{item.action}</td><td className="px-5 py-3">{item.ip ?? "-"}</td><td className="max-w-xs truncate px-5 py-3">{item.userAgent ?? "-"}</td><td className="px-5 py-3">{Object.entries(item.metadata).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "-"}</td></tr>)}{!securityEvents.items.length && <tr><td colSpan={5} className="px-5 py-6 text-zinc-500">Chưa có sự kiện bảo mật.</td></tr>}</tbody></table></div></section>}
       {rotateTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="rotate-key-title">
@@ -366,11 +390,11 @@ export default function ApiKeysPage() {
           </form>
         </div>
       )}
-    </div>
+    </main>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) { return <div className="panel p-5"><span className="text-sm text-zinc-500">{label}</span><b className="mt-2 block text-2xl">{value}</b></div>; }
+function Stat({ icon: Icon, label, value, tone, compact = false }: { icon: typeof KeyRound; label: string; value: string; tone: "emerald" | "violet" | "blue" | "amber"; compact?: boolean }) { const color = tone === "emerald" ? "bg-emerald-50 text-emerald-700" : tone === "violet" ? "bg-violet-50 text-violet-700" : tone === "blue" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"; return <div className="panel min-w-0 p-4"><span className={`grid size-8 place-items-center rounded-lg ${color}`}><Icon size={16} /></span><span className="mt-3 block truncate text-xs text-zinc-500">{label}</span><b className={`mt-1 block truncate tracking-tight ${compact ? "text-base sm:text-xl" : "text-xl"}`}>{value}</b></div>; }
 
 function ApiKeyTable({
   keys,

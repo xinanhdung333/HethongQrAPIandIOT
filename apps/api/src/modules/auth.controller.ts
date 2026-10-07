@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Patch, Post, Req, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Headers, Patch, Post, Query, Req, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import { Request } from "express";
 import { LoginDto, RegisterDto, UpdateProfileDto } from "../dto";
 import { ActivityLogService } from "../services/activity-log.service";
@@ -6,6 +6,8 @@ import { PlatformService } from "../services/platform.service";
 
 @Controller("auth")
 export class AuthController {
+  private readonly locationCache = new Map<string, { expiresAt: number; items: Array<{ code: string; name: string }> }>();
+
   constructor(private readonly platform: PlatformService, private readonly activity: ActivityLogService) {}
 
   @Post("register")
@@ -29,6 +31,25 @@ export class AuthController {
     return this.platform.me(token);
   }
 
+  @Get("locations/provinces")
+  locationsProvinces() {
+    return this.getLocations("provinces", "https://provinces.open-api.vn/api/v1/p/");
+  }
+
+  @Get("locations/districts")
+  async locationsDistricts(@Query("provinceCode") provinceCode?: string) {
+    this.assertLocationCode(provinceCode);
+    const result = await this.getLocationTree(`province:${provinceCode}`, `https://provinces.open-api.vn/api/v1/p/${provinceCode}?depth=2`);
+    return result.districts ?? [];
+  }
+
+  @Get("locations/wards")
+  async locationsWards(@Query("districtCode") districtCode?: string) {
+    this.assertLocationCode(districtCode);
+    const result = await this.getLocationTree(`district:${districtCode}`, `https://provinces.open-api.vn/api/v1/d/${districtCode}?depth=2`);
+    return result.wards ?? [];
+  }
+
   @Patch("profile")
   async updateProfile(@Body() dto: UpdateProfileDto, @Headers("authorization") authorization?: string, @Req() req?: Request) {
     const token = authorization?.replace(/^Bearer\s+/i, "");
@@ -47,5 +68,45 @@ export class AuthController {
     const result = await this.platform.logout(token);
     await this.activity.record({ session, action: "LOGOUT", targetType: "User", targetId: session.sub, req });
     return result;
+  }
+
+  private assertLocationCode(code?: string): asserts code is string {
+    if (!code || !/^\d{1,8}$/.test(code)) throw new BadRequestException("Ma dia gioi khong hop le");
+  }
+
+  private async getLocations(cacheKey: string, url: string) {
+    const cached = this.locationCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.items;
+    const response = await this.fetchLocationApi(url);
+    if (!Array.isArray(response)) throw new ServiceUnavailableException("Du lieu dia gioi khong hop le");
+    const items = this.normalizeLocations(response);
+    this.locationCache.set(cacheKey, { expiresAt: Date.now() + 24 * 60 * 60 * 1000, items });
+    return items;
+  }
+
+  private async getLocationTree(cacheKey: string, url: string) {
+    const response = await this.fetchLocationApi(url) as { districts?: unknown[]; wards?: unknown[] };
+    return {
+      districts: this.normalizeLocations(response.districts ?? []),
+      wards: this.normalizeLocations(response.wards ?? [])
+    };
+  }
+
+  private async fetchLocationApi(url: string): Promise<unknown> {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`Location API ${response.status}`);
+      return response.json();
+    } catch {
+      throw new ServiceUnavailableException("Tam thoi khong tai duoc danh sach dia gioi");
+    }
+  }
+
+  private normalizeLocations(items: unknown[]) {
+    return items.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const value = item as { code?: string | number; name?: string };
+      return value.code !== undefined && typeof value.name === "string" ? [{ code: String(value.code), name: value.name }] : [];
+    });
   }
 }

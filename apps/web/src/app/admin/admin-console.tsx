@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Copy, Database, ExternalLink, FileText, History, Home, KeyRound, Loader2, LogOut, Package, Radio, Save, ShieldCheck, ShoppingBag, Ticket, Truck, Users } from "lucide-react";
+import { BarChart3, Copy, Database, FileText, History, KeyRound, Loader2, Package, Radio, Save, ShieldCheck, ShoppingBag, Ticket, Truck, Users } from "lucide-react";
 import { API_URL, money, StaticPage } from "@/lib/api";
+import { AdminShell } from "./admin-resource-page";
 
 type AdminData = {
   summary?: { counts: Record<string, number>; revenue: { total: number; payout: number; fee: number } };
@@ -27,8 +28,12 @@ type AdminData = {
     user?: { email: string; role: string };
   }>;
 };
+type ActivityPage = { items: AdminData["activityLogs"]; total?: number; page?: number; pageSize?: number; totalPages?: number };
 
 const emptyData: AdminData = { users: [], products: [], orders: [], shows: [], tickets: [], apiKeys: [], staticPages: [], activityLogs: [] };
+const ADMIN_CACHE_TTL_MS = 30_000;
+const adminDataCache = new Map<string, { expiresAt: number; data: Partial<AdminData> }>();
+export function invalidateAdminDataCache() { adminDataCache.clear(); }
 const tabs = [
   ["activityLogs", "Lịch sử", History, "Hoạt động của user"],
   ["staticPages", "Trang tĩnh", FileText, "Menu, ảnh, nội dung quảng cáo"],
@@ -39,17 +44,18 @@ const tabs = [
   ["apiKeys", "API Keys", KeyRound, "Cấp key cho cổng quét"],
   ["users", "Users", Users, "Tài khoản hệ thống"]
 ] as const;
-const visitorLinks = [
-  ["Trang chủ", "/", Home],
-  ["Sản phẩm", "/san-pham", Package],
-  ["Dịch vụ", "/dich-vu", FileText],
-  ["Thuê API", "/thue-api", KeyRound],
-  ["Giá rẻ", "/bang-gia", ShoppingBag],
-  ["Giới thiệu", "/gioi-thieu", ShieldCheck],
-  ["Thuê thiết bị", "/thue-thiet-bi", Truck],
-  ["Tạo show", "/tao-show", Radio]
-] as const;
-
+type AdminSection = "overview" | (typeof tabs)[number][0];
+const sectionTitles: Record<AdminSection, string> = {
+  overview: "Tổng quan quản trị",
+  activityLogs: "Lịch sử hoạt động",
+  staticPages: "Trang tĩnh & menu",
+  products: "Sản phẩm",
+  orders: "Đơn hàng",
+  shows: "Show",
+  tickets: "Vé",
+  apiKeys: "API keys",
+  users: "Người dùng"
+};
 function formatRemaining(value: string, now = Date.now()) {
   const seconds = Math.max(0, Math.ceil((new Date(value).getTime() - now) / 1000));
   if (seconds <= 0) return "đã hết hạn";
@@ -59,10 +65,10 @@ function formatRemaining(value: string, now = Date.now()) {
   return `${minutes} phút ${seconds % 60} giây`;
 }
 
-export function AdminConsole() {
+export function AdminConsole({ initialTab = "overview" }: { initialTab?: AdminSection }) {
   const [token, setToken] = useState("");
   const [data, setData] = useState<AdminData>(emptyData);
-  const [tab, setTab] = useState<(typeof tabs)[number][0]>("activityLogs");
+  const [tab] = useState<AdminSection>(initialTab);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [onceKey, setOnceKey] = useState("");
@@ -113,22 +119,45 @@ export function AdminConsole() {
     return res.json();
   }
 
-  async function load(authToken = token) {
+  async function load(authToken = token, force = false) {
+    const cacheKey = `${authToken}:${tab}`;
+    const cached = adminDataCache.get(cacheKey);
+    if (!force && cached && cached.expiresAt > Date.now()) {
+      setData((current) => ({ ...current, ...cached.data }));
+      setMessage("");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setMessage("");
     try {
-      const [summary, users, products, orders, shows, tickets, apiKeys, staticPages, activityLogs] = await Promise.all([
-        request<AdminData["summary"]>("/admin/summary", undefined, authToken),
-        request<AdminData["users"]>("/admin/users", undefined, authToken),
-        request<AdminData["products"]>("/admin/products", undefined, authToken),
-        request<AdminData["orders"]>("/admin/orders", undefined, authToken),
-        request<AdminData["shows"]>("/admin/shows", undefined, authToken),
-        request<AdminData["tickets"]>("/admin/tickets", undefined, authToken),
-        request<AdminData["apiKeys"]>("/admin/api-keys", undefined, authToken),
-        request<AdminData["staticPages"]>("/admin/static-pages", undefined, authToken),
-        request<AdminData["activityLogs"]>("/admin/activity-logs", undefined, authToken)
-      ]);
-      setData({ summary, users, products, orders, shows, tickets, apiKeys, staticPages, activityLogs });
+      let patch: Partial<AdminData> = {};
+      switch (tab) {
+        case "overview":
+          patch = { summary: await request<AdminData["summary"]>("/admin/summary", undefined, authToken) };
+          break;
+        case "activityLogs": {
+          const logs = await request<ActivityPage | AdminData["activityLogs"]>("/admin/activity-logs?pageSize=50", undefined, authToken);
+          patch = { activityLogs: Array.isArray(logs) ? logs : logs.items ?? [] };
+          break;
+        }
+        case "staticPages": patch = { staticPages: await request<AdminData["staticPages"]>("/admin/static-pages", undefined, authToken) }; break;
+        case "products": patch = { products: await request<AdminData["products"]>("/admin/products", undefined, authToken) }; break;
+        case "orders": patch = { orders: await request<AdminData["orders"]>("/admin/orders", undefined, authToken) }; break;
+        case "shows": patch = { shows: await request<AdminData["shows"]>("/admin/shows", undefined, authToken) }; break;
+        case "tickets": patch = { tickets: await request<AdminData["tickets"]>("/admin/tickets", undefined, authToken) }; break;
+        case "apiKeys": {
+          const [apiKeys, users] = await Promise.all([
+            request<AdminData["apiKeys"]>("/admin/api-keys", undefined, authToken),
+            request<AdminData["users"]>("/admin/users", undefined, authToken)
+          ]);
+          patch = { apiKeys, users };
+          break;
+        }
+        case "users": patch = { users: await request<AdminData["users"]>("/admin/users", undefined, authToken) }; break;
+      }
+      setData((current) => ({ ...current, ...patch }));
+      adminDataCache.set(cacheKey, { data: patch, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
     } catch (error) {
       if (error instanceof Error && error.message === "ADMIN_SESSION_EXPIRED") {
         window.localStorage.removeItem("smartqr_token");
@@ -155,7 +184,7 @@ export function AdminConsole() {
       })
     });
     setMessage(`Đã lưu ${product.name}`);
-    await load();
+    await load(token, true);
   }
 
   async function updateStaticPage(page: StaticPage, formData: FormData) {
@@ -176,7 +205,7 @@ export function AdminConsole() {
         })
       });
       setMessage(`Đã lưu trang ${page.navLabel}`);
-      await load();
+      await load(token, true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "JSON trang tĩnh không hợp lệ");
     }
@@ -185,7 +214,7 @@ export function AdminConsole() {
   async function updateShowStatus(id: string, status: string) {
     await request(`/admin/shows/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
     setMessage("Đã cập nhật trạng thái show");
-    await load();
+    await load(token, true);
   }
 
   async function updateShowInstallation(id: string, formData: FormData) {
@@ -198,7 +227,7 @@ export function AdminConsole() {
       })
     });
     setMessage("Đã cập nhật trạng thái lắp đặt");
-    await load();
+    await load(token, true);
   }
 
   async function createShowScanKey(showId: string) {
@@ -207,7 +236,7 @@ export function AdminConsole() {
       const created = await request<{ api_key_once: string }>('/admin/shows/' + showId + '/scan-key', { method: "POST", body: "{}" });
       setOnceKey(created.api_key_once);
       setMessage("Đã cấp key máy quét. Raw key chỉ hiển thị một lần.");
-      await load();
+      await load(token, true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể cấp key máy quét.");
     }
@@ -219,7 +248,7 @@ export function AdminConsole() {
       const created = await request<{ api_key_once: string; old_revoke_at?: string }>(`/admin/shows/${showId}/scan-key/rotate`, { method: "POST", body: JSON.stringify({ grace_minutes: 60 }) });
       setOnceKey(created.api_key_once);
       setMessage(`Đã cấp key mới. Key cũ còn hiệu lực ${created.old_revoke_at ? formatRemaining(created.old_revoke_at, now) : "trong thời gian chuyển đổi"}. Raw key chỉ hiển thị một lần.`);
-      await load();
+      await load(token, true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể cấp key mới.");
     }
@@ -242,14 +271,7 @@ export function AdminConsole() {
       body: JSON.stringify({ user_id: String(formData.get("userId")), rental_id: String(formData.get("rentalId")) })
     });
     setOnceKey(created.api_key_once);
-    await load();
-  }
-
-  function logout() {
-    window.localStorage.removeItem("smartqr_token");
-    setToken("");
-    setData(emptyData);
-    setMessage("");
+    await load(token, true);
   }
 
   if (!token || message.includes("Admin role required") || message.includes("Missing admin token") || message.includes("Unauthorized")) {
@@ -270,68 +292,16 @@ export function AdminConsole() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-      <aside className="border-b border-zinc-200 bg-white lg:sticky lg:top-0 lg:h-dvh lg:overflow-hidden lg:border-b-0 lg:border-r">
-        <div className="flex h-full min-h-0 flex-col gap-6 p-4">
-          <div className="flex items-center gap-3 rounded-lg border border-zinc-200 p-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-900 text-white">
-              <ShieldCheck size={18} />
-            </span>
-            <div>
-              <b className="block tracking-tight">SmartQR Admin</b>
-              <span className="text-xs text-zinc-500">PostgreSQL CMS console</span>
-            </div>
-          </div>
-
-          <nav className="grid min-h-0 flex-1 gap-6 overflow-y-auto pr-1">
-            <div>
-              <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-normal text-zinc-400">Quản trị</p>
-              <div className="flex gap-2 overflow-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
-                {tabs.map(([id, label, Icon, hint]) => (
-                  <button
-                    key={id}
-                    className={`flex min-w-40 items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition lg:min-w-0 ${tab === id ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950"}`}
-                    onClick={() => setTab(id)}
-                  >
-                    <Icon size={16} />
-                    <span>
-                      <b className="block font-semibold">{label}</b>
-                      <span className={`hidden text-xs lg:block ${tab === id ? "text-zinc-300" : "text-zinc-500"}`}>{hint}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-normal text-zinc-400">Xem public</p>
-              <div className="grid gap-1">
-                {visitorLinks.map(([label, href, Icon]) => (
-                  <Link key={href} href={href} className="flex min-h-10 items-center justify-between rounded-lg px-3 text-sm text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950">
-                    <span className="flex items-center gap-2"><Icon size={16} />{label}</span>
-                    <ExternalLink size={14} className="text-zinc-400" />
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </nav>
-
-          <button className="btn btn-secondary mt-auto shrink-0 text-sm" onClick={logout}>
-            <LogOut size={16} />
-            Đăng xuất admin
-          </button>
-        </div>
-      </aside>
-
-      <section className="min-w-0 px-4 py-6 md:px-8 md:py-10">
+    <AdminShell>
+      <section className="min-w-0">
         <div className="mx-auto grid max-w-6xl gap-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-zinc-500">SmartQR Admin</p>
-              <h1 className="mt-2 text-4xl font-semibold tracking-tight">Quản lý website</h1>
-              <p className="mt-3 max-w-2xl text-sm text-zinc-600">Sửa toàn bộ trang quảng cáo tĩnh, menu, ảnh hero, CTA và nội dung section từ PostgreSQL.</p>
+              <h1 className="mt-2 text-4xl font-semibold tracking-tight">{sectionTitles[tab]}</h1>
+              <p className="mt-3 max-w-2xl text-sm text-zinc-600">{tab === "overview" ? "Theo dõi nhanh hoạt động và dữ liệu toàn hệ thống." : `Quản lý ${sectionTitles[tab].toLowerCase()} SmartQR.`}</p>
             </div>
-            <button className="btn btn-secondary text-sm" onClick={() => load()} disabled={loading}>{loading ? <Loader2 size={16} className="animate-spin" /> : <BarChart3 size={16} />}Tải lại</button>
+            <button className="btn btn-secondary text-sm" onClick={() => load(token, true)} disabled={loading}>{loading ? <Loader2 size={16} className="animate-spin" /> : <BarChart3 size={16} />}Tải lại</button>
           </div>
 
           {data.summary && (
@@ -367,9 +337,10 @@ export function AdminConsole() {
             </section>
           )}
 
+          {tab === "overview" && <div className="panel p-6"><h2 className="text-lg font-semibold">Chào mừng đến khu vực quản trị</h2><p className="mt-2 text-sm text-zinc-600">Chọn chức năng từ menu để quản lý từng phần riêng biệt.</p></div>}
           {tab === "activityLogs" && (
             <SimpleTable
-              rows={data.activityLogs.map((log) => [
+              rows={(Array.isArray(data.activityLogs) ? data.activityLogs : []).map((log) => [
                 new Date(log.createdAt).toLocaleString("vi-VN"),
                 log.user?.email ?? "",
                 log.action,
@@ -441,7 +412,7 @@ export function AdminConsole() {
           {tab === "users" && <SimpleTable rows={data.users.map((user) => [user.email, user.role, new Date(user.createdAt).toLocaleString("vi-VN"), user.id])} />}
         </div>
       </section>
-    </div>
+    </AdminShell>
   );
 }
 

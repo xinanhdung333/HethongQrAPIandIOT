@@ -19,6 +19,7 @@ export class ApiRentalsController {
     plan?: "starter" | "business";
     duration?: number;
     scopes?: string[];
+    payment_method?: "payos_demo" | "momo";
   }) {
     if (!userId) throw new UnauthorizedException("Login required");
     return this.rentals.create(userId, body);

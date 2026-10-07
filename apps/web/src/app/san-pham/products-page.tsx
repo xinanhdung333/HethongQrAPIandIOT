@@ -5,7 +5,7 @@ import { api, Product } from "@/lib/api";
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-  const products = (await api<Product[]>("/products").catch(() => [])).filter((product) => product.type !== "COMPONENT");
+  const products = (await api<Product[]>("/products").catch(() => [])).filter((product) => product.type !== "COMPONENT" && product.productType !== "THIET_BI_THUE");
   return (
     <main className="shell py-16 md:py-24">
       <Reveal>

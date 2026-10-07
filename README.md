@@ -1,335 +1,175 @@
 # SmartQR Platform
 
-Monorepo cho SmartQR: thue hop quet IoT, white-label show, ban linh kien va API QR tich hop cho web/server/IoT.
+Nền tảng SmartQR giúp tạo, quản lý và xác minh QR cho vé sự kiện, thiết bị cho thuê và các hệ thống bên ngoài. Repo được tổ chức theo npm workspaces, gồm ứng dụng web, API, các dịch vụ chuyên biệt và SDK cho nhà phát triển.
 
-- Thue thiet bi IoT: `/thue-thiet-bi`
-- White-label show: `/tao-show` va `/e/[slug]`
-- Ban linh kien: `/linh-kien`
-- Thue API QR: `/thue-api`
-- Developer console: `/dashboard/api-keys`
+## Chức năng
 
-## Tai source va chay local
+- Tạo show, phát hành và xác minh vé QR; hỗ trợ quét tại cổng và trạng thái show theo thời gian thực.
+- Quản lý đơn thuê thiết bị, thuê API và quota sử dụng.
+- Tạo QR đơn lẻ hoặc hàng loạt, kết xuất QR dạng SVG, thu hồi mã và kiểm soát quyền truy cập API.
+- Developer console với API key, quota, analytics, audit log và webhook.
+- Trang quản trị cho show, thiết bị, sản phẩm, đơn hàng và nội dung.
+- SDK cho JavaScript/TypeScript, Python và PHP.
 
-Yeu cau chung:
+## Kiến trúc
 
-- Node.js 20+
-- npm 10+
-- Git
-- Docker Desktop neu muon chay bang Docker
+```text
+Trình duyệt / ứng dụng tích hợp
+             │
+    Web Next.js :3000
+             │
+      API NestJS :4000
+       ├─────┼───────────┐
+ Ticket :3003  Rental :3004  QR :3005
+       └─────┴───────────┘
+          PostgreSQL :5432
+          Redis :6379
+```
 
-Tai source:
+| Thư mục | Vai trò |
+| --- | --- |
+| `apps/web` | Giao diện Next.js App Router |
+| `apps/api` | API chính, xác thực, thanh toán, developer console và proxy đến service |
+| `apps/ticket-service` | Xác minh vé và QR tại cổng |
+| `apps/rental-service` | Quản lý thuê và quota nội bộ |
+| `apps/qr-service` | Tạo QR, SVG và tiêu thụ quota thuê API |
+| `packages/database` | Prisma schema, migration và dữ liệu seed |
+| `packages/sdk` | SDK JavaScript/TypeScript |
+| `packages/sdk-python`, `packages/sdk-php` | SDK Python và PHP |
 
-```powershell
+## Yêu cầu
+
+- Node.js 20 trở lên và npm 10 trở lên.
+- Docker Desktop với Docker Compose plugin (cách chạy khuyến nghị), hoặc PostgreSQL 16 và Redis 7 nếu chạy dịch vụ trên máy.
+
+## Chạy toàn bộ bằng Docker
+
+```bash
 git clone <repo-url>
 cd HeThongQRthongminh
-```
-
-Neu ban dang co san folder source thi chi can mo terminal tai thu muc project:
-
-```powershell
-cd C:\HeThongQRthongminh
-```
-
-Neu chay khong dung Docker cho app thi cai dependencies tren may host:
-
-```powershell
-npm install
-```
-
-### Cach 1: Chay bang Docker
-
-Docker Compose se chay day du PostgreSQL, Redis, API chinh, web va cac service tach rieng.
-
-```powershell
 docker compose up --build
 ```
 
-Mo app:
+Docker Compose khởi động PostgreSQL, Redis, migration, API, web và ba service chuyên biệt. Truy cập:
 
-- Web: `http://localhost:3000`
-- API chinh: `http://localhost:4000`
-- Ticket service: `http://localhost:3003`
-- Rental service: `http://localhost:3004`
-- QR service: `http://localhost:3005`
+- Web: <http://localhost:3000>
+- API: <http://localhost:4000>
+- Ticket service: <http://localhost:3003>
+- Rental service: <http://localhost:3004>
+- QR service: <http://localhost:3005>
 
-Dung stack Docker:
+Dừng các container bằng `docker compose down`. Lệnh `docker compose down -v` xóa cả volume dữ liệu PostgreSQL và Redis.
 
-```powershell
-docker compose down
-```
+## Chạy local không Docker
 
-Xoa ca database/redis volume local neu muon reset sach du lieu:
+Khởi động PostgreSQL và Redis trước (có thể dùng Docker chỉ cho hai database):
 
-```powershell
-docker compose down -v
-```
-
-Neu Prisma bao loi khong tim thay OpenSSL trong container, build lai image:
-
-```powershell
-docker compose down
-docker compose build --no-cache
-docker compose up
-```
-
-### Cach 2: Chay khong dung Docker cho app
-
-Cach nay van can PostgreSQL va Redis. Ban co the cai PostgreSQL/Redis truc tiep tren may, hoac chi dung Docker cho database:
-
-```powershell
+```bash
 docker compose up -d postgres redis
+npm install
 ```
 
-Neu PostgreSQL va Redis da duoc cai/chay ben ngoai Docker tren may moi, co the dung file tu dong:
-
-```powershell
-.\smartqr-no-docker-setup.bat
-```
-
-Mac dinh file nay ket noi:
-
-- PostgreSQL: `postgresql://smartqr:1@localhost:5432/smartqr?schema=public`
-- Redis: `redis://localhost:6379`
-
-Lenh tren se tao `.env` local cho cac app, chay `npm install`, Prisma generate/migrate/seed, roi mo web/API/services. Cac lenh phu:
-
-```powershell
-.\smartqr-no-docker-setup.bat setup
-.\smartqr-no-docker-setup.bat start
-.\smartqr-no-docker-setup.bat backend
-.\smartqr-no-docker-setup.bat web
-.\smartqr-no-docker-setup.bat check
-.\smartqr-no-docker-setup.bat stop
-```
-
-Tao file env cho API neu chua co:
+Tạo file môi trường cho API từ mẫu, rồi điều chỉnh kết nối database/cache nếu cần:
 
 ```powershell
 Copy-Item apps\api\.env.example apps\api\.env
 ```
 
-Sau do sua `apps\api\.env` cho dung local. Gia tri mac dinh de dev:
-
-```env
-DATABASE_URL="postgresql://smartqr:1@localhost:5432/smartqr?schema=public"
-REDIS_URL="redis://localhost:6379"
-JWT_SECRET="smartqr-local-dev-secret-change-in-production"
-PAYMENT_DEMO_MODE="true"
-WEB_ORIGIN="http://localhost:3000"
-TICKET_SERVICE_URL="http://localhost:3003"
-RENTAL_SERVICE_URL="http://localhost:3004"
-QR_SERVICE_URL="http://localhost:3005"
-```
-
-Generate Prisma, migrate va seed database:
-
-```powershell
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-```
-
-Chay app chinh o che do dev:
-
-```powershell
+```bash
+npm run db:setup
 npm run dev
 ```
 
-Lenh tren chay API chinh `:4000` va web `:3000`. Neu can chay day du cac service tach rieng cho luong verify/quota/QR, mo them cac terminal khac:
+`db:setup` sinh Prisma Client, chạy migration ở chế độ phát triển và nạp dữ liệu mẫu. `npm run dev` chạy web và API chính. Để bật các service chuyên biệt, mở thêm terminal cho từng lệnh:
 
-```powershell
+```bash
 npm run dev:ticket-service
 npm run dev:rental-service
 npm run dev:qr-service
 ```
 
-Mo app:
-
-- Web: `http://localhost:3000`
-- API chinh: `http://localhost:4000`
-- Ticket service: `http://localhost:3003`
-- Rental service: `http://localhost:3004`
-- QR service: `http://localhost:3005`
-
-### Cach nhanh tren Windows
-
-Repo co san tool `.bat` de chay nhanh local tren Windows/PowerShell:
+Trên Windows có thể dùng tiện ích thiết lập/chạy nhanh có sẵn:
 
 ```powershell
+.\smartqr-no-docker-setup.bat
 .\smartqr-dev-tool.bat
 ```
 
-Mot so lenh phu:
+## Cấu hình môi trường
 
-```powershell
-.\smartqr-dev-tool.bat all
-.\smartqr-dev-tool.bat db
-.\smartqr-dev-tool.bat ps
-.\smartqr-dev-tool.bat stop 3000
-.\smartqr-dev-tool.bat stop-all
-.\smartqr-dev-tool.bat logs
-.\smartqr-dev-tool.bat menu
+Các biến quan trọng được mô tả trong [`.env.example`](.env.example). API local thường cần:
+
+| Biến | Mục đích |
+| --- | --- |
+| `DATABASE_URL` | Chuỗi kết nối PostgreSQL |
+| `REDIS_URL` | Chuỗi kết nối Redis |
+| `JWT_SECRET`, `QR_JWT_SECRET` | Ký token phiên và QR; đặt giá trị ngẫu nhiên riêng khi triển khai |
+| `API_KEY_PEPPER` | Bí mật máy chủ dùng xử lý API key |
+| `API_SECRET_ENCRYPTION_KEY` | Khóa mã hóa webhook/request signing secret lưu trong DB (32 byte dạng hex) |
+| `INTERNAL_SERVICE_TOKEN` | Xác thực lời gọi nội bộ giữa các service |
+| `WEB_ORIGIN` | Origin của web, mặc định local là `http://localhost:3000` |
+| `TICKET_SERVICE_URL`, `RENTAL_SERVICE_URL`, `QR_SERVICE_URL` | Địa chỉ các service; dùng tên service trong mạng Docker |
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SOCKET_URL` | URL API và Socket.IO mà web truy cập từ trình duyệt |
+| `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM` | Thông tin PayOS khi cấu hình thanh toán thật |
+
+Không dùng giá trị bí mật mẫu hoặc cấu hình demo trong môi trường production. Các endpoint `/internal/*` của rental service yêu cầu `x-internal-service-token` khớp với `INTERNAL_SERVICE_TOKEN`.
+
+## API v1
+
+Base URL local: `http://localhost:4000`. Các endpoint chính:
+
+| Phương thức | Endpoint | Mô tả |
+| --- | --- | --- |
+| `POST` | `/api/v1/qr-codes` | Tạo QR |
+| `POST` | `/api/v1/qr-codes/bulk` | Tạo tối đa 500 QR trong một request |
+| `GET` | `/api/v1/qr-codes/:id/svg` | Lấy hình QR dạng SVG |
+| `POST` | `/api/v1/qr-codes/:id/revoke` | Thu hồi QR |
+| `POST` | `/api/v1/tickets/verify` | Xác minh vé hoặc mã QR; trả quyết định cho phép/từ chối |
+| `GET` | `/api/v1/status` | Tình trạng API |
+| `/api/v1/developer/*` | — | API key, cài đặt, analytics, audit và webhook logs |
+
+Tạo QR cần API key có scope `qr:create`; đọc QR cần `qr:read`; xác minh vé cần `ticket:verify`. API áp dụng rate limit và quota theo key. Key thử nghiệm có tiền tố `sk_test_` không trừ quota live.
+
+API hỗ trợ request signing HMAC tùy chọn, IP whitelist, xoay key, metadata, QR dùng nhiều lần, giới hạn gate, thời điểm hiệu lực, thu hồi và webhook. Response tạo QR duy trì các trường tương thích `qr_jwt`, `ticket_code` và `qr.*`.
+
+## SDK
+
+- JavaScript/TypeScript: [`packages/sdk/README.md`](packages/sdk/README.md)
+- Python: [`packages/sdk-python/README.md`](packages/sdk-python/README.md)
+- PHP: [`packages/sdk-php/README.md`](packages/sdk-php/README.md)
+
+## Tài khoản dữ liệu mẫu
+
+Sau khi chạy seed, tài khoản demo mặc định:
+
+- Khách hàng: `demo@smartqr.vn` / `demo123456`
+- Quản trị viên: `admin@smartqr.vn` / `admin123456`
+
+Chỉ sử dụng các tài khoản này trên môi trường phát triển cục bộ.
+
+## Lệnh thường dùng
+
+```bash
+npm run dev                 # Web và API chính
+npm run build               # Build API và web
+npm run lint                # Lint web
+npm run db:generate         # Sinh Prisma Client
+npm run db:migrate          # Migration phát triển
+npm run db:migrate:deploy   # Áp dụng migration đã tạo
+npm run db:seed             # Nạp dữ liệu mẫu
+npm test -w @smartqr/sdk    # Test SDK JavaScript
 ```
 
-Neu dung PowerShell, bat buoc co `.\` truoc ten file `.bat` vi PowerShell khong tu chay lenh trong thu muc hien tai.
-
-Ticket service tach rieng:
-
-- App chinh (giu contract cho client): `http://localhost:4000`
-- Ticket service: `http://localhost:3003`
-- Verify qua app chinh: `POST /api/v1/tickets/verify`
-- Verify truc tiep ticket service: `POST /api/v1/tickets/verify`
-
-Chay rieng ticket service:
+Để chạy integration test API, cần PostgreSQL test riêng và `TEST_DATABASE_URL`:
 
 ```powershell
-npm run dev:ticket-service
-```
-
-Can chay app chinh song song de giu endpoint proxy:
-
-```powershell
-npm run dev -w @smartqr/api
-```
-
-Rental service tach rieng:
-
-- App chinh (giu contract cho client): `http://localhost:4000/api-rentals`
-- Rental service: `http://localhost:3004/api-rentals`
-- Consume quota noi bo: `POST http://localhost:3004/internal/rentals/:id/consume-quota`
-- Refund quota noi bo: `POST http://localhost:3004/internal/rentals/:id/refund-quota`
-
-Chay rental service:
-
-```powershell
-npm run dev:rental-service
-```
-
-Endpoint `/internal/*` bat buoc nhan header `x-internal-service-token` trung voi
-`INTERNAL_SERVICE_TOKEN`; khong dung API key cua khach hang.
-
-QR service tach rieng:
-
-- App chinh (giu contract cho client): `http://localhost:4000/api/v1/qr-codes`
-- QR service: `http://localhost:3005/api/v1/qr-codes`
-- SVG qua app chinh: `GET http://localhost:4000/api/v1/qr-codes/:id/svg`
-- SVG truc tiep: `GET http://localhost:3005/api/v1/qr-codes/:id/svg`
-
-Chay QR service:
-
-```powershell
-npm run dev:qr-service
-```
-
-Chay toan bo backend bang Docker Compose:
-
-```powershell
-docker compose up --build
-```
-
-Docker Compose se chay PostgreSQL, Redis, API chinh va ba service tach rieng.
-Trong mang Docker, cac service goi nhau qua ten `ticket-service`, `rental-service`
-va `qr-service`; tu may host van truy cap duoc lan luot tai cong 4000, 3003,
-3004 va 3005. Stack Docker local chay voi `NODE_ENV=development`; khong dung
-cac secrets nay cho production. Dung `docker compose down` de dung stack.
-
-Neu Prisma bao loi khong tim thay OpenSSL trong container, build lai image sau
-khi Dockerfile da cai `openssl`:
-
-```powershell
-docker compose down
-docker compose build --no-cache
-docker compose up
-```
-
-Khi tao QR, QR service goi `RENTAL_SERVICE_URL` de consume quota truoc.
-Neu tao QR that bai, service goi lai endpoint refund quota; neu rental service
-khong san sang thi QR khong duoc tao.
-
-Tai khoan seed:
-
-- Customer: `demo@smartqr.vn` / `demo123456`
-- Admin: `admin@smartqr.vn` / `admin123456`
-
-## SmartQR API v1
-
-API duoc thiet ke de dev ngoai tich hop vao backend rieng va IoT gateway:
-
-- `POST /api/v1/qr-codes`: tao QR cho bat ky `resource_type`.
-- `POST /api/v1/qr-codes/bulk`: tao toi da 500 QR/request.
-- `GET /api/v1/qr-codes/:id/svg`: render SVG tu JWT.
-- `POST /api/v1/tickets/verify`: verify QR/code, tra `decision: allow/deny`.
-- `POST /api/v1/qr-codes/:id/revoke`: thu hoi QR.
-- `GET /api/v1/status`: status page API.
-- `/api/v1/developer/*`: key rotation, test key, settings, analytics, audit, webhook logs.
-
-Response tao QR van giu tuong thich nguoc voi `qr_jwt`, `ticket_code` va object `qr.*`.
-
-Tinh nang API:
-
-- Scope theo key: `qr:create`, `qr:read`, `ticket:verify`.
-- Rate limit theo key va headers `X-RateLimit-*`.
-- Monthly quota va pay-as-you-go usage event.
-- Test key `sk_test_...` khong tru quota live.
-- HMAC request signing tuy chon.
-- IP whitelist theo key.
-- Key rotation: key cu `deprecated`, tu revoke sau 7 ngay.
-- Webhook outbox: `qr.created`, `qr.expired`, `qr.verify_failed`, `ticket.verified`, legacy `qr.verified`, retry 1p/5p/30p.
-- Metadata tu do, multi-use QR, allowed gate IDs, not-before, revoke.
-- Audit log moi request qua API key.
-
-## Roadmap bao mat ve / QR
-
-Hien tai he thong dung:
-
-- `qrJwt` ky HMAC/HS256 bang `QR_JWT_SECRET` cho verify online.
-- `qrOfflineJwt` ky RSA/RS256 cho gate offline, gate chi giu public key.
-- Show Scan Key rieng cho may quet tung show, scope `ticket:verify`.
-- DB/Redis check tiep: dung show, chua used, chua revoke, chua het han.
-
-Cac nang cap nen lam sau de tien gan mo hinh Ticketmaster SafeTix / Google Wallet:
-
-- Rotating QR/barcode: ma hien thi thay doi moi 15-60 giay de giam rui ro screenshot/resale ngoai he thong.
-- Per-ticket rotating secret: moi ve co secret rieng de sinh ma dong, secret khong dua vao JWT/public payload.
-- Wallet pass: xuat Apple Wallet / Google Wallet event ticket, pass duoc ky bang certificate/issuer key.
-- Online + offline hybrid: online check DB realtime; offline dung RSA public key, revoked-delta va usage sync khi co mang.
-- Key rotation cho offline tenant: ho tro `kid`/key version de gate chap nhan key cu trong grace window roi cat dan.
-- Replay protection manh hon cho offline: gate luu local `jti` da quet, sync conflict ve server khi online lai.
-- Admin/operator runbook: quy trinh revoke ve, rotate key, cap lai show scan key, va xu ly may quet bi mat.
-
-## Chay test
-
-```powershell
-npm run db:generate
-npm run build -w @smartqr/api
-npm test -w @smartqr/sdk
-```
-
-Integration test can PostgreSQL test database rieng:
-
-```powershell
-$env:TEST_DATABASE_URL = "postgresql://smartqr:1@localhost:5432/smartqr_api_test_YYYYMMDDHHMMSS?schema=public"
+$env:TEST_DATABASE_URL = "postgresql://smartqr:1@localhost:5432/smartqr_api_test?schema=public"
 npm run test:integration -w @smartqr/api
 ```
 
-## Production env can co
+## Tài liệu khác
 
-```env
-DATABASE_URL="postgresql://..."
-REDIS_URL="redis://..."
-JWT_SECRET="long-random-secret"
-API_SECRET_ENCRYPTION_KEY="64_hex_chars"
-WEB_ORIGIN="https://your-web.vn"
-API_PUBLIC_URL="https://api.your-domain.vn"
-TRUST_PROXY_HOPS="1"
-```
-
-`API_SECRET_ENCRYPTION_KEY` dung de ma hoa signing/webhook secrets trong database. Tao bang 32 bytes random hex.
-
-## Luong demo
-
-1. Vao `/thue-api`, tao don thue API va thanh toan demo.
-2. Vao `/dashboard/api-keys`, tao `sk_test_...`, bat/tat HMAC, rotate key.
-3. Vao `/thue-api`, dung API Explorer voi test key.
-4. Dung terminal theo `cach-test-bang-terminal.md` de tao/verify QR.
-5. Kiem tra audit, analytics va webhook logs trong developer console.
+- [Hướng dẫn test bằng terminal](cach-test-bang-terminal.md)
+- [Hướng dẫn test scope API](cach-test-scope-api.md)
+- [Phân tích chức năng API](DOCS_PHAN_TICH_CHUC_NANG_API.md)
+- [Mô hình khóa SmartQR](DOCS_MO_HINH_KHOA_SMARTQR.md)

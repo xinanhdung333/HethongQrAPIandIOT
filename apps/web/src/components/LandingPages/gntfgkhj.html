@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartQR - Nền Tảng QR Cho Thuê Thiết Bị & Quét Realtime</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              900: '#4c1d95',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- GSAP & ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+
+  <!-- QR Code Generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #09090b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #27272a;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3f3f46;
+    }
+
+    .glass-card {
+      background: rgba(24, 24, 27, 0.65);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .glass-card-hover {
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .glass-card-hover:hover {
+      border-color: rgba(139, 92, 246, 0.4);
+      box-shadow: 0 0 25px -5px rgba(139, 92, 246, 0.25);
+    }
+
+    .glow-purple {
+      box-shadow: 0 0 35px -5px rgba(139, 92, 246, 0.35);
+    }
+    
+    .glow-emerald {
+      box-shadow: 0 0 35px -5px rgba(16, 185, 129, 0.35);
+    }
+
+    /* 3D Typography Elevate */
+    .text-3d-elevate {
+      display: inline-block;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      transform-style: preserve-3d;
+      will-change: transform, text-shadow;
+      perspective: 1000px;
+    }
+
+    .text-3d-elevate:hover {
+      transform: translateY(-6px) translateZ(30px) scale(1.02);
+      text-shadow: 
+        0 1px 0 #a78bfa,
+        0 2px 0 #8b5cf6,
+        0 3px 0 #7c3aed,
+        0 4px 0 #6d28d9,
+        0 5px 0 #5b21b6,
+        0 8px 16px rgba(139, 92, 246, 0.5),
+        0 16px 32px rgba(0, 0, 0, 0.8);
+      color: #ffffff;
+    }
+
+    .text-3d-glow:hover {
+      transform: translateY(-4px) translateZ(20px);
+      text-shadow: 
+        0 0 20px rgba(139, 92, 246, 0.8),
+        0 1px 0 #c4b5fd,
+        0 2px 0 #8b5cf6,
+        0 3px 0 #6d28d9,
+        0 6px 15px rgba(0, 0, 0, 0.6);
+    }
+
+    /* WebGL Overlay Pointer Events Guard */
+    #webgl-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Scanline effect overlay */
+    .scanline-grid {
+      background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.3));
+      background-size: 100% 4px;
+    }
+
+    @keyframes laserScan {
+      0% { top: 0%; opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { top: 92%; opacity: 0.8; }
+    }
+
+    .animate-laser {
+      animation: laserScan 2.4s ease-in-out infinite alternate;
+    }
+
+    /* 3D STAGE STYLES */
+    .perspective-container {
+      perspective: 1200px;
+    }
+
+    .preserve-3d {
+      transform-style: preserve-3d;
+    }
+
+    .demo-3d-card {
+      transition: transform 0.2s ease-out, box-shadow 0.3s ease;
+      will-change: transform;
+    }
+
+    .qr-stage-3d {
+      transform-style: preserve-3d;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .qr-layer-depth-1 { transform: translateZ(15px); }
+    .qr-layer-depth-2 { transform: translateZ(35px); }
+    .qr-layer-depth-3 { transform: translateZ(55px); }
+
+    @keyframes spinHUD {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    @keyframes spinHUDReverse {
+      from { transform: translate(-50%, -50%) rotate(360deg); }
+      to { transform: translate(-50%, -50%) rotate(0deg); }
+    }
+
+    .hud-spin {
+      animation: spinHUD 12s linear infinite;
+    }
+    .hud-spin-reverse {
+      animation: spinHUDReverse 8s linear infinite;
+    }
+
+    @keyframes pulse3DGlow {
+      0%, 100% { opacity: 0.4; transform: scale(0.96) translateZ(-20px); }
+      50% { opacity: 0.85; transform: scale(1.05) translateZ(-10px); }
+    }
+    .animate-3d-glow {
+      animation: pulse3DGlow 3s ease-in-out infinite;
+    }
+
+    /* Holographic Scan Sweep Effect */
+    @keyframes holographicSweep {
+      0% { top: -10%; opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { top: 110%; opacity: 0; }
+    }
+    .hologram-laser-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, transparent, #38bdf8, #8b5cf6, #10b981, transparent);
+      box-shadow: 0 0 15px #38bdf8, 0 0 25px #8b5cf6;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .hologram-laser-line.active {
+      animation: holographicSweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    /* 3D Gate Success Pulse */
+    .gate-success-ring {
+      position: absolute;
+      inset: -12px;
+      border-radius: 1.5rem;
+      border: 2px solid #10b981;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.6), inset 0 0 30px rgba(16, 185, 129, 0.3);
+      opacity: 0;
+      transform: translateZ(40px) scale(0.85);
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .gate-success-ring.active {
+      opacity: 1;
+      transform: translateZ(60px) scale(1.04);
+    }
+  </style>
+</head>
+<body class="relative min-h-screen text-zinc-100 selection:bg-violet-500 selection:text-white">
+
+  <!-- WebGL Canvas Background -->
+  <canvas id="webgl-canvas"></canvas>
+
+  <!-- Navigation Bar -->
+  <nav class="fixed top-0 left-0 right-0 z-50 px-6 py-4 transition-all duration-300 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50" id="navbar">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="#hero-section" class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
+            <i data-lucide="qr-code" class="w-6 h-6 text-white"></i>
+          </div>
+          <span class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-zinc-200 to-zinc-400">
+            Smart<span class="text-violet-400">QR</span>
+          </span>
+        </a>
+        <span class="hidden sm:inline-block ml-2 px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          ● Live Engine v2.4
+        </span>
+      </div>
+
+      <div class="hidden lg:flex items-center gap-6 text-xs font-medium text-zinc-400 font-mono">
+        <a href="#hero-section" class="hover:text-white transition">TRANG CHỦ</a>
+        <a href="#features-section" class="hover:text-white transition">KIẾN TRÚC</a>
+        <a href="#interactive-demo" class="hover:text-white transition">QUÉT 3D DEMO</a>
+        <a href="#thue-thiet-bi" class="hover:text-white transition">THUÊ THIẾT BỊ</a>
+        <a href="#tao-show" class="hover:text-white transition">TẠO SHOW WHITE-LABEL</a>
+        <a href="#payos-demo" class="hover:text-white transition">PAYOS DEMO</a>
+        <a href="#dashboard" class="hover:text-white transition">DASHBOARD</a>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button id="config-toggle-btn" class="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded-lg bg-zinc-900/80 border border-zinc-800 text-zinc-400 hover:text-white transition">
+          <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+          <span class="hidden md:inline">3D Controls</span>
+        </button>
+        <a href="#interactive-demo" class="px-4 py-2 text-sm font-medium rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition shadow-lg shadow-violet-600/30">
+          Thử Nghiệm
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Scrollable Wrapper -->
+  <main class="relative z-10 w-full">
+
+    <!-- HERO SECTION -->
+    <section id="hero-section" class="relative min-h-screen w-full flex items-center justify-center px-6 pt-24 pb-16">
+      <div class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        
+        <!-- Left Column: Spacer for 3D Terminal Object on Large Screens -->
+        <div class="lg:col-span-5 h-[420px] lg:h-[600px] relative pointer-events-auto flex items-center justify-center" id="terminal-target-zone">
+          <!-- Floating HTML Overlay Holograms -->
+          <div id="card-left-overlay" class="absolute left-0 top-12 z-20 glass-card p-4 rounded-2xl border border-zinc-700/50 shadow-2xl transition-transform duration-200 hover:scale-105 cursor-pointer max-w-[210px]">
+            <div class="flex items-center justify-between text-xs font-semibold text-zinc-400 mb-2">
+              <span>SP-01 MINI</span>
+              <i data-lucide="scan-line" class="w-3.5 h-3.5 text-violet-400"></i>
+            </div>
+            <div class="bg-white p-2 rounded-xl flex justify-center items-center shadow-inner">
+              <div id="hero-mini-qr"></div>
+            </div>
+            <div class="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+              <span>JWT Signed</span>
+              <span class="text-violet-400 font-semibold">Active</span>
+            </div>
+          </div>
+
+          <div id="card-right-overlay" class="absolute right-2 bottom-16 z-20 glass-card p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 shadow-2xl transition-transform duration-200 hover:scale-105 cursor-pointer max-w-[220px]">
+            <div class="flex items-center gap-2 text-emerald-400 font-medium text-sm">
+              <i data-lucide="shield-check" class="w-4 h-4"></i>
+              <b>Đã xác thực</b>
+            </div>
+            <p class="mt-1 text-xs text-zinc-300 font-mono">gate-main · 182ms</p>
+            <div class="mt-2 text-[10px] text-zinc-400 flex items-center justify-between border-t border-zinc-800 pt-1.5">
+              <span>Hash: <code class="text-emerald-300">#8f9a2e</code></span>
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Copywriting & Actions -->
+        <div class="lg:col-span-7 flex flex-col justify-center space-y-6 pointer-events-auto pl-0 lg:pl-6">
+          
+          <div class="inline-flex items-center gap-3">
+            <span class="rounded-lg bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-violet-300 backdrop-blur-md text-3d-glow cursor-pointer">
+              Nền tảng QR
+            </span>
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-violet-400 shadow-inner">
+              <i data-lucide="qr-code" class="w-4 h-4"></i>
+            </span>
+          </div>
+
+          <h1 class="text-4xl md:text-6xl font-extrabold leading-[1.08] tracking-tight text-white drop-shadow-sm text-3d-elevate cursor-pointer select-none">
+            SmartQR cho thuê thiết bị, bán vé và quét realtime.
+          </h1>
+
+          <p class="text-lg md:text-xl text-zinc-400 leading-relaxed max-w-2xl font-normal hover:text-zinc-200 transition-colors duration-300">
+            Một nền tảng QR cho phòng gym, show âm nhạc và đội IoT: tạo show white-label, PayOS demo tự paid, QR JWT chống quét lại.
+          </p>
+
+          <!-- Chips -->
+          <div class="flex flex-wrap gap-2.5 pt-2">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-mono text-zinc-300 shadow-sm hover:border-violet-500/40 transition text-3d-glow cursor-pointer">
+              <i data-lucide="key" class="w-3.5 h-3.5 text-violet-400"></i> API Key hash
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-mono text-zinc-300 shadow-sm hover:border-violet-500/40 transition text-3d-glow cursor-pointer">
+              <i data-lucide="shield" class="w-3.5 h-3.5 text-violet-400"></i> JWT jti
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-mono text-zinc-300 shadow-sm hover:border-violet-500/40 transition text-3d-glow cursor-pointer">
+              <i data-lucide="credit-card" class="w-3.5 h-3.5 text-emerald-400"></i> PayOS mock
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-mono text-zinc-300 shadow-sm hover:border-violet-500/40 transition text-3d-glow cursor-pointer">
+              <i data-lucide="activity" class="w-3.5 h-3.5 text-cyan-400"></i> Realtime
+            </span>
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex flex-wrap gap-4 pt-4">
+            <a href="#thue-thiet-bi" class="group inline-flex items-center gap-2.5 rounded-xl bg-white px-6 py-3.5 text-sm font-semibold text-zinc-950 transition-all hover:bg-zinc-200 hover:-translate-y-0.5 shadow-xl shadow-white/10">
+              <i data-lucide="download" class="w-4 h-4 text-zinc-900 group-hover:scale-110 transition-transform"></i>
+              Thuê thiết bị
+            </a>
+            
+            <a href="#tao-show" class="group inline-flex items-center gap-2.5 rounded-xl border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-medium text-white transition-all hover:bg-white/10 hover:border-white/30 hover:-translate-y-0.5 backdrop-blur-md">
+              <i data-lucide="eye" class="w-4 h-4 text-violet-400 group-hover:scale-110 transition-transform"></i>
+              Tạo show
+            </a>
+
+            <a href="#interactive-demo" class="group inline-flex items-center gap-2.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-6 py-3.5 text-sm font-medium text-violet-200 transition-all hover:bg-violet-500/20 hover:border-violet-500/50 hover:-translate-y-0.5 backdrop-blur-md">
+              Quét thử
+              <i data-lucide="arrow-right" class="w-4 h-4 text-violet-400 group-hover:translate-x-1 transition-transform"></i>
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: ARCHITECTURE & REALTIME METRICS -->
+    <section id="features-section" class="relative min-h-screen w-full flex items-center justify-center px-6 py-24">
+      <div class="max-w-7xl w-full mx-auto">
+        <div class="text-center max-w-3xl mx-auto mb-16 space-y-4">
+          <h2 class="text-3xl md:text-5xl font-extrabold text-white text-3d-elevate cursor-pointer">Kiến Trúc QR An Toàn Tuyệt Đối</h2>
+          <p class="text-zinc-400 text-lg">Mỗi mã QR được sinh ra mang chữ ký mã hóa JWT độc bản, liên kết trực tiếp tới gateway phần cứng IoT.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          
+          <div class="glass-card glass-card-hover p-8 rounded-3xl space-y-4 relative overflow-hidden group">
+            <div class="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+              <i data-lucide="shield-check" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white text-3d-glow cursor-pointer">Chống Chụp Ảnh / Quét Bẩn</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">Mã QR tự động refresh theo chu kỳ 15 giây với token ngắn hạn. Ngăn chặn triệt để hành vi chia sẻ vé hoặc gian lận cửa xoay.</p>
+            <div class="pt-2 text-xs font-mono text-violet-400 flex items-center gap-2">
+              <span>Dynamic Refresh Token</span>
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i>
+            </div>
+          </div>
+
+          <div class="glass-card glass-card-hover p-8 rounded-3xl space-y-4 relative overflow-hidden group">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <i data-lucide="zap" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white text-3d-glow cursor-pointer">Phản Hồi Realtime &lt; 200ms</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">Tích hợp trực tiếp WebSocket & PayOS webhook. Xác nhận mở cổng ngay khi giao dịch hoàn tất không cần chờ đợi.</p>
+            <div class="pt-2 text-xs font-mono text-emerald-400 flex items-center gap-2">
+              <span>Latency test: 142ms</span>
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+            </div>
+          </div>
+
+          <div class="glass-card glass-card-hover p-8 rounded-3xl space-y-4 relative overflow-hidden group">
+            <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+              <i data-lucide="cpu" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white text-3d-glow cursor-pointer">Thiết Bị Cho Thuê Plug & Play</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">Đầu đọc QR SP-01 Mini & Gate Controller thiết lập sẵn. Cắm nguồn, kết nối WiFi/4G là vận hành ngay lập tức.</p>
+            <div class="pt-2 text-xs font-mono text-cyan-400 flex items-center gap-2">
+              <span>Hardware Ready</span>
+              <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: INTERACTIVE QR SIMULATOR & DEMO WITH 3D DYNAMIC EFFECTS -->
+    <section id="interactive-demo" class="relative min-h-screen w-full flex items-center justify-center px-6 py-24 perspective-container">
+      
+      <!-- Interactive 3D Parallax Card Frame -->
+      <div id="demo-3d-card-frame" class="max-w-5xl w-full mx-auto glass-card p-8 md:p-12 rounded-3xl border border-zinc-800/80 shadow-[0_20px_60px_rgba(0,0,0,0.8)] demo-3d-card preserve-3d space-y-8 relative overflow-hidden">
+        
+        <!-- Background Hologram Ambient Glow Layer -->
+        <div class="absolute -top-32 -left-32 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none animate-3d-glow"></div>
+        <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-cyan-600/20 rounded-full blur-3xl pointer-events-none animate-3d-glow" style="animation-delay: 1.5s;"></div>
+
+        <!-- Section Header Bar -->
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6 preserve-3d qr-layer-depth-1">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="text-xs font-mono text-cyan-400 uppercase tracking-widest">Trình Mô Phỏng Quét QR Realtime 3D</span>
+            </div>
+            <h2 class="text-2xl md:text-3xl font-bold text-white text-3d-elevate cursor-pointer">Thử Nghiệm Tạo & Quét QR</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="btn-3d-tilt-toggle" class="px-3 py-1.5 text-xs font-mono rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-300 hover:text-white transition flex items-center gap-1.5">
+              <i data-lucide="box" class="w-3.5 h-3.5 text-violet-400"></i>
+              <span id="tilt-status-txt">3D Motion: ON</span>
+            </button>
+
+            <button id="btn-generate-qr" class="px-4 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition flex items-center gap-2 shadow-lg shadow-violet-600/30 active:scale-95">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              Tạo Token Mới
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Grid Interactive Stage -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-center preserve-3d">
+          
+          <!-- 3D Holographic QR Stage -->
+          <div class="flex flex-col items-center justify-center p-8 bg-zinc-950/90 rounded-3xl border border-zinc-800/80 shadow-2xl relative preserve-3d group qr-stage-3d">
+            
+            <!-- Dynamic Success Gate Ring -->
+            <div id="gate-success-ring" class="gate-success-ring"></div>
+
+            <!-- Background Canvas FX for 3D Particle Rays & Grid -->
+            <canvas id="qr-hologram-canvas" class="absolute inset-0 w-full h-full rounded-3xl pointer-events-none opacity-60"></canvas>
+
+            <!-- Hologram Laser Line Animation -->
+            <div id="hologram-laser" class="hologram-laser-line"></div>
+
+            <!-- Outer HUD Reticle Ring 1 -->
+            <div class="absolute top-1/2 left-1/2 w-64 h-64 border border-violet-500/20 rounded-full hud-spin pointer-events-none qr-layer-depth-1"></div>
+            <!-- Outer HUD Reticle Ring 2 -->
+            <div class="absolute top-1/2 left-1/2 w-72 h-72 border border-dashed border-cyan-500/20 rounded-full hud-spin-reverse pointer-events-none qr-layer-depth-1"></div>
+
+            <!-- 3D Floating QR Container -->
+            <div class="relative bg-white p-5 rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.3)] transition-transform duration-300 group-hover:scale-105 preserve-3d qr-layer-depth-3">
+              
+              <!-- Reticle Corner Markers -->
+              <div class="absolute -top-3 -left-3 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl"></div>
+              <div class="absolute -top-3 -right-3 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr"></div>
+              <div class="absolute -bottom-3 -left-3 w-5 h-5 border-b-2 border-l-2 border-cyan-400 rounded-bl"></div>
+              <div class="absolute -bottom-3 -right-3 w-5 h-5 border-b-2 border-r-2 border-cyan-400 rounded-br"></div>
+
+              <div id="interactive-qrcode" class="relative z-10"></div>
+              
+              <div class="absolute inset-0 bg-violet-600/10 opacity-0 group-hover:opacity-100 transition rounded-2xl flex items-center justify-center pointer-events-none z-20">
+                <span class="bg-zinc-900/90 text-violet-300 text-[10px] font-mono px-2.5 py-1 rounded-md border border-violet-500/30 shadow-lg">
+                  3D Dynamic JWT QR
+                </span>
+              </div>
+            </div>
+            
+            <!-- Realtime Token Specs Display -->
+            <div class="w-full space-y-2 text-center mt-6 z-10 preserve-3d qr-layer-depth-2">
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300 shadow-inner">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span class="truncate max-w-[220px]" id="qr-token-display">token: eyJhbGciOiJIUzI1Ni...</span>
+              </div>
+              <div class="text-[11px] text-zinc-400 font-mono flex items-center justify-center gap-1.5">
+                <i data-lucide="timer" class="w-3.5 h-3.5 text-violet-400"></i>
+                Tự động thay đổi mã checksum sau <span id="timer-count" class="text-violet-400 font-bold px-1 bg-violet-500/10 rounded">15</span>s
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Live Scanner Console & Controls -->
+          <div class="space-y-5 preserve-3d qr-layer-depth-2">
+            
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider font-mono flex items-center gap-2">
+                <i data-lucide="terminal" class="w-4 h-4 text-emerald-400"></i>
+                Nhật Ký Hệ Thống IoT Gate 3D
+              </h3>
+              <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                GATE_ID: GATE-SP01-01
+              </span>
+            </div>
+
+            <div class="bg-zinc-950/95 p-4 rounded-2xl border border-zinc-800/80 font-mono text-xs space-y-2.5 h-60 overflow-y-auto shadow-inner relative" id="scanner-logs">
+              <div class="text-zinc-500">[00:00:01] 3D Hologram Stage initialized. Ready for scan...</div>
+            </div>
+
+            <!-- Action Scan Button with 3D Elevate Effect -->
+            <button id="btn-simulate-scan" class="group relative w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(16,185,129,0.3)] active:scale-98 cursor-pointer overflow-hidden preserve-3d">
+              <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+              <i data-lucide="scan" class="w-4 h-4 text-white group-hover:scale-125 transition-transform"></i>
+              <span class="relative z-10 font-bold">Giả Lập Quét Cổng (Simulate 3D Gate Scan)</span>
+            </button>
+
+            <!-- Diagnostic Badges -->
+            <div class="grid grid-cols-3 gap-2 text-center text-[10px] font-mono text-zinc-400 pt-1">
+              <div class="p-2 rounded-xl bg-zinc-900/80 border border-zinc-800">
+                <div class="text-zinc-500">LATENCY</div>
+                <div class="text-emerald-400 font-bold mt-0.5">&lt; 180ms</div>
+              </div>
+              <div class="p-2 rounded-xl bg-zinc-900/80 border border-zinc-800">
+                <div class="text-zinc-500">ENCRYPTION</div>
+                <div class="text-violet-400 font-bold mt-0.5">AES-256</div>
+              </div>
+              <div class="p-2 rounded-xl bg-zinc-900/80 border border-zinc-800">
+                <div class="text-zinc-500">3D ENGINE</div>
+                <div class="text-cyan-400 font-bold mt-0.5">WebGL 2.0</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         CONSOLIDATED SECTION 4: HARDWARE RENTAL CATALOG & ORDERING
+         ========================================================= -->
+    <section id="thue-thiet-bi" class="relative min-h-screen w-full flex items-center justify-center px-6 py-24 bg-zinc-950/60 border-t border-zinc-900">
+      <div class="max-w-7xl w-full mx-auto space-y-12">
+        <div class="text-center max-w-3xl mx-auto space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-xs font-mono text-violet-300">
+            <i data-lucide="package" class="w-3.5 h-3.5"></i>
+            Hệ Thống Thiết Bị Cho Thuê
+          </div>
+          <h2 class="text-3xl md:text-5xl font-extrabold text-white text-3d-elevate cursor-pointer">Danh Mục Thiết Bị IoT & Cửa Xoay</h2>
+          <p class="text-zinc-400 text-lg">Cho thuê thiết bị đọc QR trọn gói cho Sự kiên, Phòng Gym, Tòa nhà. Lắp đặt và bàn giao vận hành trong 24h.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          <!-- Device Card 1 -->
+          <div class="glass-card glass-card-hover rounded-3xl p-6 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="h-44 rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800/80 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div class="absolute inset-0 bg-violet-600/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                <i data-lucide="scan-line" class="w-16 h-16 text-violet-400 group-hover:scale-110 transition-transform duration-300"></i>
+                <span class="mt-2 text-[10px] font-mono text-zinc-500">Model: SP-01 MINI</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-mono text-violet-400 bg-violet-500/10 px-2.5 py-0.5 rounded-full border border-violet-500/20">Đầu Đọc Để Bàn</span>
+                <span class="text-xs text-emerald-400 font-semibold">Sẵn hàng (24)</span>
+              </div>
+              <h3 class="text-lg font-bold text-white">SmartQR SP-01 Mini</h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">Đầu đọc QR siêu tốc, tích hợp loa phát âm thanh chào mừng & LED trạng thái. Hỗ trợ WiFi / LAN / 4G.</p>
+            </div>
+            <div class="pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+              <div>
+                <span class="text-xs text-zinc-500">Giá thuê/ngày:</span>
+                <div class="text-lg font-bold text-white">150.000 <span class="text-xs font-normal text-zinc-400">đ</span></div>
+              </div>
+              <button onclick="selectRentalDevice('SmartQR SP-01 Mini', 150000)" class="px-4 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition shadow-md shadow-violet-600/20">
+                Thuê Ngay
+              </button>
+            </div>
+          </div>
+
+          <!-- Device Card 2 -->
+          <div class="glass-card glass-card-hover rounded-3xl p-6 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="h-44 rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800/80 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div class="absolute inset-0 bg-cyan-600/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                <i data-lucide="cpu" class="w-16 h-16 text-cyan-400 group-hover:scale-110 transition-transform duration-300"></i>
+                <span class="mt-2 text-[10px] font-mono text-zinc-500">Model: GATE-BOX-PRO</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20">Bộ Điều Khiển Cổng</span>
+                <span class="text-xs text-emerald-400 font-semibold">Sẵn hàng (12)</span>
+              </div>
+              <h3 class="text-lg font-bold text-white">IoT Gate Controller Box</h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">Tích hợp Rơ-le kích mở cửa xoay, khóa từ, barie tự động. Chuẩn công nghiệp chống nhiễu ESD 15kV.</p>
+            </div>
+            <div class="pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+              <div>
+                <span class="text-xs text-zinc-500">Giá thuê/ngày:</span>
+                <div class="text-lg font-bold text-white">250.000 <span class="text-xs font-normal text-zinc-400">đ</span></div>
+              </div>
+              <button onclick="selectRentalDevice('IoT Gate Controller Box', 250000)" class="px-4 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition shadow-md shadow-violet-600/20">
+                Thuê Ngay
+              </button>
+            </div>
+          </div>
+
+          <!-- Device Card 3 -->
+          <div class="glass-card glass-card-hover rounded-3xl p-6 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="h-44 rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800/80 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div class="absolute inset-0 bg-emerald-600/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                <i data-lucide="git-commit" class="w-16 h-16 text-emerald-400 group-hover:scale-110 transition-transform duration-300"></i>
+                <span class="mt-2 text-[10px] font-mono text-zinc-500">Model: TURNSTILE-TRIPOD</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">Cửa Xoay Ba Chấu</span>
+                <span class="text-xs text-emerald-400 font-semibold">Sẵn hàng (8)</span>
+              </div>
+              <h3 class="text-lg font-bold text-white">Cửa Xoay Tripod Inox 304</h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">Cửa xoay cơ khí chính xác cao cho Show ca nhạc, Gym & Sự kiện ngoài trời. Tốc độ qua cổng 35 người/phút.</p>
+            </div>
+            <div class="pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+              <div>
+                <span class="text-xs text-zinc-500">Giá thuê/ngày:</span>
+                <div class="text-lg font-bold text-white">650.000 <span class="text-xs font-normal text-zinc-400">đ</span></div>
+              </div>
+              <button onclick="selectRentalDevice('Cửa Xoay Tripod Inox 304', 650000)" class="px-4 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition shadow-md shadow-violet-600/20">
+                Thuê Ngay
+              </button>
+            </div>
+          </div>
+
+          <!-- Device Card 4 -->
+          <div class="glass-card glass-card-hover rounded-3xl p-6 space-y-4 flex flex-col justify-between">
+            <div class="space-y-3">
+              <div class="h-44 rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800/80 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div class="absolute inset-0 bg-amber-600/10 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                <i data-lucide="smartphone" class="w-16 h-16 text-amber-400 group-hover:scale-110 transition-transform duration-300"></i>
+                <span class="mt-2 text-[10px] font-mono text-zinc-500">Model: HANDHELD-X1</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">Máy Cầm Tay Android</span>
+                <span class="text-xs text-emerald-400 font-semibold">Sẵn hàng (15)</span>
+              </div>
+              <h3 class="text-lg font-bold text-white">Máy Quét Cầm Tay POS X1</h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">Tích hợp camera laser scanning 2D, pin 5000mAh hoạt động liên tục 12h. Cài sẵn App Soát Vé SmartQR.</p>
+            </div>
+            <div class="pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+              <div>
+                <span class="text-xs text-zinc-500">Giá thuê/ngày:</span>
+                <div class="text-lg font-bold text-white">200.000 <span class="text-xs font-normal text-zinc-400">đ</span></div>
+              </div>
+              <button onclick="selectRentalDevice('Máy Quét Cầm Tay POS X1', 200000)" class="px-4 py-2 text-xs font-semibold rounded-xl bg-violet-600 hover:bg-violet-500 text-white transition shadow-md shadow-violet-600/20">
+                Thuê Ngay
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Rental Calculator / Order Box -->
+        <div id="rental-order-box" class="glass-card p-8 rounded-3xl border border-violet-500/30 max-w-3xl mx-auto space-y-6">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <i data-lucide="calculator" class="w-5 h-5 text-violet-400"></i>
+              Ước Tính Chi Phí Thuê Thiết Bị Realtime
+            </h3>
+            <span class="text-xs font-mono text-zinc-400">SmartQR Order System</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <label class="block text-xs font-mono text-zinc-400 mb-2">Thiết Bị Đã Chọn:</label>
+              <input type="text" id="rental-device-name" readonly value="SmartQR SP-01 Mini" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-semibold">
+            </div>
+            <div>
+              <label class="block text-xs font-mono text-zinc-400 mb-2">Số Lượng Thiết Bị:</label>
+              <input type="number" id="rental-qty" min="1" max="50" value="2" oninput="calculateRentalTotal()" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-mono text-zinc-400 mb-2">Số Ngày Thuê:</label>
+              <input type="number" id="rental-days" min="1" max="365" value="3" oninput="calculateRentalTotal()" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-mono text-zinc-400 mb-2">Tổng Chi Phí Dự Kiến:</label>
+              <div class="w-full bg-violet-950/40 border border-violet-500/40 rounded-xl px-4 py-2.5 text-violet-300 font-extrabold text-xl flex items-center justify-between">
+                <span id="rental-total-price">900.000</span> VNĐ
+              </div>
+            </div>
+          </div>
+
+          <button onclick="submitRentalOrder()" class="w-full py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm transition shadow-lg shadow-violet-600/30 flex items-center justify-center gap-2">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            Gửi Yêu Cầu Đặt Thuê & Lắp Đặt
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         CONSOLIDATED SECTION 5: WHITE-LABEL SHOW CREATOR
+         ========================================================= -->
+    <section id="tao-show" class="relative min-h-screen w-full flex items-center justify-center px-6 py-24">
+      <div class="max-w-7xl w-full mx-auto space-y-12">
+        
+        <div class="text-center max-w-3xl mx-auto space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-xs font-mono text-cyan-300">
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+            Nền Tảng White-Label
+          </div>
+          <h2 class="text-3xl md:text-5xl font-extrabold text-white text-3d-elevate cursor-pointer">Tạo Show Âm Nhạc & Vé QR Tự Động</h2>
+          <p class="text-zinc-400 text-lg">Khởi tạo Sự kiện / Đăng ký Gym của bạn chỉ trong 2 phút. Tự chọn logo, giá vé và phát hành mã JWT QR có bảo mật cao.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          <!-- Show Creator Form -->
+          <div class="lg:col-span-6 glass-card p-8 rounded-3xl border border-zinc-800 space-y-5">
+            <h3 class="text-xl font-bold text-white flex items-center gap-2">
+              <i data-lucide="plus-circle" class="w-5 h-5 text-violet-400"></i>
+              Thiết Lập Thông Tin Show Mới
+            </h3>
+
+            <div class="space-y-4 text-sm">
+              <div>
+                <label class="block text-xs font-mono text-zinc-400 mb-1.5">Tên Sự Kiện / Show White-label:</label>
+                <input type="text" id="show-title-input" value="Rave Music Festival 2026" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:border-violet-500 focus:outline-none">
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-mono text-zinc-400 mb-1.5">Loại Hình:</label>
+                  <select id="show-type-select" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white">
+                    <option value="Show Âm Nhạc / Concert">Show Âm Nhạc / Concert</option>
+                    <option value="Phòng Gym / Fitness Access">Phòng Gym / Fitness Access</option>
+                    <option value="Hội Thảo / Exhibition">Hội Thảo / Exhibition</option>
+                    <option value="Đội Nhóm IoT Gate">Đội Nhóm IoT Gate</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-mono text-zinc-400 mb-1.5">Giá Vé Chuẩn (VNĐ):</label>
+                  <input type="number" id="show-price-input" value="350000" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white font-mono">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-mono text-zinc-400 mb-1.5">Địa Điểm / Cổng Soát Vé Target:</label>
+                <input type="text" id="show-location-input" value="Sân Vận Động Mỹ Đình - Gate A" class="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white">
+              </div>
+
+              <div>
+                <label class="block text-xs font-mono text-zinc-400 mb-1.5">Chế Độ Mã Hóa QR Checksum:</label>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                  <label class="flex items-center gap-2 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer hover:border-violet-500/50">
+                    <input type="radio" name="enc-type" checked class="accent-violet-500">
+                    <div>
+                      <div class="font-semibold text-white">JWT Dynamic 15s</div>
+                      <div class="text-[10px] text-zinc-500">Chống chụp màn hình</div>
+                    </div>
+                  </label>
+                  <label class="flex items-center gap-2 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer hover:border-violet-500/50">
+                    <input type="radio" name="enc-type" class="accent-violet-500">
+                    <div>
+                      <div class="font-semibold text-white">Static Hash HMAC</div>
+                      <div class="text-[10px] text-zinc-500">Dành cho vé cứng</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <button onclick="createNewShow()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-violet-600/30 flex items-center justify-center gap-2">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                Khởi Tạo Show White-Label Ngay
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Shows & Generated Ticket Preview -->
+          <div class="lg:col-span-6 space-y-6">
+            <div class="glass-card p-6 rounded-3xl border border-zinc-800 space-y-4">
+              <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+                  <i data-lucide="ticket" class="w-4 h-4 text-emerald-400"></i>
+                  Danh Sách Show Đang Hoạt Động
+                </h3>
+                <span class="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">LIVE ACTIVE</span>
+              </div>
+
+              <div id="shows-list-container" class="space-y-3">
+                <!-- Dynamically generated show items will appear here -->
+              </div>
+            </div>
+
+            <!-- Issued Ticket Preview Card -->
+            <div id="show-ticket-card" class="glass-card p-6 rounded-3xl border border-violet-500/40 bg-violet-950/20 relative overflow-hidden hidden">
+              <div class="flex items-start justify-between">
+                <div>
+                  <span class="text-[10px] font-mono uppercase tracking-widest text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">VÉ ĐIỆN TỬ SMARTQR</span>
+                  <h4 id="ticket-show-title" class="text-lg font-bold text-white mt-1">Rave Music Festival 2026</h4>
+                  <p id="ticket-show-loc" class="text-xs text-zinc-400">Sân Vận Động Mỹ Đình - Gate A</p>
+                </div>
+                <div id="ticket-qr-box" class="bg-white p-2 rounded-xl shadow-lg"></div>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-xs font-mono text-zinc-400">
+                <span>Trạng thái: <strong class="text-emerald-400">Sẵn sàng qua cửa</strong></span>
+                <span id="ticket-id-txt">#TKT-9912</span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         CONSOLIDATED SECTION 6: PAYOS DEMO & REALTIME WEBHOOK
+         ========================================================= -->
+    <section id="payos-demo" class="relative min-h-screen w-full flex items-center justify-center px-6 py-24 bg-zinc-950/80 border-t border-zinc-900">
+      <div class="max-w-5xl w-full mx-auto glass-card p-8 md:p-12 rounded-3xl border border-emerald-500/30 space-y-8 relative overflow-hidden">
+        
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span class="text-xs font-mono text-emerald-400 uppercase tracking-widest">PayOS Automatic Webhook Engine</span>
+            </div>
+            <h2 class="text-2xl md:text-3xl font-bold text-white">Thanh Toán VietQR & Mở Cổng Tự Động</h2>
+          </div>
+          <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-mono border border-emerald-500/30">
+            PayOS Sandbox Live
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          
+          <!-- VietQR Frame -->
+          <div class="bg-zinc-900/90 p-6 rounded-2xl border border-zinc-800 text-center space-y-4 relative">
+            <div class="text-xs font-mono text-zinc-400 flex items-center justify-center gap-2">
+              <i data-lucide="credit-card" class="w-4 h-4 text-emerald-400"></i>
+              Mã VietQR Thanh Toán PayOS Mock
+            </div>
+
+            <div class="bg-white p-4 rounded-xl inline-block shadow-2xl relative">
+              <div id="payos-qr-container" class="flex justify-center items-center"></div>
+              <div id="payos-success-overlay" class="absolute inset-0 bg-emerald-950/90 rounded-xl flex flex-col items-center justify-center space-y-2 opacity-0 pointer-events-none transition-opacity duration-300">
+                <i data-lucide="check-circle" class="w-12 h-12 text-emerald-400 animate-bounce"></i>
+                <span class="text-xs font-bold text-emerald-300 font-mono">GIAO DỊCH THÀNH CÔNG!</span>
+              </div>
+            </div>
+
+            <div class="text-xs font-mono space-y-1">
+              <div class="text-zinc-400">Số tiền: <strong class="text-white text-base">50.000 VNĐ</strong></div>
+              <div class="text-zinc-500">Nội dung: <code class="text-violet-300">SMARTQR GYM DAYPASS</code></div>
+            </div>
+          </div>
+
+          <!-- Webhook Live Trigger -->
+          <div class="space-y-5">
+            <div class="space-y-2">
+              <h3 class="text-sm font-semibold text-zinc-300 font-mono flex items-center gap-2">
+                <i data-lucide="activity" class="w-4 h-4 text-cyan-400"></i>
+                Mô Phỏng Nhận Webhook Tự Động
+              </h3>
+              <p class="text-xs text-zinc-400 leading-relaxed">Khi người dùng chuyển khoản qua ứng dụng ngân hàng, PayOS gửi webhook xác nhận về SmartQR Gateway trong vòng &lt; 300ms để kích rơ-le mở cửa.</p>
+            </div>
+
+            <div class="bg-zinc-950 p-4 rounded-2xl border border-zinc-800/80 font-mono text-xs space-y-2 h-40 overflow-y-auto" id="payos-logs">
+              <div class="text-zinc-500">[00:00:00] PayOS order created. Awaiting banking transfer...</div>
+            </div>
+
+            <div class="flex gap-3">
+              <button onclick="triggerPayOSPayment()" id="btn-payos-simulate" class="flex-1 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30">
+                <i data-lucide="zap" class="w-4 h-4"></i>
+                Giả Lập Chuyển Khoản Thành Công
+              </button>
+
+              <button onclick="resetPayOSDemo()" class="px-4 py-3.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-mono">
+                Reset
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================
+         CONSOLIDATED SECTION 7: REALTIME DASHBOARD METRICS & LOGS
+         ========================================================= -->
+    <section id="dashboard" class="relative min-h-screen w-full flex items-center justify-center px-6 py-24">
+      <div class="max-w-7xl w-full mx-auto space-y-10">
+        
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-xs font-mono text-emerald-400 uppercase tracking-widest">Realtime Gateway Telemetry</span>
+            </div>
+            <h2 class="text-3xl font-bold text-white">Bảng Điều Khiển Soát Vé Realtime</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-mono text-zinc-400">Cập nhật: <span id="dash-clock" class="text-white">--:--:--</span></span>
+          </div>
+        </div>
+
+        <!-- Metrics Counters -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          <div class="glass-card p-6 rounded-3xl space-y-2 border border-zinc-800">
+            <div class="flex items-center justify-between text-xs text-zinc-400 font-mono">
+              <span>LƯỢT QUÉT HÔM NAY</span>
+              <i data-lucide="users" class="w-4 h-4 text-violet-400"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-white" id="stat-scans">1,842</div>
+            <div class="text-[10px] text-emerald-400 font-mono">↑ +14% so với hôm qua</div>
+          </div>
+
+          <div class="glass-card p-6 rounded-3xl space-y-2 border border-zinc-800">
+            <div class="flex items-center justify-between text-xs text-zinc-400 font-mono">
+              <span>CỔNG HOẠT ĐỘNG</span>
+              <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-white">16 / 16</div>
+            <div class="text-[10px] text-emerald-400 font-mono">● 100% Online</div>
+          </div>
+
+          <div class="glass-card p-6 rounded-3xl space-y-2 border border-zinc-800">
+            <div class="flex items-center justify-between text-xs text-zinc-400 font-mono">
+              <span>TỶ LỆ CHÍNH XÁC</span>
+              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-white">99.85%</div>
+            <div class="text-[10px] text-zinc-500 font-mono">Chống tái sử dụng JWT</div>
+          </div>
+
+          <div class="glass-card p-6 rounded-3xl space-y-2 border border-zinc-800">
+            <div class="flex items-center justify-between text-xs text-zinc-400 font-mono">
+              <span>LATENCY TRUNG BÌNH</span>
+              <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+            </div>
+            <div class="text-3xl font-extrabold text-white">142ms</div>
+            <div class="text-[10px] text-emerald-400 font-mono">WebSocket Direct Ping</div>
+          </div>
+
+        </div>
+
+        <!-- Realtime Scan Table -->
+        <div class="glass-card p-6 rounded-3xl border border-zinc-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+              <i data-lucide="list" class="w-4 h-4 text-violet-400"></i>
+              Nhật Ký Quét Cổng Mới Nhất
+            </h3>
+            <span class="text-xs text-zinc-400 font-mono">Live Stream</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs font-mono">
+              <thead>
+                <tr class="border-b border-zinc-800 text-zinc-500 uppercase">
+                  <th class="py-3 px-4">Thời Gian</th>
+                  <th class="py-3 px-4">Gateway</th>
+                  <th class="py-3 px-4">Mã Vé / User</th>
+                  <th class="py-3 px-4">Checksum JWT</th>
+                  <th class="py-3 px-4 text-right">Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-table-body" class="divide-y divide-zinc-800/50 text-zinc-300">
+                <!-- Live Table Rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="relative z-10 border-t border-zinc-900 bg-zinc-950/80 px-6 py-12 text-center text-sm text-zinc-500">
+      <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p>© 2026 SmartQR Platform. Tất cả quyền được bảo lưu.</p>
+        <div class="flex items-center gap-6">
+          <a href="#" class="hover:text-zinc-300 transition">Điều khoản</a>
+          <a href="#" class="hover:text-zinc-300 transition">Bảo mật</a>
+          <a href="#" class="hover:text-zinc-300 transition">Tài liệu API</a>
+        </div>
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- 3D CONFIGURATOR GUI PANEL -->
+  <div id="config-panel" class="fixed top-20 right-6 z-50 glass-card p-5 rounded-2xl border border-zinc-700 w-80 shadow-2xl transition-all duration-300 transform translate-x-96 opacity-0 pointer-events-none">
+    <div class="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
+      <span class="text-sm font-bold text-white flex items-center gap-2">
+        <i data-lucide="sliders" class="w-4 h-4 text-violet-400"></i>
+        Cấu Hình 3D Space
+      </span>
+      <button id="config-close-btn" class="text-zinc-400 hover:text-white">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="space-y-4 text-xs font-mono">
+      <div>
+        <div class="flex justify-between text-zinc-300 mb-1">
+          <span>Mouse Parallax Factor</span>
+          <span id="val-parallax">0.08</span>
+        </div>
+        <input type="range" id="input-parallax" min="0" max="0.2" step="0.01" value="0.08" class="w-full accent-violet-500">
+      </div>
+
+      <div>
+        <div class="flex justify-between text-zinc-300 mb-1">
+          <span>Camera Depth (FOV)</span>
+          <span id="val-fov">45</span>
+        </div>
+        <input type="range" id="input-fov" min="30" max="75" step="1" value="45" class="w-full accent-violet-500">
+      </div>
+
+      <div>
+        <div class="flex justify-between text-zinc-300 mb-1">
+          <span>Particle Count</span>
+          <span id="val-particles">1200</span>
+        </div>
+        <input type="range" id="input-particles" min="200" max="3000" step="100" value="1200" class="w-full accent-violet-500">
+      </div>
+
+      <div>
+        <div class="flex justify-between text-zinc-300 mb-1">
+          <span>Terminal Glow Intensity</span>
+          <span id="val-glow">1.5</span>
+        </div>
+        <input type="range" id="input-glow" min="0.2" max="4.0" step="0.1" value="1.5" class="w-full accent-violet-500">
+      </div>
+
+      <div class="pt-2 border-t border-zinc-800 flex items-center justify-between">
+        <span class="text-zinc-400">Laser Animation</span>
+        <input type="checkbox" id="input-laser" checked class="accent-violet-500 w-4 h-4">
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // Global 3D & App Configuration
+    const CONFIG = {
+      cameraFOV: 45,
+      parallaxFactor: 0.08,
+      lerpSpeed: 0.05,
+      particleCount: 1200,
+      glowIntensity: 1.5,
+      laserEnabled: true,
+      colors: {
+        bg: 0x09090b,
+        grid: 0x1f1f2e,
+        violet: 0x8b5cf6,
+        cyan: 0x06b6d4,
+        emerald: 0x10b981,
+        accentLight: 0xd8b4fe
+      }
+    };
+
+    let scene, camera, renderer;
+    let particlesMesh, techGrid, terminalGroup, scanLaserMesh;
+    let targetMouse = { x: 0, y: 0 };
+    let currentMouse = { x: 0, y: 0 };
+    let windowHalfX = window.innerWidth / 2;
+    let windowHalfY = window.innerHeight / 2;
+
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    function initThree() {
+      const canvas = document.getElementById('webgl-canvas');
+      
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(CONFIG.colors.bg);
+      scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.015);
+
+      camera = new THREE.PerspectiveCamera(
+        CONFIG.cameraFOV,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(0, 0, 25);
+
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true,
+        alpha: true,
+        powerPreference: "high-performance"
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      // Lights Setup
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      mainLight.position.set(10, 20, 15);
+      mainLight.castShadow = true;
+      scene.add(mainLight);
+
+      // Neon Accent Lights
+      const violetPoint = new THREE.PointLight(CONFIG.colors.violet, 3, 30);
+      violetPoint.position.set(-8, 5, 5);
+      scene.add(violetPoint);
+
+      const emeraldPoint = new THREE.PointLight(CONFIG.colors.emerald, 2.5, 25);
+      emeraldPoint.position.set(8, -5, 5);
+      scene.add(emeraldPoint);
+
+      createBackgroundLayers();
+      createTerminalDevice();
+
+      // Mouse & Window Listeners
+      window.addEventListener('resize', onWindowResize, false);
+      window.addEventListener('mousemove', onMouseMove, false);
+
+      // Init GSAP Animations
+      initGSAPScroll();
+    }
+
+    function createBackgroundLayers() {
+      // 1. Tech Grid Surface at Z = -30
+      const gridHelper = new THREE.GridHelper(120, 60, CONFIG.colors.violet, CONFIG.colors.grid);
+      gridHelper.position.z = -30;
+      gridHelper.position.y = -15;
+      gridHelper.rotation.x = Math.PI * 0.15;
+      scene.add(gridHelper);
+      techGrid = gridHelper;
+
+      // 2. Instanced Depth Bokeh / Dust Particle System
+      const geometry = new THREE.SphereGeometry(0.06, 8, 8);
+      const material = new THREE.MeshBasicMaterial({
+        color: CONFIG.colors.violet,
+        transparent: true,
+        opacity: 0.6
+      });
+
+      particlesMesh = new THREE.InstancedMesh(geometry, material, CONFIG.particleCount);
+      const dummy = new THREE.Object3D();
+
+      for (let i = 0; i < CONFIG.particleCount; i++) {
+        dummy.position.set(
+          (Math.random() - 0.5) * 60,
+          (Math.random() - 0.5) * 60,
+          (Math.random() - 0.5) * 40 - 10
+        );
+
+        const scale = Math.random() * 1.5 + 0.5;
+        dummy.scale.set(scale, scale, scale);
+        dummy.updateMatrix();
+
+        particlesMesh.setMatrixAt(i, dummy.matrix);
+      }
+      particlesMesh.instanceMatrix.needsUpdate = true;
+      scene.add(particlesMesh);
+    }
+
+    function createTerminalDevice() {
+      terminalGroup = new THREE.Group();
+
+      // Main Outer Frame (Sleek IoT Terminal)
+      const bodyGeo = new THREE.BoxGeometry(4.5, 7.5, 0.8);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x121217,
+        roughness: 0.2,
+        metalness: 0.8,
+      });
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.castShadow = true;
+      bodyMesh.receiveShadow = true;
+      terminalGroup.add(bodyMesh);
+
+      // Bezel Chamfer Frame
+      const bezelGeo = new THREE.BoxGeometry(4.7, 7.7, 0.2);
+      const bezelMat = new THREE.MeshStandardMaterial({
+        color: 0x27272a,
+        roughness: 0.4,
+        metalness: 0.6
+      });
+      const bezelMesh = new THREE.Mesh(bezelGeo, bezelMat);
+      bezelMesh.position.z = -0.3;
+      terminalGroup.add(bezelMesh);
+
+      // Interactive Glowing Screen
+      const screenGeo = new THREE.PlaneGeometry(3.8, 5.8);
+      
+      const screenCanvas = document.createElement('canvas');
+      screenCanvas.width = 512;
+      screenCanvas.height = 768;
+      const ctx = screenCanvas.getContext('2d');
+      
+      drawTerminalScreen(ctx);
+
+      const screenTexture = new THREE.CanvasTexture(screenCanvas);
+      const screenMat = new THREE.MeshBasicMaterial({
+        map: screenTexture
+      });
+      const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+      screenMesh.position.z = 0.41;
+      terminalGroup.add(screenMesh);
+
+      // Laser Scanner Sheet
+      const laserGeo = new THREE.PlaneGeometry(3.8, 0.15);
+      const laserMat = new THREE.MeshBasicMaterial({
+        color: CONFIG.colors.cyan,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide
+      });
+      scanLaserMesh = new THREE.Mesh(laserGeo, laserMat);
+      scanLaserMesh.position.z = 0.43;
+      scanLaserMesh.position.y = 2.0;
+      terminalGroup.add(scanLaserMesh);
+
+      // Terminal Base Stand
+      const standGeo = new THREE.CylinderGeometry(0.8, 1.2, 2.5, 16);
+      const standMat = new THREE.MeshStandardMaterial({
+        color: 0x18181b,
+        metalness: 0.9,
+        roughness: 0.1
+      });
+      const standMesh = new THREE.Mesh(standGeo, standMat);
+      standMesh.position.y = -4.5;
+      standMesh.position.z = -0.5;
+      terminalGroup.add(standMesh);
+
+      terminalGroup.position.set(-6, 0, 2);
+      terminalGroup.rotation.y = 0.25;
+      terminalGroup.rotation.x = 0.05;
+
+      scene.add(terminalGroup);
+    }
+
+    function drawTerminalScreen(ctx) {
+      ctx.fillStyle = '#09090d';
+      ctx.fillRect(0, 0, 512, 768);
+
+      ctx.fillStyle = '#181825';
+      ctx.fillRect(20, 20, 472, 60);
+
+      ctx.fillStyle = '#8b5cf6';
+      ctx.font = 'bold 24px JetBrains Mono';
+      ctx.fillText('SMARTQR GATE v2', 40, 58);
+
+      ctx.fillStyle = '#10b981';
+      ctx.font = '18px JetBrains Mono';
+      ctx.fillText('ONLINE', 390, 58);
+
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(80, 160, 352, 352);
+
+      ctx.strokeStyle = '#8b5cf6';
+      ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(80, 220); ctx.lineTo(80, 160); ctx.lineTo(140, 160); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(370, 160); ctx.lineTo(432, 160); ctx.lineTo(432, 220); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(80, 452); ctx.lineTo(80, 512); ctx.lineTo(140, 512); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(370, 512); ctx.lineTo(432, 512); ctx.lineTo(432, 452); ctx.stroke();
+
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = '18px JetBrains Mono';
+      ctx.fillText('READY TO SCAN QR...', 140, 340);
+
+      ctx.fillStyle = '#52525b';
+      ctx.font = '14px JetBrains Mono';
+      ctx.fillText('JWT Public Key Loaded', 150, 560);
+      ctx.fillText('AES-256 Decryption Active', 135, 590);
+
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(20, 680, 472, 50);
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 20px Inter';
+      ctx.fillText('SYSTEM READY', 180, 712);
+    }
+
+    function onMouseMove(event) {
+      targetMouse.x = (event.clientX - windowHalfX) / windowHalfX;
+      targetMouse.y = (event.clientY - windowHalfY) / windowHalfY;
+
+      // Sync HTML Overlay Hologram Cards in Hero
+      const cardL = document.getElementById('card-left-overlay');
+      const cardR = document.getElementById('card-right-overlay');
+      
+      if (cardL && cardR) {
+        const moveX = targetMouse.x * 25;
+        const moveY = targetMouse.y * 25;
+        cardL.style.transform = `translate3d(${moveX * 1.2}px, ${moveY * 1.2}px, 0px) rotateY(${moveX * 0.2}deg)`;
+        cardR.style.transform = `translate3d(${-moveX * 1.5}px, ${-moveY * 1.5}px, 0px) rotateY(${-moveX * 0.2}deg)`;
+      }
+
+      if (is3DTiltEnabled) {
+        updateDemoCardTilt(event);
+      }
+    }
+
+    function onWindowResize() {
+      windowHalfX = window.innerWidth / 2;
+      windowHalfY = window.innerHeight / 2;
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      if (window.innerWidth < 1024) {
+        terminalGroup.position.set(0, 1.5, 0);
+        terminalGroup.scale.set(0.75, 0.75, 0.75);
+      } else {
+        terminalGroup.position.set(-6, 0, 2);
+        terminalGroup.scale.set(1, 1, 1);
+      }
+    }
+
+    function initGSAPScroll() {
+      gsap.registerPlugin(ScrollTrigger);
+
+      gsap.timeline({
+        scrollTrigger: {
+          trigger: "main",
+          start: "top top",
+          end: "bottom bottom",
+          scrub: 1.2
+        }
+      })
+      .to(camera.position, { z: 12, y: -5, ease: "none" })
+      .to(terminalGroup.rotation, { y: Math.PI * 0.75, x: 0.2, ease: "none" }, 0)
+      .to(techGrid.position, { z: -10, ease: "none" }, 0);
+    }
+
+    let laserDirection = 1;
+    function animate() {
+      requestAnimationFrame(animate);
+
+      currentMouse.x += (targetMouse.x - currentMouse.x) * CONFIG.lerpSpeed;
+      currentMouse.y += (targetMouse.y - currentMouse.y) * CONFIG.lerpSpeed;
+
+      camera.position.x = currentMouse.x * 3;
+      camera.position.y = -currentMouse.y * 3;
+      camera.lookAt(scene.position);
+
+      if (terminalGroup) {
+        terminalGroup.position.y += Math.sin(Date.now() * 0.002) * 0.003;
+        terminalGroup.rotation.y += currentMouse.x * 0.005;
+        terminalGroup.rotation.x += currentMouse.y * 0.005;
+      }
+
+      if (scanLaserMesh && CONFIG.laserEnabled) {
+        scanLaserMesh.position.y += 0.04 * laserDirection;
+        if (scanLaserMesh.position.y > 2.6) laserDirection = -1;
+        if (scanLaserMesh.position.y < -2.6) laserDirection = 1;
+      }
+
+      if (particlesMesh) {
+        particlesMesh.rotation.y += 0.0008;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    let is3DTiltEnabled = true;
+    let qrHologramCanvas, qrHologramCtx;
+    let holoParticles = [];
+
+    function init3DDemoStage() {
+      qrHologramCanvas = document.getElementById('qr-hologram-canvas');
+      if (qrHologramCanvas) {
+        qrHologramCtx = qrHologramCanvas.getContext('2d');
+        resizeHoloCanvas();
+        initHoloParticles();
+        animateHoloCanvas();
+        window.addEventListener('resize', resizeHoloCanvas);
+      }
+
+      const tiltBtn = document.getElementById('btn-3d-tilt-toggle');
+      const tiltTxt = document.getElementById('tilt-status-txt');
+      if (tiltBtn) {
+        tiltBtn.addEventListener('click', () => {
+          is3DTiltEnabled = !is3DTiltEnabled;
+          tiltTxt.innerText = `3D Motion: ${is3DTiltEnabled ? 'ON' : 'OFF'}`;
+          if (!is3DTiltEnabled) {
+            const frame = document.getElementById('demo-3d-card-frame');
+            if (frame) frame.style.transform = 'rotateX(0deg) rotateY(0deg)';
+          }
+        });
+      }
+    }
+
+    function resizeHoloCanvas() {
+      if (!qrHologramCanvas) return;
+      const rect = qrHologramCanvas.getBoundingClientRect();
+      qrHologramCanvas.width = rect.width || 350;
+      qrHologramCanvas.height = rect.height || 350;
+    }
+
+    function initHoloParticles() {
+      holoParticles = [];
+      for (let i = 0; i < 40; i++) {
+        holoParticles.push({
+          x: Math.random() * qrHologramCanvas.width,
+          y: Math.random() * qrHologramCanvas.height,
+          radius: Math.random() * 2 + 1,
+          speedY: Math.random() * 0.8 + 0.2,
+          alpha: Math.random() * 0.7 + 0.2,
+          color: Math.random() > 0.5 ? '#8b5cf6' : '#06b6d4'
+        });
+      }
+    }
+
+    function animateHoloCanvas() {
+      if (!qrHologramCtx || !qrHologramCanvas) return;
+      qrHologramCtx.clearRect(0, 0, qrHologramCanvas.width, qrHologramCanvas.height);
+
+      holoParticles.forEach(p => {
+        p.y -= p.speedY;
+        if (p.y < 0) {
+          p.y = qrHologramCanvas.height;
+          p.x = Math.random() * qrHologramCanvas.width;
+        }
+
+        qrHologramCtx.beginPath();
+        qrHologramCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        qrHologramCtx.fillStyle = p.color;
+        qrHologramCtx.globalAlpha = p.alpha;
+        qrHologramCtx.shadowBlur = 8;
+        qrHologramCtx.shadowColor = p.color;
+        qrHologramCtx.fill();
+      });
+
+      requestAnimationFrame(animateHoloCanvas);
+    }
+
+    function updateDemoCardTilt(e) {
+      const card = document.getElementById('demo-3d-card-frame');
+      if (!card) return;
+
+      const rect = card.getBoundingClientRect();
+      if (
+        e.clientX >= rect.left - 100 &&
+        e.clientX <= rect.right + 100 &&
+        e.clientY >= rect.top - 100 &&
+        e.clientY <= rect.bottom + 100
+      ) {
+        const x = e.clientX - rect.left - rect.width / 2;
+        const y = e.clientY - rect.top - rect.height / 2;
+
+        const tiltX = (y / rect.height) * -14;
+        const tiltY = (x / rect.width) * 14;
+
+        card.style.transform = `rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+      } else {
+        card.style.transform = 'rotateX(0deg) rotateY(0deg)';
+      }
+    }
+
+    let qrcodeInstance = null;
+    let heroMiniQrInstance = null;
+    let payosQrInstance = null;
+    let ticketQrInstance = null;
+    let timerCount = 15;
+    let timerInterval = null;
+
+    function initInteractiveQR() {
+      const container = document.getElementById('interactive-qrcode');
+      const miniContainer = document.getElementById('hero-mini-qr');
+      const payosContainer = document.getElementById('payos-qr-container');
+      
+      if (miniContainer) {
+        heroMiniQrInstance = new QRCode(miniContainer, {
+          text: "smartqr:demo:gate:sp01",
+          width: 120,
+          height: 120,
+          colorDark: "#09090b",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      }
+
+      if (container) {
+        qrcodeInstance = new QRCode(container, {
+          text: generateJWTToken(),
+          width: 180,
+          height: 180,
+          colorDark: "#09090b",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      }
+
+      if (payosContainer) {
+        payosQrInstance = new QRCode(payosContainer, {
+          text: "vietqr:payos:50000:smartqr-gym-daypass",
+          width: 160,
+          height: 160,
+          colorDark: "#09090b",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      }
+
+      startTokenTimer();
+
+      document.getElementById('btn-generate-qr').addEventListener('click', refreshQRCode);
+      document.getElementById('btn-simulate-scan').addEventListener('click', simulateScan);
+    }
+
+    function generateJWTToken() {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let randomHash = '';
+      for (let i = 0; i < 16; i++) {
+        randomHash += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return `eyJhbGciOiJIUzI1NiJ9.${btoa(randomHash)}.${randomHash.substring(0, 8)}`;
+    }
+
+    function refreshQRCode() {
+      const newToken = generateJWTToken();
+      if (qrcodeInstance) {
+        qrcodeInstance.clear();
+        qrcodeInstance.makeCode(newToken);
+      }
+      document.getElementById('qr-token-display').innerText = `token: ${newToken}`;
+      addLog(`[TOKEN REFRESHED] New checksum signed: #${newToken.substring(20, 28)}`);
+      
+      const qrBox = document.getElementById('interactive-qrcode');
+      if (qrBox) {
+        qrBox.style.transform = 'scale(1.08) translateZ(20px)';
+        setTimeout(() => { qrBox.style.transform = 'scale(1) translateZ(0px)'; }, 250);
+      }
+
+      timerCount = 15;
+    }
+
+    function startTokenTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timerCount--;
+        const timerEl = document.getElementById('timer-count');
+        if (timerEl) timerEl.innerText = timerCount;
+        if (timerCount <= 0) {
+          refreshQRCode();
+        }
+      }, 1000);
+    }
+
+    function simulateScan() {
+      addLog(`<span class="text-violet-400">[SCAN TRIGGERED] Firing 3D Optical Laser Beam...</span>`);
+      
+      const laser = document.getElementById('hologram-laser');
+      if (laser) {
+        laser.classList.remove('active');
+        void laser.offsetWidth;
+        laser.classList.add('active');
+      }
+
+      setTimeout(() => {
+        const ring = document.getElementById('gate-success-ring');
+        if (ring) {
+          ring.classList.add('active');
+          setTimeout(() => ring.classList.remove('active'), 1800);
+        }
+
+        if (holoParticles) {
+          for (let i = 0; i < 25; i++) {
+            holoParticles.push({
+              x: qrHologramCanvas.width / 2,
+              y: qrHologramCanvas.height / 2,
+              radius: Math.random() * 4 + 2,
+              speedY: (Math.random() - 0.5) * 4,
+              alpha: 1,
+              color: '#10b981'
+            });
+          }
+        }
+
+        addLog(`<span class="text-emerald-400 font-bold">[JWT VALIDATED] User: demo_member_99 - Access Granted!</span>`);
+        addLog(`<span class="text-cyan-400">[HARDWARE GATE] Turnstile Relay 1 opened (duration: 3000ms)</span>`);
+
+        // Add row to live dashboard
+        pushDashboardLog("GATE-SP01-01", "demo_member_99", "ALLOWED");
+      }, 400);
+    }
+
+    function addLog(msg) {
+      const logs = document.getElementById('scanner-logs');
+      if (!logs) return;
+      const time = new Date().toLocaleTimeString();
+      const line = document.createElement('div');
+      line.className = 'transition-all duration-300 transform translate-x-2';
+      line.innerHTML = `<span class="text-zinc-600">[${time}]</span> ${msg}`;
+      logs.appendChild(line);
+      logs.scrollTop = logs.scrollHeight;
+
+      setTimeout(() => {
+        line.classList.remove('translate-x-2');
+      }, 50);
+    }
+
+    let selectedUnitPrice = 150000;
+
+    function selectRentalDevice(deviceName, pricePerDay) {
+      document.getElementById('rental-device-name').value = deviceName;
+      selectedUnitPrice = pricePerDay;
+      calculateRentalTotal();
+      document.getElementById('rental-order-box').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function calculateRentalTotal() {
+      const qty = parseInt(document.getElementById('rental-qty').value) || 1;
+      const days = parseInt(document.getElementById('rental-days').value) || 1;
+      const total = qty * days * selectedUnitPrice;
+      document.getElementById('rental-total-price').innerText = total.toLocaleString('vi-VN');
+    }
+
+    function submitRentalOrder() {
+      const name = document.getElementById('rental-device-name').value;
+      const total = document.getElementById('rental-total-price').innerText;
+      alert(`Đã ghi nhận đơn thuê thiết bị [${name}] - Tổng tiền: ${total} VNĐ. Đội ngũ SmartQR sẽ liên hệ xác nhận trong 15 phút!`);
+    }
+
+    let activeShows = [
+      { id: 'SHOW-01', title: 'Rave Music Festival 2026', type: 'Show Âm Nhạc', price: 350000, location: 'SĐV Mỹ Đình - Gate A' },
+      { id: 'SHOW-02', title: 'California Fitness Access Pass', type: 'Gym Pass', price: 120000, location: 'Cổng Xoay Gym - Tầng 2' }
+    ];
+
+    function renderActiveShows() {
+      const container = document.getElementById('shows-list-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      activeShows.forEach(show => {
+        const div = document.createElement('div');
+        div.className = 'p-3.5 bg-zinc-900/90 border border-zinc-800 rounded-2xl flex items-center justify-between hover:border-violet-500/40 transition cursor-pointer';
+        div.onclick = () => issueTicketForShow(show);
+        div.innerHTML = `
+          <div>
+            <div class="text-xs font-bold text-white">${show.title}</div>
+            <div class="text-[10px] text-zinc-400 font-mono">${show.type} · ${show.location}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-xs font-mono font-bold text-violet-400">${show.price.toLocaleString('vi-VN')} đ</div>
+            <span class="text-[9px] text-emerald-400">Xuất vé QR →</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function createNewShow() {
+      const title = document.getElementById('show-title-input').value.trim();
+      const type = document.getElementById('show-type-select').value;
+      const price = parseInt(document.getElementById('show-price-input').value) || 200000;
+      const loc = document.getElementById('show-location-input').value.trim();
+
+      if (!title) return;
+
+      const newShow = {
+        id: `SHOW-0${activeShows.length + 1}`,
+        title: title,
+        type: type,
+        price: price,
+        location: loc
+      };
+
+      activeShows.unshift(newShow);
+      renderActiveShows();
+      issueTicketForShow(newShow);
+    }
+
+    function issueTicketForShow(show) {
+      const ticketCard = document.getElementById('show-ticket-card');
+      const titleEl = document.getElementById('ticket-show-title');
+      const locEl = document.getElementById('ticket-show-loc');
+      const idEl = document.getElementById('ticket-id-txt');
+      const qrBox = document.getElementById('ticket-qr-box');
+
+      ticketCard.classList.remove('hidden');
+      titleEl.innerText = show.title;
+      locEl.innerText = show.location;
+      idEl.innerText = `#TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      qrBox.innerHTML = '';
+      ticketQrInstance = new QRCode(qrBox, {
+        text: `ticket:${show.id}:${generateJWTToken()}`,
+        width: 100,
+        height: 100,
+        colorDark: "#09090b",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    }
+
+    function triggerPayOSPayment() {
+      const overlay = document.getElementById('payos-success-overlay');
+      const btn = document.getElementById('btn-payos-simulate');
+      const logs = document.getElementById('payos-logs');
+
+      btn.disabled = true;
+      btn.innerText = "Đang xử lý Webhook...";
+
+      const addPayosLog = (msg) => {
+        const time = new Date().toLocaleTimeString();
+        logs.innerHTML += `<div class="text-emerald-400">[${time}] ${msg}</div>`;
+        logs.scrollTop = logs.scrollHeight;
+      };
+
+      setTimeout(() => {
+        addPayosLog("⚡ VietQR payment detected! Bank payload verified.");
+      }, 500);
+
+      setTimeout(() => {
+        addPayosLog("🟢 PayOS Webhook received signature HMAC_SHA256 valid.");
+        overlay.classList.remove('opacity-0', 'pointer-events-none');
+      }, 1200);
+
+      setTimeout(() => {
+        addPayosLog("🔓 Gateway Relay Triggered: Turnstile 01 Unlocked!");
+        btn.disabled = false;
+        btn.innerText = "Giả Lập Chuyển Khoản Thành Công";
+        pushDashboardLog("PAYOS-GATE-01", "payos_buyer", "ALLOWED");
+      }, 2000);
+    }
+
+    function resetPayOSDemo() {
+      const overlay = document.getElementById('payos-success-overlay');
+      overlay.classList.add('opacity-0', 'pointer-events-none');
+      document.getElementById('payos-logs').innerHTML = `<div class="text-zinc-500">[00:00:00] PayOS order created. Awaiting banking transfer...</div>`;
+    }
+
+    let scanCount = 1842;
+
+    function pushDashboardLog(gate, user, status) {
+      const tbody = document.getElementById('dashboard-table-body');
+      if (!tbody) return;
+
+      scanCount++;
+      document.getElementById('stat-scans').innerText = scanCount.toLocaleString('vi-VN');
+
+      const tr = document.createElement('tr');
+      tr.className = 'bg-violet-900/20 transition-all duration-500';
+      const time = new Date().toLocaleTimeString();
+      const hash = '#' + Math.random().toString(36).substring(2, 8);
+
+      tr.innerHTML = `
+        <td class="py-3 px-4 text-zinc-400">${time}</td>
+        <td class="py-3 px-4 font-bold text-white">${gate}</td>
+        <td class="py-3 px-4 text-violet-300">${user}</td>
+        <td class="py-3 px-4 text-zinc-500">${hash}</td>
+        <td class="py-3 px-4 text-right">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            ${status}
+          </span>
+        </td>
+      `;
+
+      tbody.insertBefore(tr, tbody.firstChild);
+      if (tbody.children.length > 8) {
+        tbody.removeChild(tbody.lastChild);
+      }
+
+      setTimeout(() => {
+        tr.classList.remove('bg-violet-900/20');
+      }, 1000);
+    }
+
+    function initDashboardTicker() {
+      setInterval(() => {
+        const now = new Date();
+        document.getElementById('dash-clock').innerText = now.toLocaleTimeString();
+      }, 1000);
+
+      // Random auto background scan events
+      setInterval(() => {
+        const mockGates = ['GATE-SP01-01', 'GATE-SP01-02', 'TURNSTILE-MAIN', 'GYM-DOOR-02'];
+        const mockUsers = ['user_881', 'gym_member_42', 'vip_ticket_09', 'dev_tester'];
+        const randomGate = mockGates[Math.floor(Math.random() * mockGates.length)];
+        const randomUser = mockUsers[Math.floor(Math.random() * mockUsers.length)];
+        pushDashboardLog(randomGate, randomUser, "ALLOWED");
+      }, 7000);
+    }
+
+    function initConfigPanel() {
+      const toggleBtn = document.getElementById('config-toggle-btn');
+      const closeBtn = document.getElementById('config-close-btn');
+      const panel = document.getElementById('config-panel');
+
+      toggleBtn.addEventListener('click', () => {
+        panel.classList.toggle('translate-x-96');
+        panel.classList.toggle('opacity-0');
+        panel.classList.toggle('pointer-events-none');
+      });
+
+      closeBtn.addEventListener('click', () => {
+        panel.classList.add('translate-x-96', 'opacity-0', 'pointer-events-none');
+      });
+
+      document.getElementById('input-parallax').addEventListener('input', (e) => {
+        CONFIG.parallaxFactor = parseFloat(e.target.value);
+        document.getElementById('val-parallax').innerText = e.target.value;
+      });
+
+      document.getElementById('input-fov').addEventListener('input', (e) => {
+        camera.fov = parseInt(e.target.value);
+        camera.updateProjectionMatrix();
+        document.getElementById('val-fov').innerText = e.target.value;
+      });
+
+      document.getElementById('input-laser').addEventListener('change', (e) => {
+        CONFIG.laserEnabled = e.target.checked;
+        if (scanLaserMesh) scanLaserMesh.visible = e.target.checked;
+      });
+    }
+
+    function init3DTextInteraction() {
+      const elevatedTexts = document.querySelectorAll('.text-3d-elevate');
+      elevatedTexts.forEach(el => {
+        el.addEventListener('mousemove', (e) => {
+          const rect = el.getBoundingClientRect();
+          const x = e.clientX - rect.left - rect.width / 2;
+          const y = e.clientY - rect.top - rect.height / 2;
+          const tiltX = (y / rect.height) * -20;
+          const tiltY = (x / rect.width) * 20;
+          
+          el.style.transform = `translateY(-8px) translateZ(35px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(1.03)`;
+        });
+
+        el.addEventListener('mouseleave', () => {
+          el.style.transform = '';
+        });
+      });
+    }
+
+    // Window Load Entry Point
+    window.onload = function() {
+      initThree();
+      initInteractiveQR();
+      initConfigPanel();
+      init3DTextInteraction();
+      init3DDemoStage();
+      renderActiveShows();
+      initDashboardTicker();
+      onWindowResize();
+      animate();
+    };
+  </script>
+</body>
+</html>

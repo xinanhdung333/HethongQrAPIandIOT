@@ -56,6 +56,14 @@ export class RedisService implements OnModuleDestroy {
     this.localCache.delete(key);
   }
 
+  async releaseIfValue(key: string, expected: string) {
+    if (this.redis?.status === "ready") {
+      await this.redis.eval("if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end", 1, key, expected);
+      return;
+    }
+    if (await this.get(key) === expected) this.localCache.delete(key);
+  }
+
   async incr(key: string, ttlSeconds?: number) {
     if (this.redis?.status === "ready") {
       const value = await this.redis.incr(key);

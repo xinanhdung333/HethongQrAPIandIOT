@@ -116,7 +116,7 @@ export class DeveloperService {
   async createTestKey(session: Session, rentalId: string) {
     const rental = await this.rentalForUser(session, rentalId);
     if (rental.status !== RentalStatus.ACTIVE) throw new ForbiddenException({ error: "rental_inactive", message: "API rental is not active" });
-    const issued = await this.keys.issueKey({ userId: rental.userId, rentalId: rental.id, scopes: (Array.isArray(rental.scopes) ? rental.scopes : FULL_API_KEY_SCOPES) as never[], mode: "test", source: "developer" });
+    const issued = await this.prisma.$transaction(tx => this.keys.issueKey({ userId: rental.userId, rentalId: rental.id, scopes: (Array.isArray(rental.scopes) ? rental.scopes : FULL_API_KEY_SCOPES) as never[], mode: "test", source: "developer", tx }));
     return { api_key_once: issued.api_key_once, key: this.publicKey(issued.key) };
   }
 
@@ -125,7 +125,7 @@ export class DeveloperService {
     if (rental.status !== RentalStatus.ACTIVE) throw new ForbiddenException({ error: "rental_inactive", message: "API rental is not active" });
     const selectedScopes = Array.from(new Set(scopes.filter(scope => FULL_API_KEY_SCOPES.includes(scope as never))));
     if (!selectedScopes.length) throw new BadRequestException({ error: "invalid_scopes", message: "API key must have at least one scope" });
-    const issued = await this.keys.issueKey({ userId: rental.userId, rentalId: rental.id, scopes: selectedScopes as never[], mode: "live", source: "developer" });
+    const issued = await this.prisma.$transaction(tx => this.keys.issueKey({ userId: rental.userId, rentalId: rental.id, scopes: selectedScopes as never[], mode: "live", source: "developer", tx }));
     return { api_key_once: issued.api_key_once, key: this.publicKey(issued.key) };
   }
 

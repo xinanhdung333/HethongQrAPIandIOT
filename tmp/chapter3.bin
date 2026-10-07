@@ -1,0 +1,285 @@
+CHƯƠNG 3. CÀI ĐẶT VÀ TRIỂN KHAI HỆ THỐNG
+3.1. Môi trường và công cụ phát triển
+Bảng 3.1. Bảng môi trường và công cụ phát triển
+Thành phần	Công nghệ /Công cụ	Phiên bản	Mục đích sử dụng cụ thể
+Hệ điều hành	Windows 11 + WSL2	11 22H2	Môi trường dev chính, chạy Docker Desktop
+Runtime	Node.js	20.11 LTS	Chạy toàn bộ monorepo, build 4 service
+Quản lý gói	npm workspaces	10.x	Quản lý các gói @smartqr/*
+Backend Gateway	Fastify (TypeScript)	4.x	API Gateway :4000 giữ contract cho client
+ToMicroservices	Fastify	4.x	Ticket :3003, Rental :3004, QR :3005
+ORM	Prisma	5.13	Migration, generate client, truy vấn
+CSDL chính	PostgreSQL	15-alpine	Lưu QrCode, ApiKey, Rental, Webhook, Audit
+Cache / Rate limit	Redis	7-alpine	Lưu counter X-RateLimit 
+Frontend	Next.js App Router	14.2	Web :3000, các route /thue-thiet-bi, /tao-show
+Container	Docker Compose	2.x	Dựng Postgres, Redis, 4 backend cùng lúc
+IDE	VS Code + Prisma Extension	1.91	Phát triển fullstack
+Testing API	Postman + curl (file cach-test-bang-terminal.md)	-	Test HMAC, IP whitelist, verify QR
+VCS	Git/GitHub	-	Quản lý mã nguồn, CI
+Tool tự phát triển	smartqr-dev-tool.bat	custom	Tự động hóa db, dev, menu trên PowerShell
+
+3.2. Cài đặt backend service/api
+3.2.1. Cấu trúc dự án Backend
+Cấu trúc thư mục monorepo thực tế được tổ chức như sau:
+smartqr/
+├── apps/
+│   ├── api/                          # Gateway :4000
+│   │   ├── src/
+│   │   │   ├── modules/
+│   │   │   │   ├── auth/             # Xác thực JWT seed
+│   │   │   │   ├── qr/               # Proxy -> qr-service :3005
+│   │   │   │   ├── ticket/           # Proxy -> ticket-service :3003
+│   │   │   │   ├── rental/           # Proxy -> rental-service :3004
+│   │   │   │   ├── developer/        # api-keys, rotation, audit, analytics, webhook-logs
+│   │   │   │   └── status/
+│   │   │   ├── plugins/              # rate-limit, hmac-verify, ip-whitelist
+│   │   │   ├── lib/                  # encryption (API_SECRET_ENCRYPTION_KEY)
+│   │   │   └── server.ts
+│   │   └── prisma/
+│   │       └── schema.prisma         # Single source of truth cho DB
+│   ├── ticket-service/ (:3003)       # Xử lý verify QR
+│   │   └── src/routes/verify.ts
+│   ├── rental-service/ (:3004)       # Quản lý quota, /internal/rentals/:id/consume-quota
+│   └── qr-service/ (:3005)           # Tạo JWT, render SVG, gọi rental consume
+├── apps/web/ (:3000)                 # Next.js
+├── packages/sdk/ (@smartqr/sdk)      # SDK cho dev ngoài
+├── docker-compose.yml
+└── smartqr-dev-tool.bat
+
+Hình
+Vai trò các thành phần trong apps/api/src/modules:
+	Controller (route): Tiếp nhận HTTP request, validate bằng Zod, kiểm tra x-api-key, scopes (qr:create, qr:read, ticket:verify), IP whitelist và HMAC signature. Không chứa logic nghiệp vụ.
+	Service: Triển khai nghiệp vụ chính. Ví dụ rental.service.ts xử lý consume-quota với transaction Prisma để tránh race condition.
+	Repository: Được hiện thực bằng Prisma Client (prisma.qrCode, prisma.apiKey). Không viết SQL thuần.
+	Entity: Các model trong schema.prisma ánh xạ trực tiếp tới bảng PostgreSQL.
+	Dto: CreateQrDto { resource_type, resource_id, expires_at, allowed_gate_ids, metadata, not_before }, VerifyTicketDto { qr_jwt | ticket_code, gate_id }.
+	Config & plugins: Đọc JWT_SECRET, API_SECRET_ENCRYPTION_KEY (64 hex chars = 32 bytes random), INTERNAL_SERVICE_TOKEN, TRUST_PROXY_HOPS.
+	Exception: Middleware tập trung trả về { error: code, message } và ghi AuditLog.
+3.2.2. Hiện thực mô hình dữ liệu và truy cập cơ sở dữ liệu
+Cấu hình kết nối: 
+	DATABASE_URL=postgresql://smartqr:1@localhost:5432/smartqr và 
+REDIS_URL=redis://localhost:6379 được đọc từ .env. Lệnh npm run db:generate tạo Prisma Client. Lệnh npm run db:setup chạy migrate và seed 2 tài khoản: demo@smartqr.vn / demo123456 (customer) và admin@smartqr.vn / admin123456 (admin).
+Các Entity tiêu biểu đã hiện thực:
+model QrCode {
+  id               String   @id @default(cuid())
+  resource_type    String   // ticket, device, show...
+  jwt              String   @unique // QR JWT ký bằng JWT_SECRET
+  ticket_code      String?  @unique // mã ngắn cho IoT
+  rental_id        String?  // liên kết đơn thuê API
+  is_revoked       Boolean  @default(false)
+  not_before       DateTime?
+  expires_at       DateTime?
+  allowed_gate_ids String[] // giới hạn cổng quét
+  metadata         Json?    // metadata tự do
+  use_count        Int      @default(0)
+  max_uses         Int?     // null = unlimited, multi-use QR
+  created_at       DateTime @default(now())
+}
+
+model ApiKey {
+  id                String   @id @default(cuid())
+  prefix            String   @unique // sk_live_..., sk_test_...
+  hashed_secret     String   // bcrypt hash
+  scopes            String[] // qr:create, qr:read, ticket:verify
+  hmac_secret_enc   String?  // mã hóa AES-256-GCM bằng API_SECRET_ENCRYPTION_KEY
+  ip_whitelist      String[] // danh sách IP cho phép
+  is_test           Boolean  @default(false) // sk_test_ không trừ quota live
+  status            String   @default("active") // active, deprecated, revoked
+  rotation_expires_at DateTime?
+  created_at        DateTime @default(now())
+}
+
+model WebhookEvent {
+  id          String   @id
+  type        String   // qr.created, qr.expired, qr.verify_failed, ticket.verified
+  payload     Json
+  attempts    Int      @default(0)
+  next_retry_at DateTime? // retry 1p/5p/30p
+  status      String   // pending, delivered, failed
+}
+
+model AuditLog {
+  id          String   @id
+  api_key_id  String?
+  method      String
+  path        String
+  status      Int
+  ip          String?
+  created_at  DateTime @default(now())
+}
+
+Truy cập dữ liệu: Repository sử dụng Prisma với transaction để đảm bảo tính nhất quán quota. Ví dụ consume quota dùng $transaction để trừ monthly_quota và tạo usage event cùng lúc, tránh double-spend khi QR service retry.
+3.2.3. Hiện thực các API chính
+Bảng 3.2. Các API chính đã hiện thực
+Method	Endpoint (qua Gateway :4000)	Service xử lý thực tế	Mô tả nghiệp vụ
+POST	/api/v1/qr-codes	qr-service :3005	Tạo QR cho bất kỳ resource_type, ký JWT, gọi rental consume quota
+POST	/api/v1/qr-codes/bulk	qr-service	Tạo tối đa 500 QR/request, dùng transaction
+GET	/api/v1/qr-codes/:id/svg	qr-service	Render SVG từ JWT, cache Redis
+POST	/api/v1/qr-codes/:id/revoke	qr-service	Thu hồi QR, emit qr.expired
+POST	/api/v1/tickets/verify	ticket-service :3003	Verify QR/code, trả decision allow/deny, kiểm tra gate, not-before, revoke, multi-use
+GET	/api/v1/status	api	Status page API
+POST	/api/v1/developer/keys	api	Tạo sk_test_ và sk_live_, mã hóa HMAC secret
+POST	/internal/rentals/:id/consume-quota	rental-service :3004	Internal, yêu cầu x-internal-service-token, trừ quota
+POST	/internal/rentals/:id/refund-quota	rental-service	Hoàn quota khi tạo QR thất bại
+
+Luồng chi tiết cho POST /api/v1/qr-codes:
+•	Client gửi x-api-key: sk_test_xxx và HMAC signature. Gateway kiểm tra scope qr:create, IP whitelist, rate limit (Redis INCR với key rate:{apiKeyId}:{minute}).
+•	Gateway forward tới qr-service qua fetch http://qr-service:3005 (trong Docker) hoặc localhost:3005 (host).
+•	qr-service gọi POST http://rental-service:3004/internal/rentals/:id/consume-quota với header x-internal-service-token.
+•	Nếu consume thành công, tạo JWT: jwt.sign({ jti: qrId, resource_type, exp }, JWT_SECRET), lưu DB, tạo WebhookEvent qr.created vào bảng outbox.
+•	Nếu bước 4 lỗi, gọi refund-quota để đảm bảo không mất quota oan. Nếu rental-service không sẵn sàng, trả 503 và không tạo QR (fail-safe).
+Đoạn mã tiêu biểu qr-service:
+// qr-service/src/routes/create.ts
+export async function createQrHandler(req, res) {
+  const { rentalId } = req;
+  await fetch(`${process.env.RENTAL_SERVICE_URL}/internal/rentals/${rentalId}/consume-quota`, {
+    method: 'POST',
+    headers: { 'x-internal-service-token': process.env.INTERNAL_SERVICE_TOKEN! }
+  }).then(r => { if (!r.ok) throw new Error('quota_failed') });
+
+  try {
+    const jwt = signQr({ id: cuid(), ...req.body }, process.env.JWT_SECRET!);
+    const qr = await prisma.qrCode.create({ data: { jwt, ... } });
+    await prisma.webhookEvent.create({ data: { type: 'qr.created', payload: qr } });
+    return res.send({ qr_jwt: jwt, ticket_code: shortCode, qr });
+  } catch (err) {
+    await fetch(`${process.env.RENTAL_SERVICE_URL}/internal/renatals/${rentalId}/refund-quota`, {...});
+    throw err;
+  }
+}
+
+3.2.4. Hiện thực xử lý nghiệp vụ
+Logic nghiệp vụ được đặt tại lớp Service, không đặt tại Controller, nhằm chứng minh backend không chỉ là CRUD.
+	Quota 2-phase commit: Tạo QR không chỉ là insert DB mà là giao dịch phân tán giữa qr-service và rental-service. Cơ chế consume -> create -> refund đảm bảo idempotency khi retry.
+	Key rotation an toàn: Khi POST /developer/keys/:id/rotate, service tạo key mới, chuyển key cũ sang status deprecated, set rotation_expires_at = now + 7 ngày. Job cron tự revoke sau 7 ngày. Toàn bộ secret HMAC được mã hóa AES-256-GCM bằng API_SECRET_ENCRYPTION_KEY.
+	Test key isolation: Middleware phân biệt is_test = true (prefix sk_test_) thì bỏ qua trừ monthly_quota nhưng vẫn ghi pay-as-you-go usage event với flag test để thống kê, không ảnh hưởng billing live.
+	Verify QR với nhiều điều kiện: ticket-service kiểm tra đồng thời is_revoked, not_before <= now, expires_at, allowed_gate_ids contains gate_id, use_count < max_uses. Mỗi lần verify thành công tăng use_count và ghi AuditLog. Nếu fail emit qr.verify_failed.
+	Webhook outbox pattern: Thay vì gọi webhook trực tiếp trong request,    service chỉ insert vào WebhookEvent với next_retry_at. Worker riêng poll bảng này và retry theo lịch 1 phút, 5 phút, 30 phút, đảm bảo at-least-once delivery.
+	Xử lý ngoại lệ tập trung: Mọi lỗi nghiệp vụ ném AppError { code, status }, được plugin fastify xử lý trả JSON thống nhất và ghi AuditLog, không lộ stack trace.
+3.3. Cài đặt application client
+Client SmartQR được xây dựng bằng Next.js 14 App Router, không chỉ là giao diện mà là thành phần tiêu thụ các API thuê thiết bị, white-label show và developer console.
+3.3.1. Cấu trúc dự án Client
+apps/web/src/
+├── app/
+│   ├── layout.tsx & globals.css
+│   ├── (marketing)/
+│   │   ├── thue-thiet-bi/page.tsx      # Thuê hộp quét IoT
+│   │   ├── linh-kien/page.tsx          # Bán linh kiện
+│   │   └── thue-api/page.tsx           # Thuê API + API Explorer
+│   ├── tao-show/page.tsx               # Tạo white-label show
+│   ├── e/[slug]/page.tsx               # Public show e/[slug]
+│   └── dashboard/
+│       └── api-keys/page.tsx           # Developer console
+├── components/
+│   ├── ui/ (Button, Card, Dialog)
+│   ├── ApiExplorer.tsx                 # Gọi thử API bằng sk_test_
+│   └── QrSvgPreview.tsx
+├── lib/
+│   ├── api-client.ts                   # Tập trung fetch tới API_PUBLIC_URL
+│   └── hmac.ts                         # Tạo HMAC SHA256 phía client
+└── hooks/
+    └── use-api-keys.ts                 # Quản lý trạng thái keys, rotation
+
+Hình
+
+ Giải thích vai trò:
+Lib/api-client.ts: Tách logic gọi backend khỏi component. Đọc NEXT_PUBLIC_API_URL (http://localhost:4000 khi dev, https://api.your-domain.vn khi prod). Tự động gắn header X-RateLimit-* để hiển thị quota còn lại.
+	Components/ApiExplorer.tsx: Thành phần cho phép dev nhập sk_test_... và gọi POST /api/v1/qr-codes trực tiếp từ giao diện /thue-api, hiển thị response qr_jwt và SVG.
+	App/e/[slug]: Route động render white-label show, fetch data show từ API theo slug, không cần đăng nhập.
+3.3.2. Hiện thực giao diện và chức
+Bảng
+Màn hình	Chức năng hiện thực	Use Case 
+/thue-thiet-bi	Liệt kê hộp quét IoT, chọn thời gian thuê, tạo đơn RentalOrder, thanh toán demo	UC01 Thuê thiết bị IoT
+/tao-show & /e/[slug]	Tạo show với logo, màu sắc white-label, tạo slug duy nhất, public trang check-in	UC02 Tạo white-label show
+/linh-kien	Catalog linh kiện, giỏ hàng, đặt hàng	UC03 Bán linh kiện
+/thue-api	Giới thiệu gói API, tạo đơn thuê API, tích hợp API Explorer gọi thử bằng test key	UC04 Thuê API QR
+/dashboard/api-keys	Tạo sk_test_/sk_live_, bật/tắt HMAC, set IP whitelist, rotate key, xem analytics, audit log, webhook logs	UC05 Quản lý API Key và UC06 Giám sát webhook
+3.3.3. Hiện thực tích hợp Client với Backend API
+Tích hợp được thực hiện qua lớp api-client tập trung, không gọi fetch rải rác trong component. URL backend được cấu hình tại .env.local: NEXT_PUBLIC_API_URL=http://localhost:4000 và WEB_ORIGIN=http://localhost:3000. Khi deploy Docker, WEB_ORIGIN trỏ tới domain production để CORS hoạt động.
+// lib/api-client.ts
+export async function createQr(payload: any, apiKey: string) {
+  const hmac = await signHmac(payload, hmacSecret);
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/qr-codes`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'x-hmac-signature': hmac
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  // X-RateLimit-Remaining được đọc để hiển thị quota
+  return { data, rateLimit: res.headers.get('X-RateLimit-Remaining') };
+}
+
+Sơ đồ luồng tích hợp: Client Component (ApiExplorer) -> use-api-keys hook (loading) -> api-cli ent.ts (fetch + HMAC) -> API Gateway :4000 (audit) -> qr-service :3005 -> Response JSON { qr_jwt, ticket_code, qr } -> Client render QrSvgPreview từ GET /qr-codes/:id/svg
+3.3.4. Xử lý trạng thái và lỗi trên Client
+Để chứng minh client không chỉ gọi API thành công, hệ thống hiện thực đầy đủ các trạng thái:
+	Đang tải: Sử dụng useState isLoading, hiển thị Skeleton tại ApiExplorer và dashboard khi fetch api-keys.
+	Thành công: Khi tạo QR thành công, hiển thị qr_jwt, ticket_code và render SVG bằng <img src={`${API_URL}/api/v1/qr-codes/${id}/svg`} />.
+	Không có dữ liệu: Tại /dashboard/api-keys nếu chưa có key nào, hiển thị empty state với nút 'Tạo test key đầu tiên'.
+	Lỗi kết nối: Bắt lỗi fetch NetworkError, hiển thị banner 'Không kết nối được API :4000, kiểm tra docker compose ps'.
+	Lỗi nghiệp vụ: Phân biệt lỗi từ backend: 401 invalid_api_key, 403 ip_not_allowed / hmac_invalid, 429 rate_limited / quota_exceeded, 410 qr_revoked. Mỗi lỗi hiển thị toast với hướng dẫn cụ thể, ví dụ quota_exceeded thì link tới /thue-api để nâng gói.
+3.4. Triển khai hệ thống
+3.4.1. Triển khai local bằng tool .bat 
+Tool .\smartqr-dev-tool.bat được viết để chạy trên PowerShell, vì PowerShell không tự chạy file trong thư mục hiện tại nên bắt buộc có .\ phía trước. Các lệnh phụ: all (full stack), db (chỉ Postgres+Redis), ps (liệt kê container), stop 3000 (dừng port), stop-all, logs, menu.
+# Chạy full local app (khuyến nghị)
+.\smartqr-dev-tool.bat
+# Tương đương thủ công:
+docker compose up -d          # Postgres 15 + Redis 7 có volume pg_data, redis_data
+npm run db:setup              # prisma migrate dev + seed demo@smartqr.vn / admin@smartqr.vn
+npm run dev                   # concurrently: web :3000, api :4000, ticket :3003, rental :3004, qr :3005
+
+# Truy cập:
+Web: http://localhost:3000
+API: http://localhost:4000
+Ticket: http://localhost:3003 (verify trực tiếp)
+Rental: http://localhost:3004 (internal consume/refund)
+QR: http://localhost:3005 (render SVG trực tiếp)
+
+# Kiểm thử terminal:
+npm run dev:ticket-service  # chạy riêng ticket
+npm run dev:rental-service  # chạy riêng rental
+npm run dev:qr-service      # chạy riêng QR
+
+3.4.2. Triển khai bằng Docker Compose (production-like)
+services:
+  postgres:
+    image: postgres:15-alpine
+    volumes: [pg_data:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+  api:
+    build: ./apps/api
+    ports: [4000:4000]
+    environment: [DATABASE_URL, REDIS_URL, JWT_SECRET, API_SECRET_ENCRYPTION_KEY, INTERNAL_SERVICE_TOKEN]
+    depends_on: [postgres, redis]
+  ticket-service:
+    build: ./apps/ticket-service
+    ports: [3003:3003]
+  rental-service:
+    build: ./apps/rental-service
+    ports: [3004:3004]
+  qr-service:
+    build: ./apps/qr-service
+    ports: [3005:3005]
+    environment: [RENTAL_SERVICE_URL=http://rental-service:3004, DATABASE_URL, REDIS_URL]
+
+Trong mạng Docker, các service gọi nhau qua tên: ticket-service, rental-service, qr-service. Từ host vẫn truy cập được qua localhost:4000, 3003, 3004, 3005. Stack Docker local chạy với NODE_ENV=development, không dùng secrets này cho production. Nếu Prisma báo lỗi không tìm thấy OpenSSL trong container, phải docker compose down, docker compose build --no-cache, docker compose up lại sau khi Dockerfile đã cài openssl.
+3.4.3. Biến môi trường production cần có
+DATABASE_URL="postgresql://..."
+REDIS_URL="redis://..."
+JWT_SECRET="long-random-secret"
+API_SECRET_ENCRYPTION_KEY="64_hex_chars" # 32 bytes random hex, dùng để mã hóa signing/webhook secrets trong DB
+WEB_ORIGIN="https://your-web.vn"
+API_PUBLIC_URL="https://api.your-domain.vn"
+TRUST_PROXY_HOPS="1"
+INTERNAL_SERVICE_TOKEN="random-internal-token"
+RENTAL_SERVICE_URL="http://rental-service:3004" # trong Docker
+
+3.4.4. Luồng demo end-to-end đã triển khai
+Bước 1: Vào /thue-api, tạo đơn thuê API và thanh toán demo (tạo RentalOrder).
+Bước 2: Vào /dashboard/api-keys, tạo sk_test_..., bật/tắt HMAC, rotate key (key cũ chuyển deprecated, tự revoke sau 7 ngày).
+Bước 3: Dùng API Explorer tại /thue-api với test key để POST /api/v1/qr-codes tạo QR.
+Bước 4: Dùng terminal theo cach-test-bang-terminal.md để curl POST /api/v1/tickets/verify với qr_jwt, nhận decision allow/deny.
+Bước 5: Kiểm tra audit, analytics và webhook logs trong developer console, xác nhận các event qr.created, ticket.verified được lưu và retry 1p/5p/30p nếu webhook URL lỗi.

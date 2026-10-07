@@ -1,0 +1,2 @@
+npm notice run smart-qr-platform@1.0.0 dev
+npm notice run concurrently "npm run dev -w @smartqr/api" "npm run dev -w @smartqr/web"

@@ -27,8 +27,9 @@ export function PaymentClient() {
   const kind = search.get("kind") || "ticket";
   const paymentExpires = search.get("expires") || "";
   const paymentSignature = search.get("signature") || "";
+  const gateway = search.get("gateway") || "";
   const enableOfflineRsa = search.get("enable_offline_rsa") === "1";
-  const [status, setStatus] = useState<"waiting" | "paid" | "error">("waiting");
+  const [status, setStatus] = useState<"waiting" | "paid" | "error" | "momo_returned">("waiting");
   const [seconds, setSeconds] = useState(5);
   const [tickets, setTickets] = useState<PaidTicket[]>([]);
   const [apiKeyOnce, setApiKeyOnce] = useState("");
@@ -36,6 +37,12 @@ export function PaymentClient() {
   const backHref = useMemo(() => kind === "rental" ? "/dashboard/rentals" : kind === "api" ? "/thue-api" : "/dashboard/tickets", [kind]);
 
   useEffect(() => {
+    if (gateway === "momo") {
+      setSeconds(0);
+      setStatus("momo_returned");
+      setMessage("Da quay lai tu MoMo sandbox. Trang thai don hang se duoc cap nhat khi backend nhan IPN MoMo hop le.");
+      return;
+    }
     const tick = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
     const timer = window.setTimeout(async () => {
       try {
@@ -77,18 +84,19 @@ export function PaymentClient() {
       window.clearTimeout(timer);
       window.clearInterval(tick);
     };
-  }, [enableOfflineRsa, kind, orderId, paymentExpires, paymentSignature]);
+  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature]);
 
   return (
     <main className="shell py-16">
       <section className="panel mx-auto max-w-3xl p-8 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-100">
-          {status === "waiting" ? <Loader2 className="animate-spin text-zinc-900" /> : <CheckCircle2 className={status === "paid" ? "text-emerald-600" : "text-red-600"} />}
+          {status === "waiting" ? <Loader2 className="animate-spin text-zinc-900" /> : <CheckCircle2 className={status === "paid" || status === "momo_returned" ? "text-emerald-600" : "text-red-600"} />}
         </div>
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight">{status === "paid" ? "Đã thanh toán demo" : status === "error" ? "Thanh toán demo lỗi" : "PayOS DEMO MOCK"}</h1>
+        <h1 className="mt-6 text-3xl font-semibold tracking-tight">{status === "paid" ? "Da thanh toan demo" : status === "error" ? "Thanh toan demo loi" : status === "momo_returned" ? "MoMo da quay ve" : "PayOS DEMO MOCK"}</h1>
         <p className="mt-3 text-zinc-600">Đơn {orderId}. Số tiền được xác nhận từ dữ liệu đơn hàng.</p>
         {status === "waiting" && <p className="mt-4 text-sm text-zinc-500">Tự paid sau {seconds}s</p>}
         {message && <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">{message}</p>}
+        {status === "momo_returned" && <Link href={backHref} className="btn btn-primary mt-5">Ve don hang</Link>}
       </section>
 
       {status === "paid" && kind === "ticket" && (

@@ -36,6 +36,7 @@ export type Product = {
   slug: string;
   name: string;
   type: "IOT_MINI" | "IOT_PRO" | "COMPONENT";
+  productType?: "LINH_KIEN" | "THIET_BI_BAN" | "THIET_BI_THUE" | null;
   priceSell: number;
   priceRentMonth: number;
   depositFee: number;

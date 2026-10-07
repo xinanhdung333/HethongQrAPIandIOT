@@ -1,0 +1,115 @@
+npm notice run @smartqr/api@1.0.0 dev
+npm notice run nest start --watch
+(node:28580) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[Nest] 21744  - 10/01/2026, 2:25:41 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::4000 +3ms
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\HeThongQRthongminh\node_modules\@nestjs\platform-express\adapters\express-adapter.js:95:32)
+    at C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:183:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:173:16)
+    at async bootstrap (C:\HeThongQRthongminh\apps\api\dist\main.js:28:5) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.15.0
+[Nest] 12224  - 10/01/2026, 7:25:00 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::4000 +3ms
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\HeThongQRthongminh\node_modules\@nestjs\platform-express\adapters\express-adapter.js:95:32)
+    at C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:183:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:173:16)
+    at async bootstrap (C:\HeThongQRthongminh\apps\api\dist\main.js:28:5) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.15.0
+Redis unavailable. Using local volatile cache for dev.
+[Nest] 2732  - 10/01/2026, 8:57:59 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::4000 +4ms
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\HeThongQRthongminh\node_modules\@nestjs\platform-express\adapters\express-adapter.js:95:32)
+    at C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:183:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:173:16)
+    at async bootstrap (C:\HeThongQRthongminh\apps\api\dist\main.js:28:5) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.15.0
+[Nest] 1648  - 10/01/2026, 10:10:45 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::4000 +3ms
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\HeThongQRthongminh\node_modules\@nestjs\platform-express\adapters\express-adapter.js:95:32)
+    at C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:183:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:173:16)
+    at async bootstrap (C:\HeThongQRthongminh\apps\api\dist\main.js:28:5) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.15.0
+[Nest] 17420  - 10/01/2026, 10:17:06 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::4000 +4ms
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\HeThongQRthongminh\node_modules\@nestjs\platform-express\adapters\express-adapter.js:95:32)
+    at C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:183:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\HeThongQRthongminh\node_modules\@nestjs\core\nest-application.js:173:16)
+    at async bootstrap (C:\HeThongQRthongminh\apps\api\dist\main.js:28:5) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.15.0

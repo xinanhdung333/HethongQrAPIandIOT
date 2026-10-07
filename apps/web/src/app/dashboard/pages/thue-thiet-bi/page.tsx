@@ -1,6 +1,6 @@
-import RentalPage, { dynamic } from "./rental-page";
+import RentalPage from "./rental-page";
 
-export { dynamic };
+export const dynamic = "force-dynamic";
 
 export default function DashboardRentalPage() {
   return <RentalPage />;

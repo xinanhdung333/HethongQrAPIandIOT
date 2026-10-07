@@ -1,82 +1,37 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
-import { Banknote, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Banknote, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Landmark, Loader2, RefreshCw, Settings2, TrendingUp } from "lucide-react";
 import { api, money } from "@/lib/api";
 
 type Payment = { id: string; rental_id: string; rental_app_name?: string; qr_code_id: string | null; gross_amount: number; commission_rate_bp: number; commission_amount: number; user_amount: number; status: string; created_at: string; payout_completed_at: string | null; payout_account_snapshot?: Record<string, unknown> | null };
-
-type PaymentList = { items: Payment[]; total: number; page: number };
+type PaymentList = { items: Payment[]; total: number; page: number; summary?: { gross_amount: number; commission_amount: number; user_amount: number } };
+const PAGE_SIZE = 50;
 
 export default function DashboardPaymentsPage() {
   const [data, setData] = useState<PaymentList>({ items: [], total: 0, page: 1 });
   const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  async function load() {
-    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-    setData(await api<PaymentList>(`/api/v1/developer/payments${qs}`, { cache: "no-store" }));
-  }
+  async function load(page = 1, nextStatus = status) { setLoading(true); setMessage(""); try { const params = new URLSearchParams({ page: String(page) }); if (nextStatus) params.set("status", nextStatus); setData(await api<PaymentList>(`/api/v1/developer/payments?${params}`, { cache: "no-store" })); } catch (error) { setMessage(error instanceof Error ? error.message : "Không tải được giao dịch."); } finally { setLoading(false); } }
+  useEffect(() => { void load(1, status); }, [status]);
 
-  useEffect(() => { void load().catch(error => setMessage(error instanceof Error ? error.message : "Khong tai duoc giao dich.")); }, [status]);
+  const summary = data.summary ?? { gross_amount: data.items.reduce((sum, item) => sum + item.gross_amount, 0), commission_amount: data.items.reduce((sum, item) => sum + item.commission_amount, 0), user_amount: data.items.reduce((sum, item) => sum + item.user_amount, 0) };
+  const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
-  const totalGross = data.items.reduce((sum, item) => sum + item.gross_amount, 0);
-  const totalCommission = data.items.reduce((sum, item) => sum + item.commission_amount, 0);
-  const totalUser = data.items.reduce((sum, item) => sum + item.user_amount, 0);
+  return <main className="mx-auto min-w-0 max-w-[1200px] py-3 md:py-5">
+    <div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium text-zinc-500">Payment Split</p><h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">Giao dịch và payout</h1><p className="mt-2 text-sm text-zinc-600">Theo dõi doanh thu, phí nền tảng và số tiền thực nhận.</p></div><div className="flex gap-2"><Link href="/dashboard/settings/payout" className="btn btn-secondary bg-white text-sm"><Settings2 size={16} />Cài đặt payout</Link><button className="btn btn-secondary bg-white text-sm" disabled={loading} onClick={() => void load(data.page)}>{loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}Làm mới</button></div></div>
+    {message && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</p>}
+    <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4"><Stat icon={CircleDollarSign} label="Tổng giao dịch" value={String(data.total)} tone="violet" /><Stat icon={TrendingUp} label="Tổng doanh thu" value={money(summary.gross_amount)} tone="blue" /><Stat icon={Banknote} label="Phí nền tảng" value={money(summary.commission_amount)} tone="amber" /><Stat icon={Landmark} label="Thực nhận" value={money(summary.user_amount)} tone="emerald" /></div>
 
-  return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-zinc-500">Payment split</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Giao dich va payout</h1>
-          <p className="mt-2 text-sm text-zinc-600">Moi payment luu snapshot commission va tai khoan payout tai thoi diem phat sinh.</p>
-        </div>
-        <button className="btn btn-secondary text-sm" onClick={() => void load()}><RefreshCw size={16} /> Refresh</button>
-      </div>
-      {message && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{message}</p>}
-
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <Stat label="Gross" value={money(totalGross)} />
-        <Stat label="Commission" value={money(totalCommission)} />
-        <Stat label="User amount" value={money(totalUser)} />
-      </div>
-
-      <section className="panel mt-6 overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 p-5">
-          <h2 className="font-semibold">Danh sach giao dich</h2>
-          <select className="field max-w-60" value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">Tat ca status</option>
-            <option value="PAYOUT_PROCESSING">Payout processing</option>
-            <option value="PAYOUT_COMPLETED">Payout completed</option>
-            <option value="FAILED">Failed</option>
-            <option value="DISPUTED">Disputed</option>
-          </select>
-        </div>
-        <div className="overflow-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
-            <thead className="border-b border-zinc-200 text-xs uppercase text-zinc-500"><tr><th className="px-5 py-3">Ngay</th><th className="px-5 py-3">Rental</th><th className="px-5 py-3">Gross</th><th className="px-5 py-3">Phi</th><th className="px-5 py-3">Nhan</th><th className="px-5 py-3">Payout</th><th className="px-5 py-3">Status</th></tr></thead>
-            <tbody className="divide-y divide-zinc-200">
-              {data.items.map(payment => (
-                <tr key={payment.id}>
-                  <td className="px-5 py-4">{new Date(payment.created_at).toLocaleString("vi-VN")}<p className="mt-1 text-xs text-zinc-500">{payment.id}</p></td>
-                  <td className="px-5 py-4">{payment.rental_app_name ?? payment.rental_id}<p className="mt-1 text-xs text-zinc-500">QR {payment.qr_code_id ?? "-"}</p></td>
-                  <td className="px-5 py-4 font-semibold">{money(payment.gross_amount)}</td>
-                  <td className="px-5 py-4">{money(payment.commission_amount)}<p className="text-xs text-zinc-500">{payment.commission_rate_bp / 100}%</p></td>
-                  <td className="px-5 py-4 font-semibold text-emerald-700">{money(payment.user_amount)}</td>
-                  <td className="px-5 py-4"><Banknote size={16} className="mb-1" />{String(payment.payout_account_snapshot?.["account_name"] ?? "Chua co payout")}</td>
-                  <td className="px-5 py-4">{payment.status}</td>
-                </tr>
-              ))}
-              {!data.items.length && <tr><td className="px-5 py-6 text-zinc-500">Chua co payment transaction.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
+    <section className="panel mt-6 overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 p-5"><div><h2 className="font-semibold">Danh sách giao dịch</h2><p className="mt-1 text-sm text-zinc-500">Snapshot payout được lưu tại thời điểm phát sinh.</p></div><select className="field bg-white text-sm sm:w-60" value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Tất cả trạng thái</option><option value="PAYOUT_PROCESSING">Đang xử lý</option><option value="PAYOUT_COMPLETED">Đã hoàn tất</option><option value="FAILED">Thất bại</option><option value="DISPUTED">Tranh chấp</option></select></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[940px] text-left text-sm"><thead className="border-b border-zinc-200 bg-white text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-5 py-3">Ngày</th><th className="px-5 py-3">Ứng dụng</th><th className="px-5 py-3">Doanh thu</th><th className="px-5 py-3">Phí</th><th className="px-5 py-3">Thực nhận</th><th className="px-5 py-3">Tài khoản</th><th className="px-5 py-3">Trạng thái</th></tr></thead><tbody className={`divide-y divide-zinc-200 ${loading ? "opacity-50" : ""}`}>{data.items.map((payment) => <tr key={payment.id} className="transition hover:bg-zinc-50"><td className="whitespace-nowrap px-5 py-4">{new Date(payment.created_at).toLocaleString("vi-VN")}<p className="mt-1 max-w-32 truncate font-mono text-[10px] text-zinc-400">{payment.id}</p></td><td className="px-5 py-4"><b>{payment.rental_app_name ?? payment.rental_id}</b><p className="mt-1 text-xs text-zinc-500">QR {payment.qr_code_id ?? "—"}</p></td><td className="px-5 py-4 font-semibold">{money(payment.gross_amount)}</td><td className="px-5 py-4">{money(payment.commission_amount)}<p className="text-xs text-zinc-500">{payment.commission_rate_bp / 100}%</p></td><td className="px-5 py-4 font-semibold text-emerald-700">{money(payment.user_amount)}</td><td className="px-5 py-4"><span className="flex items-center gap-2"><Landmark size={14} className="text-zinc-400" />{String(payment.payout_account_snapshot?.["account_name"] ?? "Chưa cấu hình")}</span></td><td className="px-5 py-4"><Status value={payment.status} /></td></tr>)}{!data.items.length && !loading && <tr><td colSpan={7} className="px-5 py-10 text-center text-zinc-500">Chưa có giao dịch phù hợp.</td></tr>}</tbody></table></div>
+      <div className="flex flex-col gap-3 border-t border-zinc-200 px-5 py-4 text-sm text-zinc-600 sm:flex-row sm:items-center sm:justify-between"><span>Trang <b className="text-zinc-900">{data.page}</b>/{totalPages} · {data.total.toLocaleString("vi-VN")} giao dịch</span><div className="flex gap-2"><button className="btn btn-secondary h-9 bg-white px-3 text-xs" disabled={loading || data.page <= 1} onClick={() => void load(data.page - 1)}><ChevronLeft size={15} />Trước</button><button className="btn btn-secondary h-9 bg-white px-3 text-xs" disabled={loading || data.page >= totalPages} onClick={() => void load(data.page + 1)}>Sau<ChevronRight size={15} /></button></div></div>
+    </section>
+  </main>;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return <div className="panel p-5"><span className="text-sm text-zinc-500">{label}</span><b className="mt-2 block text-2xl tracking-tight">{value}</b></div>;
-}
+function Stat({ icon: Icon, label, value, tone }: { icon: typeof Clock3; label: string; value: string; tone: "violet" | "blue" | "amber" | "emerald" }) { const color = tone === "violet" ? "bg-violet-50 text-violet-700" : tone === "blue" ? "bg-blue-50 text-blue-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"; return <div className="panel min-w-0 p-4"><span className={`grid size-8 place-items-center rounded-lg ${color}`}><Icon size={16} /></span><span className="mt-3 block truncate text-xs text-zinc-500">{label}</span><b className="mt-1 block truncate text-base tracking-tight sm:text-xl">{value}</b></div>; }
+function Status({ value }: { value: string }) { const style = value === "PAYOUT_COMPLETED" ? "bg-emerald-50 text-emerald-700" : value === "PAYOUT_PROCESSING" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"; const label = value === "PAYOUT_COMPLETED" ? "Đã hoàn tất" : value === "PAYOUT_PROCESSING" ? "Đang xử lý" : value === "FAILED" ? "Thất bại" : value === "DISPUTED" ? "Tranh chấp" : value; return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${style}`}>{label}</span>; }

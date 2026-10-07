@@ -1,94 +1,57 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CreditCard, Loader2, ShoppingBag } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { ArrowRight, PackageOpen, Search, ShoppingBag, Wrench } from "lucide-react";
 import { api, money, Product } from "@/lib/api";
-
-type CheckoutResult = { order_id: string; payment_demo_url: string; total: number };
 
 export function ComponentShop({ products }: { products: Product[] }) {
   const [items, setItems] = useState(products);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [address, setAddress] = useState("12 Nguyễn Huệ, Quận 1, TP.HCM");
-  const [loadingId, setLoadingId] = useState("");
-  const [result, setResult] = useState<CheckoutResult | null>(null);
-  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
-    void api<Product[]>("/products", { cache: "no-store" }).then((result) => {
-      if (!result) return;
-      setItems(result.filter((product) => product.type === "COMPONENT"));
-    });
+    void api<Product[]>("/products", { cache: "no-store" })
+      .then((result) => setItems(result.filter((item) => item.productType === "LINH_KIEN")))
+      .catch(() => undefined);
   }, []);
 
-  async function buy(product: Product) {
-    setLoadingId(product.id);
-    setError("");
-    try {
-      const quantity = quantities[product.id] ?? 1;
-      const checkout = await api<CheckoutResult>(`/products/${product.id}/buy`, {
-        method: "POST",
-        body: JSON.stringify({
-          quantity,
-          shipping_address: { address, note: "Giao hàng demo Phase 1" }
-        })
-      });
-      if (!checkout) return;
-      setResult(checkout);
-      window.open(checkout.payment_demo_url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tạo đơn mua demo");
-    } finally {
-      setLoadingId("");
-    }
-  }
+  const filtered = useMemo(() => {
+    const value = query.trim().toLocaleLowerCase("vi");
+    return items.filter((item) => !value || `${item.name} ${item.slug}`.toLocaleLowerCase("vi").includes(value));
+  }, [items, query]);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
-      <div className="grid gap-4 md:grid-cols-2">
-        {items.map((product) => (
-          <article key={product.id} className="panel p-6">
-            <ShoppingBag className="text-zinc-900" />
-            <h2 className="mt-5 text-xl font-semibold tracking-tight">{product.name}</h2>
-            <p className="mt-2 text-sm text-zinc-600">Tồn kho {product.stock}. Có hóa đơn demo và hỗ trợ lắp đặt.</p>
-            <div className="mt-5 grid gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <b>{money(product.priceSell)}</b>
-                <input
-                  aria-label={`Số lượng ${product.name}`}
-                  className="field h-10 w-24"
-                  min={1}
-                  max={product.stock}
-                  type="number"
-                  value={quantities[product.id] ?? 1}
-                  onChange={(event) => setQuantities((items) => ({ ...items, [product.id]: Number(event.target.value) || 1 }))}
-                />
-              </div>
-              <button className="btn btn-primary text-sm" disabled={loadingId === product.id} onClick={() => buy(product)}>
-                {loadingId === product.id ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                Mua demo
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-      <aside className="panel h-fit p-6">
-        <h2 className="text-xl font-semibold tracking-tight">Thanh toán linh kiện</h2>
-        <label className="mt-5 grid gap-2 text-sm font-medium">
-          Địa chỉ nhận hàng
-          <textarea className="field min-h-24" value={address} onChange={(event) => setAddress(event.target.value)} />
-        </label>
-        {result && (
-          <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm">
-            <b>Đơn {result.order_id}</b>
-            <p className="mt-1 text-zinc-600">Tổng {money(result.total)}. PayOS mock sẽ tự paid sau 5 giây.</p>
-            <a className="btn btn-secondary mt-4 text-sm" href={result.payment_demo_url} target="_blank" rel="noreferrer">
-              Mở thanh toán
-            </a>
+    <>
+      <section className="panel overflow-hidden">
+        <div className="border-b border-zinc-200 bg-gradient-to-r from-violet-50/60 via-white to-emerald-50/40 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 className="font-semibold">Danh mục linh kiện</h2><p className="mt-1 text-sm text-zinc-500">Xem thông tin, giá và tồn kho trước khi mua.</p></div>
+            <label className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} /><input className="field !pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm linh kiện..." /></label>
           </div>
-        )}
-        {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      </aside>
-    </div>
+        </div>
+
+        {filtered.length ? (
+          <div className="grid gap-4 p-4 sm:grid-cols-2 md:p-5 lg:grid-cols-3">
+            {filtered.map((product) => (
+              <motion.article initial={{ opacity: 0, y: 8 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} key={product.id} className="flex min-w-0 flex-col rounded-xl border border-zinc-200 bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm">
+                <div className="aspect-[4/3] overflow-hidden rounded-lg bg-zinc-100">
+                  {product.images?.[0] ? <img src={product.images[0]} alt={product.name} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-zinc-500"><Wrench size={28} /></div>}
+                </div>
+                <div className="mt-4 flex-1"><h3 className="truncate font-semibold">{product.name}</h3><p className="mt-1 truncate text-xs text-zinc-500">{product.slug}</p></div>
+                <div className="mt-4 flex items-end justify-between gap-3 border-t border-zinc-100 pt-3"><b>{money(product.priceSell)}</b><span className={`text-xs font-medium ${product.stock ? "text-emerald-700" : "text-red-600"}`}>{product.stock ? `Còn ${product.stock}` : "Hết hàng"}</span></div>
+                <Link href={`/dashboard/pages/linh-kien/thanh-toan?product=${encodeURIComponent(product.id)}`} aria-disabled={!product.stock} className={`btn mt-4 w-full text-sm ${product.stock ? "btn-primary" : "pointer-events-none bg-zinc-200 text-zinc-500"}`}><ShoppingBag size={16} />Mua ngay<ArrowRight size={15} /></Link>
+              </motion.article>
+            ))}
+          </div>
+        ) : <Empty hasItems={items.length > 0} />}
+      </section>
+
+      <section className="panel mt-6 overflow-hidden"><div className="border-b border-zinc-200 p-5"><h2 className="font-semibold">Bộ kit SP-01 Mini gợi ý</h2><p className="mt-1 text-sm text-zinc-500">Danh sách vật tư tham khảo cho đội kỹ thuật tự lắp ráp.</p></div><div className="grid gap-3 p-4 sm:grid-cols-2 md:p-5 lg:grid-cols-4">{[["Đầu quét","GM65 / 2D barcode scanner","emerald"],["Điều khiển","ESP32 DevKit + Wi-Fi","violet"],["Cơ khí","Servo, vỏ hộp và dây nối","amber"],["Đóng gói","Tem, QR test và biên bản","blue"]].map(([title, desc, tone], index) => <article key={title} className="rounded-xl border border-zinc-200 p-4"><span className={`grid size-8 place-items-center rounded-lg text-xs font-semibold ${tone === "emerald" ? "bg-emerald-50 text-emerald-700" : tone === "violet" ? "bg-violet-50 text-violet-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>0{index + 1}</span><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-zinc-500">{desc}</p></article>)}</div></section>
+    </>
   );
+}
+
+function Empty({ hasItems }: { hasItems: boolean }) {
+  return <div className="grid min-h-80 place-items-center p-8 text-center"><div><div className="mx-auto grid size-12 place-items-center rounded-xl bg-zinc-100 text-zinc-500"><PackageOpen size={22} /></div><h3 className="mt-4 font-semibold">{hasItems ? "Không tìm thấy linh kiện" : "Chưa có dữ liệu linh kiện"}</h3><p className="mt-2 text-sm text-zinc-500">{hasItems ? "Thử một từ khóa khác." : "Linh kiện sẽ xuất hiện khi được thêm từ trang quản trị."}</p></div></div>;
 }

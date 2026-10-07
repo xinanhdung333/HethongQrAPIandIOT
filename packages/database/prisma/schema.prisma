@@ -12,8 +12,19 @@ model User {
   email              String              @unique
   passwordHash       String              @map("password_hash")
   avatarUrl          String?             @map("avatar_url")
+  fullName           String?             @map("full_name")
+  phone              String?
+  addressLine        String?             @map("address_line")
+  provinceName       String?             @map("province_name")
+  provinceCode       String?             @map("province_code")
+  districtName       String?             @map("district_name")
+  districtCode       String?             @map("district_code")
+  wardName           String?             @map("ward_name")
+  wardCode           String?             @map("ward_code")
   role               UserRole            @default(CUSTOMER)
   rentals            RentalOrder[]
+  scheduledRentals   Rental[]
+  inventoryLogs      InventoryLog[]
   shows              Show[]
   apiKeys            ApiKey[]
   apiRentals         ApiRentalOrder[]
@@ -33,8 +44,14 @@ model User {
 
 model Product {
   id             String        @id @default(cuid())
+  /// Mã nghiệp vụ mới: LK-, TBB- hoặc TBT- + mã định danh.
+  sku            String?       @unique
   slug           String        @unique
   name           String
+  categoryId     String?       @map("category_id")
+  productType    CatalogProductType? @map("product_type")
+  status         ProductStatus @default(ACTIVE)
+  description    String?       @db.Text
   type           ProductType
   priceSell      Int           @map("price_sell")
   priceRentMonth Int           @map("price_rent_month")
@@ -43,6 +60,14 @@ model Product {
   images         Json
   specs          Json
   rentals        RentalOrder[]
+  category       ProductCategory? @relation(fields: [categoryId], references: [id])
+  saleDetails    ProductSaleDetails?
+  rentalDetails  ProductRentalDetails?
+  scheduledRentals Rental[]
+  rentalUnits      RentalUnit[]
+  inventoryLogs    InventoryLog[]
+  compatibleWith   ProductCompatibility[] @relation("component_compatibility")
+  usedByComponents ProductCompatibility[] @relation("device_compatibility")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
@@ -60,6 +85,10 @@ model RentalOrder {
   depositFee      Int          @map("deposit_fee")
   installFee      Int          @map("install_fee")
   total           Int
+  startDate       DateTime?      @map("start_date")
+  paymentDueAt    DateTime?      @map("payment_due_at")
+  depositAmount   Int            @default(0) @map("deposit_amount")
+  depositPercent  Int            @default(10) @map("deposit_percent")
   status          RentalStatus @default(PENDING)
   shippingAddress Json         @map("shipping_address")
   gateIds         Json?        @map("gate_ids")
@@ -87,6 +116,7 @@ model Show {
   ticketPrice   Int           @map("ticket_price")
   totalTickets  Int           @map("total_tickets")
   soldTickets   Int           @default(0) @map("sold_tickets")
+  reservedTickets Int         @default(0) @map("reserved_tickets")
   payoutAccount Json          @map("payout_account")
   status        ShowStatus    @default(ACTIVE)
   installationStatus String   @default("PENDING") @map("installation_status")
@@ -115,6 +145,7 @@ model TicketOrder {
   platformFee    Int               @map("platform_fee")
   payoutAmount   Int               @map("payout_amount")
   status         TicketOrderStatus @default(PENDING)
+  reservationExpiresAt DateTime? @map("reservation_expires_at")
   payosPaymentId String?           @map("payos_payment_id")
   show           Show              @relation(fields: [showId], references: [id])
   tickets        Ticket[]
@@ -573,6 +604,8 @@ enum OrderType {
 
 enum RentalStatus {
   PENDING
+  DEPOSIT_PAID
+  DEPOSIT_FORFEITED
   PAID
   SHIPPED
   ACTIVE
@@ -589,6 +622,137 @@ enum ShowStatus {
 enum TicketOrderStatus {
   PENDING
   PAID
+  EXPIRED
+}
+
+enum CatalogProductType {
+  LINH_KIEN      @map("linh_kien")
+  THIET_BI_BAN   @map("thiet_bi_ban")
+  THIET_BI_THUE  @map("thiet_bi_thue")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum RentalBookingStatus {
+  CHO_DUYET  @map("cho_duyet")
+  DA_DUYET   @map("da_duyet")
+  DANG_THUE  @map("dang_thue")
+  DA_TRA     @map("da_tra")
+  QUA_HAN    @map("qua_han")
+}
+
+enum RentalUnitStatus {
+  SAN_SANG   @map("san_sang")
+  DANG_THUE  @map("dang_thue")
+  BAO_TRI    @map("bao_tri")
+}
+
+model ProductCategory {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String    @unique
+  products  Product[]
+  parentId   String? @map("parent_id") @db.Uuid
+  parent     ProductCategory? @relation("category_tree", fields: [parentId], references: [id])
+  children   ProductCategory[] @relation("category_tree")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  @@map("product_categories")
+}
+
+model ProductCompatibility {
+  componentId String @map("component_id")
+  deviceId    String @map("device_id")
+  component   Product @relation("component_compatibility", fields: [componentId], references: [id], onDelete: Cascade)
+  device      Product @relation("device_compatibility", fields: [deviceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  @@id([componentId, deviceId])
+  @@map("product_compatibility")
+}
+
+model RentalUnit {
+  id        String @id @default(uuid()) @db.Uuid
+  productId String @map("product_id")
+  serial    String @unique
+  status    RentalUnitStatus @default(SAN_SANG)
+  location  String?
+  product   Product @relation(fields: [productId], references: [id])
+  rentals   RentalUnitBooking[]
+  inventoryLogs InventoryLog[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([productId, status])
+  @@map("rental_units")
+}
+
+model RentalUnitBooking {
+  rentalId String @map("rental_id") @db.Uuid
+  unitId   String @map("unit_id") @db.Uuid
+  rental   Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  unit     RentalUnit @relation(fields: [unitId], references: [id])
+  @@id([rentalId, unitId])
+  @@map("rental_unit_bookings")
+}
+
+model InventoryLog {
+  id        String @id @default(uuid()) @db.Uuid
+  unitId    String? @map("unit_id") @db.Uuid
+  productId String @map("product_id")
+  quantity  Int
+  reason    String?
+  userId    String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  unit      RentalUnit? @relation(fields: [unitId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  user      User @relation(fields: [userId], references: [id])
+  @@index([productId, createdAt])
+  @@map("inventory_logs")
+}
+
+model ProductSaleDetails {
+  productId       String  @id @map("product_id")
+  giaNhap         Int     @map("gia_nhap")
+  giaBan          Int     @map("gia_ban")
+  giaKhuyenMai    Int?    @map("gia_khuyen_mai")
+  soLuongTon     Int     @default(0) @map("so_luong_ton")
+  baoHanhThang   Int     @default(0) @map("bao_hanh_thang")
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@map("product_sale_details")
+}
+
+model ProductRentalDetails {
+  productId       String  @id @map("product_id")
+  giaThueNgay     Int?    @map("gia_thue_ngay")
+  giaThueTuan     Int?    @map("gia_thue_tuan")
+  giaThueThang    Int?    @map("gia_thue_thang")
+  tienCoc         Int     @default(0) @map("tien_coc")
+  tongSoLuong     Int     @default(0) @map("tong_so_luong")
+  soLuongKhaDung  Int     @default(0) @map("so_luong_kha_dung")
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@map("product_rental_details")
+}
+
+model Rental {
+  id          String       @id @default(uuid()) @db.Uuid
+  productId   String
+  customerId  String
+  tuNgay      DateTime     @map("tu_ngay")
+  denNgay     DateTime     @map("den_ngay")
+  tongTien    Int          @map("tong_tien")
+  tienCoc     Int          @map("tien_coc")
+  status      RentalBookingStatus @default(CHO_DUYET)
+  product     Product      @relation(fields: [productId], references: [id])
+  customer    User         @relation(fields: [customerId], references: [id])
+  units       RentalUnitBooking[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  @@index([productId, tuNgay, denNgay])
+  @@index([customerId, createdAt])
+  @@map("rentals")
 }
 
 enum PayoutStatus {

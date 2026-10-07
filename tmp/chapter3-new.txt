@@ -1,0 +1,183 @@
+CHƯƠNG 3. CÀI ĐẶT VÀ TRIỂN KHAI HỆ THỐNG
+
+3.1. Môi trường và công cụ phát triển
+
+Bảng 3.1. Môi trường và công cụ phát triển
+
+Thành phần | Công nghệ / công cụ | Phiên bản trong cấu hình hiện tại | Mục đích
+Hệ điều hành phát triển | Windows / Linux / macOS | Theo máy phát triển | Chạy Node.js hoặc Docker Desktop.
+Runtime | Node.js | 20 (Docker dùng node:20-bookworm-slim) | Chạy web, API và các service.
+Quản lý gói | npm workspaces | npm lockfile; yêu cầu dự án npm 10+ | Quản lý apps/* và packages/* trong monorepo.
+Frontend | Next.js App Router, React, TypeScript | Next.js 14.2, React 18 | Web tại cổng 3000.
+Backend | NestJS, Express adapter, TypeScript | NestJS 10 | API chính tại cổng 4000 và ba service tại 3003–3005.
+ORM | Prisma | Prisma Client 5.22 | Truy cập PostgreSQL và quản lý migration.
+Cơ sở dữ liệu | PostgreSQL | PostgreSQL 16 Alpine trong Compose | Lưu người dùng, sản phẩm, show, đơn thuê, API key, QR và dữ liệu nghiệp vụ.
+Cache / giới hạn tốc độ | Redis, ioredis | Redis 7 Alpine trong Compose | Rate limit, cache và trạng thái dùng chung giữa tiến trình.
+Container | Docker Compose | Theo phiên bản Docker cài đặt | Chạy cơ sở dữ liệu, migration và các ứng dụng.
+Kiểm thử | Node.js test runner, script tích hợp | Theo package scripts | Test SDK và integration test API.
+Quản lý mã nguồn | Git | Theo môi trường | Theo dõi mã nguồn và thay đổi.
+
+Các phiên bản ứng dụng được khai báo trong package.json của từng workspace; các image dịch vụ cơ sở dữ liệu được khai báo trong docker-compose.yml. Không cố định phiên bản Windows, IDE hay Postman trong mã nguồn dự án.
+
+3.2. Cài đặt backend và các service
+
+3.2.1. Cấu trúc backend hiện tại
+
+Dự án là monorepo npm workspaces. Backend được viết bằng NestJS; API chính và service đều dùng Express adapter. API chính không phải Fastify và không phải một gateway Fastify riêng. API nhận request phía client, áp dụng controller/service và chuyển tiếp một số endpoint QR đến QR service.
+
+Cấu trúc chính:
+
+HeThongQRthongminh/
+  apps/
+    api/                 API chính :4000
+      src/modules/       Controller và module nghiệp vụ
+      src/services/      Prisma, Redis, QR, thanh toán, webhook, developer...
+      src/security/      API key, scope và bảo mật
+    ticket-service/      Xác minh vé :3003
+    rental-service/      Thuê và quota nội bộ :3004
+    qr-service/          QR, SVG và các thao tác API QR :3005
+    web/                 Next.js :3000
+  packages/
+    database/            Prisma schema, migrations, seed
+    sdk/                 SDK JavaScript/TypeScript
+    sdk-python/          SDK Python
+    sdk-php/             SDK PHP
+  docker-compose.yml
+  Dockerfile
+  package.json
+
+API chính khởi tạo NestJS với Express, bật CORS theo WEB_ORIGIN và các origin local được cấu hình, giới hạn body JSON/urlencoded 8 MB, ValidationPipe và bộ lọc lỗi HTTP. PORT mặc định là 4000. Mỗi service có package.json, module và tiến trình riêng; các service dùng chung schema Prisma và cơ sở dữ liệu PostgreSQL.
+
+3.2.2. Cơ sở dữ liệu và cấu hình
+
+Nguồn schema Prisma là packages/database/prisma/schema.prisma; các migration và seed nằm trong cùng thư mục prisma. Schema hiện tại bao gồm nhiều nhóm dữ liệu của sản phẩm thực tế như người dùng, danh mục/sản phẩm, kho và lịch thuê, show/vé, QR ngoài hệ thống, API key, thanh toán, audit và các cấu hình liên quan. Vì schema đã thay đổi qua migration, không xem các ví dụ model rút gọn trong tài liệu cũ là toàn bộ schema hiện hành.
+
+Các biến mẫu được đặt trong .env.example. Những biến thường cần khi chạy backend:
+
+DATABASE_URL                 Kết nối PostgreSQL.
+REDIS_URL                    Kết nối Redis.
+JWT_SECRET                   Bí mật ký JWT.
+QR_JWT_SECRET                Bí mật ký QR trong các luồng sử dụng biến này.
+API_KEY_PEPPER               Bí mật máy chủ phục vụ xác thực API key.
+API_SECRET_ENCRYPTION_KEY    Khóa mã hóa secret; cần 32 byte dạng 64 ký tự hex ở cấu hình tương ứng.
+WEB_ORIGIN                   Origin web dùng cho CORS.
+TICKET_SERVICE_URL           URL ticket-service.
+RENTAL_SERVICE_URL           URL rental-service.
+QR_SERVICE_URL               URL qr-service.
+INTERNAL_SERVICE_TOKEN       Token xác thực lời gọi nội bộ giữa service.
+NEXT_PUBLIC_API_URL          URL API mà trình duyệt web gọi.
+NEXT_PUBLIC_SOCKET_URL       URL Socket.IO mà trình duyệt web dùng.
+
+Trong Docker Compose, các container gọi nhau bằng tên service (ví dụ postgres, redis, qr-service); ứng dụng trên máy host truy cập qua các cổng được publish. Các giá trị secret trong Compose chỉ phục vụ phát triển cục bộ. Khi triển khai thật cần cấu hình secret riêng, giới hạn quyền truy cập và cung cấp Redis dùng chung; API rate limit từ chối hoạt động ở production nếu Redis không sẵn sàng.
+
+Một số lệnh cơ sở dữ liệu ở thư mục gốc:
+
+npm run db:generate         Sinh Prisma Client.
+npm run db:migrate          Chạy migration phát triển.
+npm run db:migrate:deploy   Áp dụng migration đã có.
+npm run db:seed             Nạp dữ liệu mẫu.
+npm run db:setup            Generate, migrate và seed.
+
+3.2.3. Các service và luồng request
+
+API chính :4000 phục vụ web và client tích hợp. Các nhóm controller trong apps/api/src/modules xử lý xác thực, dashboard, show, sản phẩm, đơn thuê, thanh toán, QR, vé, gate, webhook, trạng thái và chức năng quản trị/developer. Logic nghiệp vụ được tổ chức trong service NestJS; PrismaService truy cập PostgreSQL.
+
+Ticket service :3003 cung cấp POST /api/v1/tickets/verify để kiểm tra vé hoặc QR tại cổng. API chính cũng có endpoint cùng đường dẫn để duy trì contract cho client; luồng xác minh và xử lý vé được triển khai trong backend hiện tại.
+
+Rental service :3004 cung cấp các thao tác thuê API và endpoint nội bộ consume/refund quota. Endpoint /internal/* được bảo vệ bằng x-internal-service-token khớp với INTERNAL_SERVICE_TOKEN; token nội bộ không phải API key của khách hàng.
+
+QR service :3005 xử lý QR độc lập. API chính forward các request QR đến QR service và kiểm tra API key/scope ở các route công khai tương ứng. Các URL nội bộ Docker dùng tên service; trên host dùng localhost và cổng tương ứng.
+
+Bảng 3.2. Một số endpoint SmartQR API v1
+
+Phương thức | Endpoint | Chức năng
+POST | /api/v1/qr-codes | Tạo QR cho resource được hỗ trợ.
+POST | /api/v1/qr-codes/bulk | Tạo QR hàng loạt; DTO giới hạn tối đa 500 resource mỗi request.
+GET | /api/v1/qr-codes/:id | Đọc thông tin QR; yêu cầu scope đọc ở API chính.
+GET | /api/v1/qr-codes/:id/svg | Lấy QR dạng SVG.
+POST | /api/v1/qr-codes/:id/revoke | Thu hồi QR.
+POST | /api/v1/tickets/verify | Xác minh vé hoặc QR.
+GET | /api/v1/status | Endpoint trạng thái được đăng ký trong module status; xem controller để biết payload hiện hành.
+/api/v1/developer/* | Nhiều phương thức | Quản lý key, cài đặt, quota, thống kê, audit và webhook logs tùy endpoint.
+POST | /internal/rentals/:id/consume-quota | Service nội bộ tiêu thụ quota; cần token nội bộ.
+POST | /internal/rentals/:id/refund-quota | Service nội bộ hoàn quota theo nghiệp vụ; cần token nội bộ.
+
+Các route QR công khai ở API chính sử dụng API key và scope phù hợp: qr:create cho tạo/thu hồi và qr:read cho đọc QR/SVG. API có idempotency key ở một số thao tác tạo/cập nhật, rate limit và các header giới hạn tốc độ. Quy tắc xác thực cụ thể được định nghĩa tại security guards/decorators và service, vì vậy cần đối chiếu mã nguồn trước khi tích hợp endpoint mới.
+
+Luồng tiêu thụ quota và tạo QR phụ thuộc service thuê và QR. QR service sử dụng RENTAL_SERVICE_URL để gọi endpoint nội bộ khi thao tác cần quota; khi phát sinh lỗi trong thao tác có tiêu thụ quota, luồng service có xử lý hoàn quota theo nhánh nghiệp vụ. Không nên mô tả đây là giao dịch ACID phân tán hoặc bảo đảm exactly-once giữa hai database/service.
+
+3.2.4. Bảo mật và xử lý lỗi
+
+API key được kiểm tra qua lớp security và service liên quan; các key có scope, trạng thái và chính sách sử dụng. Hệ thống có hỗ trợ rate limit theo key; Redis dùng bộ đếm chia sẻ. Khi chạy development mà Redis chưa sẵn sàng, API rate limit có thể dùng bộ đếm cục bộ trong tiến trình; ở production Redis là bắt buộc cho rate limit.
+
+API chính đăng ký HttpExceptionFilter và ValidationPipe với whitelist/transform. Các service có cấu hình validation và bộ lọc lỗi riêng. Không nên khẳng định mọi request đều ghi AuditLog hoặc mọi lỗi đều được ghi audit nếu luồng cụ thể không triển khai điều đó.
+
+Một số cấu hình QR hỗ trợ thời điểm hiệu lực, hết hạn, giới hạn cổng, thu hồi và lượt sử dụng; hành vi chính xác phụ thuộc loại QR và service xác minh. Token offline dùng khóa RSA có cấu hình riêng khi bật luồng gate offline. Secret và khóa riêng không được đưa vào client hoặc commit lên kho mã nguồn.
+
+3.3. Cài đặt ứng dụng web
+
+3.3.1. Cấu trúc client
+
+Ứng dụng web ở apps/web sử dụng Next.js App Router, React và TypeScript. Trang công khai có các luồng tạo show, trang show theo slug, thuê thiết bị/API, sản phẩm và linh kiện. Khu vực đăng nhập gồm dashboard khách hàng/developer và giao diện quản trị. Các trang kết nối API qua thư viện phía web; Socket.IO client được dùng cho những luồng realtime có hỗ trợ.
+
+Các route được tổ chức trực tiếp trong apps/web/src/app, ví dụ:
+
+/                         Trang chủ.
+/tao-show                 Tạo show.
+/e/[slug]                 Trang show công khai.
+/thue-thiet-bi            Thuê thiết bị.
+/thue-api                 Thuê API và công cụ developer.
+/linh-kien, /san-pham     Danh mục sản phẩm.
+/dang-nhap, /dang-ky      Xác thực người dùng.
+/dashboard/*              Dashboard, API key, vé, show, thuê và cấu hình.
+/admin/*                  Các màn hình quản trị.
+/status, /docs            Trang trạng thái và tài liệu trong web.
+
+Danh sách route có thể thay đổi theo phiên bản; xem apps/web/src/app để biết nguồn hiện hành.
+
+3.3.2. Chạy các ứng dụng
+
+Yêu cầu cài Node.js 20+ và npm 10+. Từ thư mục gốc:
+
+npm install
+npm run db:setup
+npm run dev
+
+Lệnh npm run dev chạy song song API chính ở :4000 và web ở :3000. Mở terminal riêng để chạy service phụ:
+
+npm run dev:ticket-service
+npm run dev:rental-service
+npm run dev:qr-service
+
+Có thể chạy toàn bộ stack bằng Docker Compose:
+
+docker compose up --build
+
+Các cổng được publish: web 3000, API 4000, ticket 3003, rental 3004, QR 3005, PostgreSQL 5432 và Redis 6379. Dừng bằng docker compose down. Thêm -v sẽ xóa volume dữ liệu cục bộ.
+
+Các script gốc khác:
+
+npm run build               Build API và web.
+npm run lint                Chạy lint cho web.
+npm run start:local         Chạy bản đã build của API và web.
+npm run dev:ticket-service  Chạy ticket service ở chế độ watch.
+npm run dev:rental-service Chạy rental service ở chế độ watch.
+npm run dev:qr-service      Chạy QR service ở chế độ watch.
+
+3.4. SDK và kiểm thử
+
+SDK nằm tại packages/sdk, packages/sdk-python và packages/sdk-php; hướng dẫn sử dụng riêng nằm trong README của từng package. SDK JavaScript có test script riêng.
+
+Một số lệnh kiểm tra đã khai báo:
+
+npm test -w @smartqr/sdk
+npm run build -w @smartqr/api
+npm run test:integration -w @smartqr/api
+
+Integration test API cần PostgreSQL test riêng và biến TEST_DATABASE_URL. Không trỏ integration test vào cơ sở dữ liệu phát triển hoặc production.
+
+3.5. Dữ liệu mẫu và giới hạn môi trường demo
+
+Seed định nghĩa tài khoản mẫu admin@smartqr.vn / admin123456 và demo@smartqr.vn / demo123456. Chỉ dùng thông tin này cho môi trường local. Cấu hình thanh toán demo và secret trong Docker Compose không đại diện cho cấu hình triển khai thực tế.
+
+Khi triển khai production cần dùng secret ngẫu nhiên riêng, HTTPS, cấu hình đúng WEB_ORIGIN và URL service, Redis dùng chung, database được backup, migration theo quy trình triển khai và thông tin cổng thanh toán thật nếu bật thanh toán. Không commit file .env hoặc private key.

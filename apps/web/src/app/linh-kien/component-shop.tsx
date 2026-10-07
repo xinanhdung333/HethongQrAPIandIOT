@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CreditCard, Loader2, ShoppingBag } from "lucide-react";
 import { api, money, Product } from "@/lib/api";
+import { PaymentMethod, PaymentMethodSelect } from "@/components/payment-method-select";
 
 type CheckoutResult = { order_id: string; payment_demo_url: string; total: number };
 
@@ -13,11 +14,12 @@ export function ComponentShop({ products }: { products: Product[] }) {
   const [loadingId, setLoadingId] = useState("");
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const [error, setError] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("payos_demo");
 
   useEffect(() => {
     void api<Product[]>("/products", { cache: "no-store" }).then((result) => {
       if (!result) return;
-      setItems(result.filter((product) => product.type === "COMPONENT"));
+      setItems(result.filter((product) => product.productType === "LINH_KIEN"));
     });
   }, []);
 
@@ -30,7 +32,8 @@ export function ComponentShop({ products }: { products: Product[] }) {
         method: "POST",
         body: JSON.stringify({
           quantity,
-          shipping_address: { address, note: "Giao hàng demo Phase 1" }
+          shipping_address: { address, note: "Giao hàng demo Phase 1" },
+          payment_method: paymentMethod
         })
       });
       if (!checkout) return;
@@ -78,6 +81,9 @@ export function ComponentShop({ products }: { products: Product[] }) {
           Địa chỉ nhận hàng
           <textarea className="field min-h-24" value={address} onChange={(event) => setAddress(event.target.value)} />
         </label>
+        <div className="mt-5">
+          <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
+        </div>
         {result && (
           <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm">
             <b>Đơn {result.order_id}</b>

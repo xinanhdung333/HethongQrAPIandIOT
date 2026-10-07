@@ -6,7 +6,7 @@ import { ComponentShop } from "./component-shop";
 export const dynamic = "force-dynamic";
 
 export default async function ComponentsPage() {
-  const products = (await api<Product[]>("/products").catch(() => [])).filter((product) => product.type === "COMPONENT");
+  const products = (await api<Product[]>("/products").catch(() => [])).filter((product) => product.productType === "LINH_KIEN");
   return (
     <RequireLogin>
       <main className="shell py-16 md:py-24">

@@ -10,6 +10,7 @@ import {
   Copy,
   Loader2,
   Power,
+  Plus,
   Radio,
   RotateCcw,
   Search,
@@ -46,12 +47,14 @@ export default function ShowsDashboardPage() {
   const [rawScannerKey, setRawScannerKey] = useState("");
   const [oldKeyRevokeAt, setOldKeyRevokeAt] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [showQuery, setShowQuery] = useState("");
+  const [showStatus, setShowStatus] = useState("ALL");
 
   async function load() {
     setLoading(true);
     setError("");
     try {
-      setData(await api<DashboardData>("/dashboard", { cache: "no-store" }));
+      setData(await api<DashboardData>("/dashboard?view=shows", { cache: "no-store" }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không tải được dữ liệu show.");
     } finally {
@@ -122,22 +125,32 @@ export default function ShowsDashboardPage() {
   const active = data.shows.filter((show) => (show.status ?? "ACTIVE") === "ACTIVE").length;
   const ended = data.shows.filter((show) => show.status === "ENDED").length;
   const soldTickets = data.shows.reduce((sum, show) => sum + show.soldTickets, 0);
+  const totalRevenue = data.ticketOrders.reduce((sum, order) => sum + (order.status === "PAID" ? order.totalAmount : 0), 0);
+  const visibleShows = useMemo(() => {
+    const keyword = normalize(showQuery);
+    return data.shows.filter((show) => {
+      const matchesQuery = !keyword || normalize(`${show.name} ${show.location ?? ""} ${show.slug}`).includes(keyword);
+      const matchesStatus = showStatus === "ALL" || (show.status ?? "ACTIVE") === showStatus;
+      return matchesQuery && matchesStatus;
+    });
+  }, [data.shows, showQuery, showStatus]);
 
   return (
-    <div className="min-w-0">
+    <main className="mx-auto min-w-0 max-w-[1200px] py-3 md:py-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-zinc-500">Show đã mở</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Show</h1>
+          <p className="text-sm font-medium text-zinc-500">SmartQR Events</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">Quản lý show</h1>
+          <p className="mt-2 text-sm text-zinc-600">Theo dõi bán vé, check-in và thiết bị quét theo thời gian thực.</p>
         </div>
-        <Link href="/tao-show" className="btn btn-primary text-sm">Tạo show</Link>
+        <Link href="/dashboard/pages/tao-show" className="btn btn-primary text-sm"><Plus size={16} />Tạo show</Link>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4">
-        <Stat icon={Radio} label="Tổng show" value={String(data.shows.length)} />
-        <Stat icon={CheckCircle2} label="Đang chạy" value={String(active)} />
-        <Stat icon={CalendarDays} label="Đã kết thúc" value={String(ended)} />
-        <Stat icon={Ticket} label="Vé đã bán" value={String(soldTickets)} />
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat icon={Radio} label="Tổng show" value={String(data.shows.length)} tone="violet" />
+        <Stat icon={CheckCircle2} label="Đang chạy" value={String(active)} tone="emerald" />
+        <Stat icon={Ticket} label="Vé đã bán" value={String(soldTickets)} tone="amber" />
+        <Stat icon={CalendarDays} label="Doanh thu" value={money(totalRevenue)} tone="blue" compact />
       </div>
 
       {loading && <p className="panel mt-6 p-5 text-sm text-zinc-600">Đang tải show...</p>}
@@ -145,14 +158,19 @@ export default function ShowsDashboardPage() {
 
       {!error && (
         <div className="mt-6 grid gap-4">
-          {data.shows.map((show) => {
+          <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+            <SearchField value={showQuery} onChange={setShowQuery} placeholder="Tìm tên, địa điểm hoặc slug..." />
+            <select className="field bg-white text-sm sm:w-48" value={showStatus} onChange={(event) => setShowStatus(event.target.value)}><option value="ALL">Tất cả trạng thái</option><option value="ACTIVE">Đang hoạt động</option><option value="ENDED">Đã kết thúc</option></select>
+            <span className="ml-auto shrink-0 text-xs text-zinc-500">{visibleShows.length}/{data.shows.length} show</span>
+          </div>
+          {visibleShows.map((show) => {
             const orders = ordersByShow.get(show.id) ?? [];
             const usedTickets = orders.reduce((sum, order) => sum + order.tickets.filter((ticketItem) => ticketItem.isUsed).length, 0);
             const revenue = orders.reduce((sum, order) => sum + (order.status === "PAID" ? order.totalAmount : 0), 0);
             const isOpen = openShowId === show.id;
 
             return (
-              <article key={show.id} className="panel overflow-hidden">
+              <article key={show.id} className="panel overflow-hidden transition hover:border-zinc-300">
                 <div className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -162,8 +180,8 @@ export default function ShowsDashboardPage() {
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-lg bg-zinc-100 px-3 py-1 text-sm font-medium">{show.status ?? "ACTIVE"}</span>
-                      <Link href={`/e/${show.slug}`} className="btn btn-secondary text-sm">Mở show</Link>
+                      <ShowStatus value={show.status ?? "ACTIVE"} />
+                      <Link href={`/e/${show.slug}`} target="_blank" className="btn btn-secondary bg-white text-sm">Mở public</Link>
                       <button className="btn btn-secondary text-sm" disabled={show.status === "ENDED" || endingId === show.id} onClick={() => void endShow(show.id)}>
                         {endingId === show.id ? <Loader2 size={16} className="animate-spin" /> : <Power size={16} />}
                         Kết thúc
@@ -180,6 +198,7 @@ export default function ShowsDashboardPage() {
                     <p>Địa điểm: {show.location ?? "Đang cập nhật"}</p>
                     <p>Ngày diễn ra: {show.startAt ? new Date(show.startAt).toLocaleString("vi-VN") : "Đang cập nhật"}</p>
                   </div>
+                  <div className="mt-4"><div className="flex justify-between text-xs text-zinc-500"><span>Tiến độ bán vé</span><b className="text-zinc-700">{show.totalTickets ? Math.round(show.soldTickets / show.totalTickets * 100) : 0}%</b></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${show.totalTickets ? Math.min(100, show.soldTickets / show.totalTickets * 100) : 0}%` }} /></div></div>
                   <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm">
                     <p className="font-medium text-zinc-900">Thiết bị quét</p>
                     <p className="mt-1 text-zinc-600">Trạng thái: {installationLabel(show.installationStatus)} · {show.scannerCount ?? 0} máy</p>
@@ -199,8 +218,8 @@ export default function ShowsDashboardPage() {
               </article>
             );
           })}
-          {!loading && !data.shows.length && (
-            <p className="panel p-5 text-sm text-zinc-600">Chưa có show. Hãy tạo show white-label để lấy link bán vé.</p>
+          {!loading && !visibleShows.length && (
+            <div className="panel p-10 text-center"><p className="font-semibold">{data.shows.length ? "Không tìm thấy show phù hợp" : "Chưa có show"}</p><p className="mt-2 text-sm text-zinc-500">{data.shows.length ? "Thử đổi từ khóa hoặc bộ lọc trạng thái." : "Tạo show white-label để nhận link bán vé public."}</p></div>
           )}
         </div>
       )}
@@ -215,7 +234,7 @@ export default function ShowsDashboardPage() {
       {rawScannerKey && <section className="panel mt-6 border-emerald-200 bg-emerald-50 p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-emerald-900">Key quét mới - chỉ hiện một lần</h2><p className="mt-1 text-sm text-emerald-800">Lưu lại ngay, sẽ không hiện lại.</p>{oldKeyRevokeAt && <p className="mt-1 text-xs text-amber-800">Key cũ hết ân hạn sau {remainingSeconds === null ? "..." : `${Math.floor(remainingSeconds / 60)} phút ${remainingSeconds % 60} giây`}.</p>}</div><div className="flex gap-2"><button className="btn btn-secondary bg-white text-sm" onClick={() => void copyScannerKey()}><Copy size={15} /> Copy</button><button className="btn btn-secondary bg-white text-sm" onClick={() => setRawScannerKey("")}>Ẩn</button></div></div><pre className="mt-3 overflow-auto rounded-lg bg-white p-3 text-xs text-emerald-950">{rawScannerKey}</pre></section>}
 
       {rotateShow && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4"><form className="panel w-full max-w-md p-6" onSubmit={event => { event.preventDefault(); void submitRotateShow(); }}><h2 className="text-lg font-semibold">Xoay key quét</h2><p className="mt-2 text-sm text-zinc-600">{rotateShow.name} · key cũ vẫn hoạt động trong thời gian ân hạn.</p><label className="mt-4 grid gap-2 text-sm font-medium">Mật khẩu hiện tại<input className="field" type="password" value={rotatePassword} onChange={event => setRotatePassword(event.target.value)} required autoFocus /></label><label className="mt-4 grid gap-2 text-sm font-medium">Thời gian ân hạn (phút)<input className="field" type="number" min={1} max={1440} value={graceMinutes} onChange={event => setGraceMinutes(event.target.value)} /></label><div className="mt-6 flex justify-end gap-2"><button type="button" className="btn btn-secondary" onClick={() => setRotateShow(null)} disabled={rotating}>Hủy</button><button className="btn btn-primary" disabled={rotating}>{rotating ? "Đang xoay..." : "Xoay key"}</button></div></form></div>}
-    </div>
+    </main>
   );
 }
 
@@ -355,7 +374,7 @@ function SearchField({ value, onChange, placeholder }: { value: string; onChange
   return (
     <label className="relative block">
       <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-      <input className="field h-10 w-full pl-9 text-sm" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <input className="field h-10 w-full !pl-9 text-sm" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
   );
 }
@@ -405,12 +424,15 @@ function Status({ value }: { value: string }) {
   return <span className="rounded-lg bg-zinc-100 px-3 py-1 text-sm font-medium">{value}</span>;
 }
 
-function Stat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+function ShowStatus({ value }: { value: string }) { const active = value === "ACTIVE"; return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${active ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>{active ? "Đang hoạt động" : value === "ENDED" ? "Đã kết thúc" : value}</span>; }
+
+function Stat({ icon: Icon, label, value, tone, compact = false }: { icon: LucideIcon; label: string; value: string; tone: "violet" | "emerald" | "amber" | "blue"; compact?: boolean }) {
+  const color = tone === "violet" ? "bg-violet-50 text-violet-700" : tone === "emerald" ? "bg-emerald-50 text-emerald-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700";
   return (
-    <div className="panel p-5">
-      <Icon size={18} className="text-zinc-900" />
-      <span className="mt-4 block text-sm text-zinc-500">{label}</span>
-      <b className="mt-1 block text-2xl">{value}</b>
+    <div className="panel min-w-0 p-4">
+      <span className={`grid size-8 place-items-center rounded-lg ${color}`}><Icon size={16} /></span>
+      <span className="mt-3 block truncate text-xs text-zinc-500">{label}</span>
+      <b className={`mt-1 block truncate tracking-tight ${compact ? "text-base sm:text-xl" : "text-xl"}`}>{value}</b>
     </div>
   );
 }

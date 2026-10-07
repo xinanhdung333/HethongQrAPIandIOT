@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, Ticket } from "lucide-react";
 import { API_URL, api, money } from "@/lib/api";
+import { PaymentMethod, PaymentMethodSelect } from "@/components/payment-method-select";
 
 export function BuyForm({ slug, price }: { slug: string; price: number }) {
   const [quantity, setQuantity] = useState(2);
   const [buyerEmail, setBuyerEmail] = useState("buyer@smartqr.vn");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("payos_demo");
 
   useEffect(() => {
     const token = window.localStorage.getItem("smartqr_token");
@@ -55,7 +57,8 @@ export function BuyForm({ slug, price }: { slug: string; price: number }) {
           buyer_email: email,
           buyer_phone: buyerPhone,
           buyer_note: buyerNote,
-          quantity: safeQuantity
+          quantity: safeQuantity,
+          payment_method: paymentMethod
         })
       });
       window.location.href = result.payment_url;
@@ -106,6 +109,7 @@ export function BuyForm({ slug, price }: { slug: string; price: number }) {
         <span>Tổng thanh toán</span>
         <b>{money(price * quantity)}</b>
       </div>
+      <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
       <button disabled={loading} className="btn btn-primary">
         <Ticket size={16} />
         {loading ? "Đang tạo link" : "Thanh toán PayOS demo"}

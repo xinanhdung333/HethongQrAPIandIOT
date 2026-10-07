@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Cpu, Github, Mail, MapPin, Phone } from "lucide-react";
+import { Github, Mail, MapPin, Phone } from "lucide-react";
 
 const groups = [
   {
@@ -30,10 +30,8 @@ export function Footer() {
       <div className="shell grid gap-10 py-14 md:grid-cols-[1.2fr_1fr_1fr]">
         <div>
           <Link href="/" className="inline-flex items-center gap-2 font-semibold tracking-tight">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-zinc-950">
-              <Cpu size={18} />
-            </span>
-            SmartQR
+            <img src="/brand/smartqr-icon.svg" alt="" width={36} height={36} className="h-9 w-9 rounded-lg" />
+            <span>SmartQR</span>
           </Link>
           <p className="mt-5 max-w-sm text-sm leading-6 text-zinc-400">
             Nền tảng QR thông minh cho thuê hộp quét, bán vé white-label và vận hành cổng soát vé realtime.

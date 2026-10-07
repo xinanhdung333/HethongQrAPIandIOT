@@ -1,48 +1,39 @@
-import { Reveal } from "@/components/reveal";
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { Banknote, Check, CheckCircle2, CreditCard, Minus, PackageCheck, Percent, Plus, ShieldCheck, Sparkles, Ticket, Truck } from "lucide-react";
 import { money } from "@/lib/api";
 
+const plans = [
+  { id: "mini", name: "SP-01 Mini", price: 690000, deposit: 2000000, description: "Phù hợp lớp học, phòng gym và sự kiện nhỏ.", features: ["Một cổng quét", "QR realtime", "Hỗ trợ cấu hình từ xa"], tone: "emerald", recommended: false },
+  { id: "pro", name: "SP-02 Pro", price: 1990000, deposit: 5000000, description: "Dành cho cổng lớn với lưu lượng quét liên tục.", features: ["Nhiều cổng quét", "Chế độ offline", "Ưu tiên hỗ trợ 24/7"], tone: "violet", recommended: true },
+  { id: "show", name: "White-label Show", price: 199000, deposit: 0, description: "Landing bán vé riêng, QR ticket và payout 95%.", features: ["Trang public riêng", "QR ticket JWT", "Dashboard realtime"], tone: "amber", recommended: false }
+] as const;
+
 export default function PricingPage() {
-  return (
-    <main className="shell py-16 md:py-24">
-      <Reveal>
-        <h1 className="text-4xl font-semibold tracking-tight md:text-6xl">Bảng giá</h1>
-        <p className="mt-4 max-w-2xl text-zinc-600">Rõ phí thuê, phí lắp đặt, phí thiệt hại và hoa hồng gói show.</p>
-      </Reveal>
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        {[
-          ["Thuê SP-01", `${money(690000)}/tháng`, "Cọc 2tr, lắp đặt 300k, hợp đồng 1/3/12 tháng."],
-          ["Thuê SP-02", `${money(1990000)}/tháng`, "Cọc 5tr, phù hợp show lớn và cổng công suất cao."],
-          ["White-label Show", "199k + 5%", "Khởi tạo page riêng, payout demo 95%, QR ticket realtime."]
-        ].map(([name, price, desc]) => (
-          <article key={name} className="panel p-6">
-            <h2 className="text-xl font-semibold tracking-tight">{name}</h2>
-            <p className="mt-4 text-3xl font-semibold tracking-tight">{price}</p>
-            <p className="mt-4 text-sm leading-6 text-zinc-600">{desc}</p>
-          </article>
-        ))}
-      </div>
-      <Reveal className="mt-8 panel p-6">
-        <h2 className="text-xl font-semibold tracking-tight">Phí thiệt hại</h2>
-        <p className="mt-3 text-zinc-600">Mất đền 100%, hỏng đầu quét 1tr. Điều khoản này bắt buộc checkbox khi thuê thiết bị.</p>
-      </Reveal>
-      <Reveal className="mt-8 grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <section className="panel p-6">
-          <h2 className="text-2xl font-semibold tracking-tight">Ví dụ đơn thuê</h2>
-          <div className="mt-5 grid gap-3 text-sm">
-            <div className="flex justify-between"><span>SP-01 Mini · 1 tháng</span><b>{money(690000)}</b></div>
-            <div className="flex justify-between"><span>Cọc thiết bị</span><b>{money(2000000)}</b></div>
-            <div className="flex justify-between"><span>Phí lắp đặt</span><b>{money(300000)}</b></div>
-            <div className="flex justify-between border-t border-zinc-200 pt-3 text-base"><span>Tổng demo</span><b>{money(2990000)}</b></div>
-          </div>
-        </section>
-        <section className="panel p-6">
-          <h2 className="text-2xl font-semibold tracking-tight">Hoa hồng show</h2>
-          <p className="mt-3 text-sm leading-6 text-zinc-600">Vé 100k, bán 2 vé demo: tổng 200k, phí nền tảng 5%, payout còn 190k cho chủ show.</p>
-          <div className="mt-6 h-2 overflow-hidden rounded-full bg-zinc-100">
-            <div className="h-full w-[95%] rounded-full bg-zinc-950" />
-          </div>
-        </section>
-      </Reveal>
-    </main>
-  );
+  const [selectedId, setSelectedId] = useState<(typeof plans)[number]["id"]>("mini");
+  const [duration, setDuration] = useState(1);
+  const [quantity, setQuantity] = useState(1);
+  const [installation, setInstallation] = useState(true);
+  const selected = plans.find((plan) => plan.id === selectedId)!;
+  const estimate = useMemo(() => { const subscription = selected.price * duration * quantity; const deposit = selected.deposit * quantity; const install = selected.id !== "show" && installation ? 300000 : 0; return { subscription, deposit, install, total: subscription + deposit + install }; }, [duration, installation, quantity, selected]);
+
+  return <main className="mx-auto min-w-0 max-w-[1200px] py-3 md:py-5">
+    <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-medium text-zinc-500">SmartQR Pricing</p><h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">Bảng giá và chính sách phí</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Chọn mô hình phù hợp và ước tính tổng chi phí trước khi tạo đơn.</p></div><div className="grid grid-cols-3 gap-2 sm:gap-3 lg:w-[510px]"><Summary icon={Truck} label="Lắp đặt" value={money(300000)} tone="emerald" /><Summary icon={Percent} label="Phí nền tảng" value="5%" tone="violet" /><Summary icon={Banknote} label="Payout" value="95%" tone="amber" /></div></div>
+
+    <section className="grid gap-4 lg:grid-cols-3">{plans.map((plan) => { const active = selectedId === plan.id; const color = plan.tone === "emerald" ? "bg-emerald-50 text-emerald-700" : plan.tone === "violet" ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"; return <motion.button initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} key={plan.id} type="button" onClick={() => { setSelectedId(plan.id); setQuantity(1); }} className={`relative flex min-h-[310px] flex-col rounded-xl border p-5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-sm ${active ? "border-zinc-900 bg-zinc-950 text-white ring-1 ring-zinc-900" : "border-zinc-200 bg-white"}`}>{plan.recommended && <span className="absolute right-4 top-4 rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-bold text-zinc-950">Khuyên dùng</span>}<span className={`grid size-9 place-items-center rounded-lg ${active ? "bg-white/10 text-white" : color}`}>{plan.id === "show" ? <Ticket size={17} /> : <PackageCheck size={17} />}</span><h2 className="mt-5 text-lg font-semibold tracking-tight">{plan.name}</h2><p className={`mt-2 text-sm leading-6 ${active ? "text-zinc-400" : "text-zinc-500"}`}>{plan.description}</p><p className="mt-5"><b className="text-2xl tracking-tight">{money(plan.price)}</b><span className={active ? "text-zinc-400" : "text-zinc-500"}> / tháng</span></p><ul className={`mt-5 grid gap-2 text-xs ${active ? "text-zinc-300" : "text-zinc-600"}`}>{plan.features.map((feature) => <li key={feature} className="flex gap-2"><Check size={14} className={active ? "text-emerald-300" : "text-emerald-600"} />{feature}</li>)}</ul>{active && <span className="absolute bottom-4 right-4 grid size-6 place-items-center rounded-full bg-white text-zinc-950"><Check size={14} /></span>}</motion.button>; })}</section>
+
+    <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="panel overflow-hidden"><div className="border-b border-zinc-200 bg-gradient-to-r from-emerald-50/60 via-white to-violet-50/50 p-5"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-lg bg-emerald-100 text-emerald-700"><Sparkles size={18} /></span><div><h2 className="font-semibold">Ước tính chi phí</h2><p className="mt-1 text-sm text-zinc-500">Điều chỉnh nhu cầu để nhận dự toán tức thời.</p></div></div></div><div className="grid gap-6 p-5 md:p-6"><div><p className="mb-2 text-xs font-medium text-zinc-500">Thời hạn sử dụng</p><div className="grid grid-cols-3 gap-2">{[1,3,12].map((value) => <button key={value} type="button" onClick={() => setDuration(value)} className={`min-h-11 rounded-lg border text-sm font-semibold transition ${duration === value ? "border-violet-300 bg-violet-50 text-violet-800 ring-1 ring-violet-200" : "border-zinc-200 hover:border-violet-300"}`}>{value} tháng</button>)}</div></div><div><p className="mb-2 text-xs font-medium text-zinc-500">Số lượng {selected.id === "show" ? "show" : "thiết bị"}</p><div className="flex h-11 max-w-52 items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/40 px-2"><button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} className="grid size-8 place-items-center rounded-md hover:bg-emerald-100"><Minus size={15} /></button><b>{quantity}</b><button type="button" onClick={() => setQuantity((value) => Math.min(99, value + 1))} className="grid size-8 place-items-center rounded-md hover:bg-emerald-100"><Plus size={15} /></button></div></div>{selected.id !== "show" && <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${installation ? "border-amber-200 bg-amber-50/60" : "border-zinc-200"}`}><input type="checkbox" checked={installation} onChange={(event) => setInstallation(event.target.checked)} className="mt-1 size-4 accent-zinc-900" /><span><b className="text-sm">Lắp đặt tại địa điểm</b><span className="mt-1 block text-xs text-zinc-500">Kỹ thuật viên cấu hình Wi-Fi, gate ID và kiểm tra quét mẫu.</span></span><b className="ml-auto shrink-0 text-sm">+{money(300000)}</b></label>}<div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm"><Fee label={`${selected.name} × ${quantity} × ${duration} tháng`} value={money(estimate.subscription)} /><Fee label="Tiền cọc hoàn lại" value={money(estimate.deposit)} /><Fee label="Phí lắp đặt" value={money(estimate.install)} /></div></div></section>
+
+      <aside className="panel overflow-hidden xl:sticky xl:top-20"><div className="border-b border-amber-200 bg-amber-50/60 p-5"><div className="flex items-center gap-2"><CreditCard size={17} className="text-amber-700" /><h2 className="font-semibold">Tổng dự toán</h2></div><p className="mt-1 text-sm text-zinc-500">Chưa trừ ưu đãi theo hợp đồng.</p></div><div className="p-5"><div className="rounded-lg border border-violet-100 bg-violet-50/50 p-4"><p className="font-medium">{selected.name}</p><p className="mt-1 text-xs text-violet-700">{quantity} × {duration} tháng</p></div><div className="mt-5 flex items-end justify-between border-b border-zinc-200 pb-5"><span className="font-medium">Thanh toán dự kiến</span><b className="text-2xl tracking-tight text-amber-700">{money(estimate.total)}</b></div><p className="mt-4 flex gap-2 text-xs leading-5 text-zinc-500"><ShieldCheck size={15} className="shrink-0 text-emerald-600" />Tiền cọc được hoàn lại sau khi kiểm tra thiết bị.</p><Link href={selected.id === "show" ? "/dashboard/pages/tao-show" : "/dashboard/pages/thue-thiet-bi"} className="btn btn-primary mt-5 w-full">{selected.id === "show" ? <Ticket size={16} /> : <Truck size={16} />}{selected.id === "show" ? "Tạo show ngay" : "Tạo đơn thuê"}</Link></div></aside>
+    </div>
+
+    <section className="panel mt-6 p-5"><h2 className="font-semibold">Điều khoản minh bạch</h2><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">{[["Cọc thiết bị","Hoàn lại sau khi kiểm tra và đối soát."],["Thiệt hại","Tính theo linh kiện thực tế cần thay thế."],["Vé QR","Mỗi vé có JWT và mã chống sử dụng lại."],["Payout","Chủ show nhận 95% doanh thu đã thanh toán."]].map(([title, desc]) => <div key={title} className="rounded-lg border border-zinc-200 p-4"><CheckCircle2 size={16} className="text-emerald-600" /><h3 className="mt-3 text-sm font-semibold">{title}</h3><p className="mt-2 text-xs leading-5 text-zinc-500">{desc}</p></div>)}</div></section>
+  </main>;
 }
+
+function Summary({ icon: Icon, label, value, tone }: { icon: typeof Truck; label: string; value: string; tone: "emerald" | "violet" | "amber" }) { const color = tone === "emerald" ? "bg-emerald-50 text-emerald-700" : tone === "violet" ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"; return <div className="panel min-w-0 p-3.5 sm:p-4"><div className="flex items-center gap-2 text-zinc-500"><span className={`grid size-7 shrink-0 place-items-center rounded-lg ${color}`}><Icon size={14} /></span><span className="truncate text-[10px] font-semibold uppercase tracking-wide sm:text-xs">{label}</span></div><p className="mt-2 truncate text-base font-semibold tracking-tight sm:text-xl">{value}</p></div>; }
+function Fee({ label, value }: { label: string; value: string }) { return <div className="flex justify-between gap-3"><span className="text-zinc-500">{label}</span><b className="font-medium">{value}</b></div>; }

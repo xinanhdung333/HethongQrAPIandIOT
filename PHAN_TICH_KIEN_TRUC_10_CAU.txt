@@ -1,0 +1,419 @@
+PHÂN TÍCH KIẾN TRÚC HỆ THỐNG SMARTQR - TRẢ LỜI C1 ĐẾN C10
+Ngày viết: 2026-10-02
+Dựa trên mã nguồn thực tế tại: C:\HeThongQRthongminh
+
+============================================================
+C1. VÌ SAO CHỌN KIẾN TRÚC NÀY, NẾU CHỌN HƯỚNG KHÁC THÌ DỄ / KHÓ HƠN?
+============================================================
+
+Hệ thống SmartQR đang chọn kiến trúc hybrid: modular monolith kết hợp tách dần service.
+
+Cụ thể:
+- apps/api là API chính, xử lý auth, dashboard, show, rental, thanh toán demo, admin, developer.
+- apps/ticket-service tách riêng luồng verify vé.
+- apps/rental-service tách riêng quota / rental API.
+- apps/qr-service tách riêng luồng tạo và đọc QR.
+- Các service dùng chung PostgreSQL, Redis, Prisma schema và giao tiếp nội bộ qua HTTP.
+
+Lý do chọn:
+1. Phù hợp MVP và nhóm nhỏ: vẫn giữ được tốc độ phát triển của monolith, nhưng các nghiệp vụ dễ quá tải như verify vé, QR, rental quota đã có thể tách service riêng.
+2. Dễ debug hơn pure microservices vì dữ liệu còn chung schema, transaction trong một số luồng vẫn làm trực tiếp bằng Prisma.
+3. Dễ triển khai demo / local: Docker Compose chạy web, API, PostgreSQL, Redis và các service tách riêng.
+4. Vẫn có đường mở rộng: khi traffic verify vé hoặc tạo QR tăng, có thể scale ticket-service hoặc qr-service độc lập.
+
+Nếu chọn full monolith:
+- Dễ hơn: deploy một process, debug đơn giản, transaction nội bộ dễ hơn.
+- Khó hơn: khi verify vé hoặc QR tải cao, phải scale cả hệ thống; code dễ phình to; sau này tách service khó hơn.
+
+Nếu chọn pure microservices, mỗi service có database riêng:
+- Dễ hơn: scale độc lập, ranh giới team rõ, service nào hỏng ít ảnh hưởng service khác hơn.
+- Khó hơn: phải xử lý distributed transaction, saga, message broker, đồng bộ dữ liệu, quan sát lỗi liên service. Với nhóm nhỏ, chi phí vận hành cao hơn lợi ích.
+
+Nếu chọn serverless:
+- Dễ hơn: scale tự động, ít quản lý server.
+- Khó hơn: cold start ảnh hưởng scan vé / QR realtime, WebSocket khó hơn, Prisma connection pool với PostgreSQL phức tạp hơn.
+
+Kết luận: kiến trúc hiện tại là lựa chọn trung gian hợp lý: đủ đơn giản để làm nhanh, nhưng vẫn cho phép tách dần các phần nóng như ticket, QR và rental.
+
+
+============================================================
+C2. USER XUẤT HIỆN Ở NHIỀU NƠI: MỖI NƠI CHỈ LẤY DỮ LIỆU CẦN THIẾT, TRÁNH DƯ THỪA / LỘ DỮ LIỆU
+============================================================
+
+Trong chính project SmartQR, thực thể trung tâm nhất là `User`. `User` không xuất hiện trực tiếp như một object đầy đủ ở mọi nơi mà chủ yếu được tham chiếu bằng `userId`, `ownerId` hoặc lấy từ `session.sub`. Tuy nhiên một số query hiện tại vẫn lấy dư dữ liệu quan hệ.
+
+Các liên kết thực tế trong `schema.prisma`:
+- `User` sở hữu `RentalOrder`, `Show`, `ApiKey`, `ApiRentalOrder`, `ExternalQrCode`, `PayoutAccount`, `PaymentTransaction`, `ApiNotification` và các log / payout liên quan.
+- `Show` dùng `ownerId` để xác định chủ show; từ `Show` nối tiếp sang `TicketOrder`, `Ticket`, API key quét show, revoke resource và payout.
+- `TicketOrder` hiện không có `userId` người mua; người mua được nhận diện bằng `buyerName`, `buyerEmail`, `buyerPhone`. Vì vậy dashboard đang tìm đơn người mua bằng `buyerEmail`.
+
+Do đó cần phân biệt hai loại dữ liệu: dữ liệu định danh / phân quyền của User và dữ liệu nghiệp vụ thuộc User. Không nên nhúng toàn bộ User vào mọi response.
+
+Các ngữ cảnh chính và dữ liệu tối thiểu:
+
+1. Auth / session
+- Query nội bộ: id, email, passwordHash, role, jti hoặc sessionVersion.
+- Response cho client: id, email, role, fullName, avatarUrl; chỉ thêm phone / địa chỉ khi màn hình thật sự cần.
+- Tuyệt đối không trả passwordHash, keyHash, signingSecret, webhookSecret, qrJwt.
+
+2. Hồ sơ cá nhân
+- Cần: id, email, fullName, phone, avatarUrl, addressLine, provinceCode, districtCode, wardCode.
+- Không cần trả role nếu đây chỉ là form hồ sơ, và không cần trả các quan hệ như rentals, shows, apiKeys.
+
+3. Dashboard tổng quan
+- User chỉ cần id và email để xác định session / truy vấn các dữ liệu thuộc quyền sở hữu.
+- Thẻ thống kê nên lấy các số đã tổng hợp: số show, số vé đã bán, doanh thu, số đơn thuê đang hoạt động, số API key đang dùng.
+- Danh sách rút gọn chỉ lấy id, tên, trạng thái, thời gian, số lượng và amount cần hiển thị; chi tiết được tải ở endpoint riêng.
+
+4. Rental / Product
+- RentalOrder: id, productId, quantity, type, duration, status, totalAmount, createdAt.
+- Product: id, name, type, priceSell, priceRent; không cần trả toàn bộ Product nếu màn hình chỉ hiển thị tên và giá.
+- ShippingAddress chỉ trả ở màn hình giao hàng / chi tiết đơn, không trả trong mọi danh sách.
+
+5. Show
+- Danh sách công khai: id, slug, name, location, startAt, endAt, totalTickets, soldTickets, status, ticketPrice.
+- Màn hình chủ show: thêm ownerId, payoutAccountId hoặc trạng thái tài khoản nhận tiền; không trả thông tin cá nhân đầy đủ của owner.
+- Màn hình chỉnh sửa: chỉ lấy các trường được phép sửa; không trả ticket, API key, QR hay payout nếu không phục vụ thao tác đó.
+
+6. TicketOrder / Ticket
+- Người mua: order id, buyerName, buyerEmail, buyerPhone đã che bớt nếu cần, show summary, status, quantity, amount, createdAt; Ticket chỉ cần id, jti hiển thị dạng mã đã che hoặc QR được cấp riêng.
+- Chủ show: order id, buyerName, buyerEmail, buyerPhone, quantity, status, amount, showId; chỉ lấy ticket cần cho việc quản lý / soát vé.
+- Không trả qrJwt, jti đầy đủ hoặc scan history trong danh sách đơn nếu không cần thiết.
+
+7. API Rental / API Key
+- ApiRentalOrder: id, appName, plan, quota, usedQuota, scopes, callbackUrl, status, createdAt.
+- ApiKey: id, prefix, scopes, quota, rateLimit, status, revokeAt, suspendUntil, createdAt.
+- Chỉ hiển thị prefix; keyHash và secret phải ở lại server. signingSecret / webhookSecret chỉ trả một lần khi tạo hoặc qua luồng rotate có kiểm soát.
+
+8. External QR / Gate offline
+- Dashboard: id, code hoặc prefix đã che, resourceType, resourceId, expiresAt, revokedAt, trạng thái và vài số liệu scan.
+- Gate sync: chỉ lấy tenantId, showId, jti cần đồng bộ, revokedAt và dữ liệu chữ ký cần thiết.
+- Không gửi qrJwt / secret của tenant sang dashboard nếu không phục vụ thao tác cụ thể.
+
+9. Audit / Notification / Payout
+- ActivityLog: createdAt, action, targetType, targetId, kết quả; chỉ admin mới được xem ip / userAgent và cũng nên phân trang.
+- ApiNotification: id, type, title, status, createdAt; không trả secret hoặc payload kỹ thuật nếu không cần.
+- Payout: id, showId, amount, status, createdAt; thông tin tài khoản ngân hàng chỉ dùng trong màn hình cài đặt thanh toán và phải được che.
+
+Đối chiếu trực tiếp với code project:
+
+- `platform.service.ts`, method `dashboard(userId)`: chỉ query `User` với `select: { email: true }` để tìm đơn mua, đây là phần hợp lý và không lấy dư User.
+- Nhưng cùng method này lại chạy 9 query song song và trả nguyên các collection `rentals`, `apiRentals`, `shows`, `apiKeys`, `ticketOrders`, `purchasedTicketOrders`, `payouts`, `tickets`, `externalQrCodes`. Đây là dashboard tổng hợp nhưng đang trả cả dữ liệu danh sách và dữ liệu chi tiết trong một response lớn.
+
+Các chỗ dư thừa / có nguy cơ lộ dữ liệu thực tế:
+
+- `PlatformService.dashboard()` đang gọi `include: { product: true }`, `include: { show: true, tickets: true }` và `include: { scanLogs: ... }`. Đây là lấy cả object quan hệ thay vì projection theo màn hình, làm response lớn và có thể kéo theo trường nhạy cảm.
+- Cùng method này đang lấy đồng thời danh sách đơn của chủ show và danh sách đơn người mua, kèm toàn bộ tickets; dashboard tổng quan nên trả summary / danh sách ngắn, còn chi tiết nên tách endpoint có phân trang.
+- `apiKey.findMany()` đang lấy nguyên record rồi mới map qua `publicApiKey()`. Tốt hơn là dùng Prisma `select` ngay từ query để không đọc keyHash hoặc trường không cần thiết vào object xử lý.
+- `externalQrCode.findMany()` đang lấy QR cùng scan logs. Nên tách danh sách QR và lịch sử scan; chỉ lấy `take`, `select` các cột cần thiết và phân trang.
+- Một số module admin vẫn dùng `include: { product: true }`, `include: { show: true, tickets: true, payouts: true }` hoặc `include: { apiKey: true }`. Đây là dữ liệu nội bộ nhưng vẫn nên dùng `select` theo DTO để giảm dư thừa và giảm nguy cơ lộ secret khi controller thay đổi.
+- `publicUser()` hiện đã loại passwordHash, nhưng đang trả toàn bộ nhóm địa chỉ cho mọi response auth. Nên tách `SessionUserDto` và `ProfileUserDto`, vì session / dashboard thường không cần toàn bộ địa chỉ.
+
+Kết luận cho project: phần liên kết User bằng `userId` / `ownerId` hiện là đúng hướng; không thấy lỗi kiểu trả toàn bộ User ở tất cả module. Điểm dư thừa chính nằm ở query dashboard và một số query admin dùng `include` toàn bộ quan hệ. Nên sửa theo thứ tự: dashboard dùng `select` và summary, tách endpoint chi tiết có phân trang; các danh sách API key / QR chỉ lấy field hiển thị; tuyệt đối không trả secret, hash, JWT. Thực thể trung tâm thứ hai là `Show` vì nó gom phần bán vé, soát vé và payout của chủ show.
+
+
+============================================================
+C3. CHỈ RA MỘT THAY ĐỔI NGHIỆP VỤ BUỘC NHÓM XỬ LÝ NHIỀU MODULE LIÊN QUAN CÙNG LÚC
+============================================================
+
+Ví dụ thay đổi nghiệp vụ: "Hủy show hoặc kết thúc show sớm và hoàn tiền cho vé chưa dùng".
+
+Hiện tại endShow chủ yếu cập nhật show.status = ENDED. Nếu nghiệp vụ đổi thành hủy show đầy đủ, nhóm phải xử lý đồng thời nhiều module:
+
+1. Module Shows
+- Đổi status của show sang ENDED hoặc CANCELLED.
+- Cập nhật lý do hủy, thời gian hủy nếu bổ sung nghiệp vụ mới.
+
+2. Module Tickets
+- Tìm toàn bộ ticket của show.
+- Vé chưa dùng phải bị revoke để không scan được nữa.
+- Ghi RevokedResource theo từng jti.
+
+3. Module Gate offline
+- Gate offline cần tải revoked-delta mới để biết vé nào bị thu hồi.
+- Nếu không đồng bộ, máy quét offline vẫn có thể cho vé đã hủy đi qua.
+
+4. Module Payment / Payout
+- TicketOrder đã PAID cần phát sinh hoàn tiền hoặc payout âm.
+- Payout của chủ show phải đổi trạng thái hoặc đối soát lại.
+
+5. Module Notification
+- Gửi email / thông báo cho người mua vé.
+- Gửi thông báo cho chủ show hoặc admin.
+
+6. Module Redis cache / Realtime
+- Xóa cache:show:<slug>.
+- Bắn realtime event để dashboard cập nhật trạng thái show và số vé.
+
+7. Module Webhook / Developer
+- Nếu developer tích hợp callback, phải phát sự kiện show.cancelled hoặc ticket.revoked.
+- Cần dedupeKey để tránh gửi trùng.
+
+Điểm quan trọng: một thay đổi nhỏ về nghiệp vụ "hủy show" không chỉ sửa một controller, mà kéo theo quyền truy cập, vé, máy quét offline, thanh toán, thông báo, cache và webhook. Đây là lý do hệ thống nên có domain event / transactional outbox cho các thay đổi dạng cross-module.
+
+
+============================================================
+C4. KHI MỘT THAO TÁC CẬP NHẬT DỮ LIỆU NHIỀU HƠN MỘT NƠI, NẾU MỘT TRONG SỐ ĐÓ LỖI THÌ DỮ LIỆU RA SAO?
+============================================================
+
+Trong hệ thống có hai kiểu:
+
+1. Luồng có transaction
+
+Ví dụ returnRental:
+- Cập nhật RentalOrder từ ACTIVE sang RETURNED.
+- Tăng lại stock của Product.
+- Hai bước nằm trong prisma.$transaction.
+
+Nếu một bước lỗi, transaction rollback, dữ liệu không bị nửa vời. Đơn thuê không bị chuyển RETURNED khi stock chưa được hoàn, hoặc ngược lại.
+
+Ví dụ markApiRentalPaid:
+- Cập nhật ApiRentalOrder sang ACTIVE.
+- Issue API key.
+- Hai bước nằm trong prisma.$transaction.
+
+Nếu issue key lỗi, đơn API không bị active nửa chừng.
+
+2. Luồng chưa transaction đầy đủ
+
+Ví dụ markTicketOrderPaid:
+- Cập nhật TicketOrder sang PAID.
+- Tạo nhiều Ticket.
+- Cập nhật Show.soldTickets.
+- Tạo Payout.
+- Xóa Redis cache.
+- Emit realtime.
+
+Các bước DB chính chưa nằm trong cùng một transaction. Vì vậy nếu lỗi ở giữa:
+- Nếu đã PAID và đã tạo Ticket nhưng lỗi khi update soldTickets: hệ thống đã có vé, nhưng show vẫn báo còn chỗ.
+- Nếu tạo vé xong nhưng lỗi khi tạo Payout: người mua có vé, nhưng chủ show chưa có bản ghi payout.
+- Nếu lỗi Redis / realtime: DB vẫn đúng, nhưng UI có thể stale trong ngắn hạn.
+
+Kết luận: các thao tác thay đổi nhiều bảng quan trọng phải bọc trong transaction. Những side effect bên ngoài DB như Redis, email, webhook nên dùng outbox hoặc retry worker để tránh mất sự kiện.
+
+
+============================================================
+C5. HAI NGƯỜI CÙNG GIÀNH CHỖ CUỐI CÙNG CÙNG LÚC THÌ SAO?
+============================================================
+
+Luồng mua vé hiện tại:
+1. buyTickets đọc Show theo slug.
+2. Kiểm tra show.soldTickets + quantity > show.totalTickets.
+3. Tạo TicketOrder.
+4. Sau thanh toán demo, markTicketOrderPaid tạo Ticket và tăng soldTickets.
+
+Tình huống:
+- Show còn đúng 1 chỗ: soldTickets = 99, totalTickets = 100.
+- User A và User B cùng mua 1 vé gần như cùng lúc.
+- Cả hai request cùng đọc soldTickets = 99.
+- Cả hai cùng pass điều kiện 99 + 1 <= 100.
+- Cả hai cùng tạo TicketOrder.
+- Khi thanh toán được mark paid, cả hai đều có thể tạo vé.
+
+Kết quả: có nguy cơ over-selling, tức bán 2 vé cho 1 chỗ cuối.
+
+Nguyên nhân:
+- Kiểm tra số vé còn và ghi đơn không atomic.
+- Không có SELECT FOR UPDATE, optimistic version, hoặc update có điều kiện soldTickets + quantity <= totalTickets.
+
+Cách sửa:
+- Bọc tạo order / giữ chỗ trong transaction.
+- Dùng lock trên dòng Show hoặc câu update có điều kiện.
+- Có thể thêm trạng thái giữ chỗ tạm thời với TTL nếu chưa thanh toán.
+
+Ví dụ hướng sửa:
+- Trong transaction, khóa dòng show.
+- Kiểm tra số vé còn.
+- Tăng reservedTickets hoặc soldTickets.
+- Nếu thanh toán thất bại thì giải phóng chỗ.
+
+Đây là một điểm nhóm biết còn rủi ro trong bản demo.
+
+
+============================================================
+C6. ĐĂNG NHẬP BẰNG TÀI KHOẢN A RỒI ĐỔI ID TRÊN URL ĐỂ XEM DỮ LIỆU CỦA B THÌ SAO?
+============================================================
+
+Với các endpoint dashboard / rental / QR, hệ thống lấy userId từ JWT chứ không tin userId trên URL.
+
+Ví dụ rental detail:
+- Controller lấy session từ Authorization Bearer token.
+- Gọi getRental(id, session.sub).
+- Service query theo cả id và userId.
+
+Nếu tài khoản A đổi URL sang rental id của B:
+- Server vẫn dùng userId của A trong JWT.
+- Query dạng findFirst({ where: { id, userId: A } }).
+- Vì bản ghi của B có userId = B, query không tìm thấy.
+- Kết quả trả 404 / Not Found, không lộ dữ liệu của B.
+
+Các lớp bảo vệ chính:
+1. JWT ký bằng JWT_SECRET, user không tự sửa sub được.
+2. Query luôn filter theo owner: userId, ownerId hoặc show.ownerId.
+3. API key cũng gắn userId / rentalId / showId để tách tenant.
+4. Nếu QR không thuộc user của API key, server trả NotFound hoặc Unauthorized.
+
+Lưu ý:
+- Một số trang public như /e/:slug cố ý công khai để người dùng mua vé.
+- Admin endpoint phải có role ADMIN, không dành cho customer thường.
+
+Kết luận: đổi id trên URL không đủ để xem dữ liệu người khác nếu endpoint đã filter theo session.sub / ownerId đúng cách.
+
+
+============================================================
+C7. LÀM SAO THU HỒI QUYỀN MỘT NGƯỜI DÙNG KHI TOKEN CỦA HỌ CÒN HẠN?
+============================================================
+
+Hệ thống dùng cơ chế JTI blacklist / allowlist trong Redis.
+
+Khi sign JWT:
+- Token có jti riêng.
+- Redis lưu key jwt:jti:<jti> = active với TTL bằng thời hạn token.
+
+Khi verify JWT:
+- Server verify chữ ký JWT.
+- Sau đó kiểm tra Redis còn jwt:jti:<jti> hay không.
+- Nếu Redis không còn key này, token bị coi là revoked hoặc expired.
+
+Khi logout / revoke:
+- Server xóa Redis key jwt:jti:<jti>.
+- Token dù còn hạn vẫn bị từ chối ở request tiếp theo.
+
+Với API key:
+- API key lưu status trong DB: active, suspended, revoked.
+- AuthService.getApiKey gọi assertActiveKey.
+- Nếu key bị revoked, suspended hoặc revokeAt đã tới hạn thì request bị chặn ngay.
+
+Điểm còn thiếu:
+- Hiện cơ chế JWT revoke tốt cho một token cụ thể.
+- Nếu muốn "đăng xuất tất cả thiết bị của user", nên có thêm index userId -> danh sách jti hoặc sessionVersion trên User.
+- Khi đổi quyền role, nên tăng tokenVersion/sessionVersion để token cũ tự mất hiệu lực.
+
+Kết luận: token còn hạn vẫn thu hồi được bằng cách xóa jti trong Redis; để thu hồi toàn bộ phiên của một user thì cần bổ sung quản lý session theo user.
+
+
+============================================================
+C8. NGƯỜI DÙNG THÔNG QUA DỊCH VỤ A GỌI SANG DỊCH VỤ B, B PHẢN HỒI CHẬM THÌ DỊCH VỤ A VÀ NGƯỜI DÙNG THẤY GÌ?
+============================================================
+
+Ví dụ:
+- Người dùng gọi API chính apps/api để verify ticket.
+- apps/api đóng vai trò dịch vụ A.
+- apps/ticket-service đóng vai trò dịch vụ B.
+
+Trong TicketsController, API chính forward request sang ticket-service với AbortSignal.timeout(5000).
+
+Nếu ticket-service phản hồi bình thường:
+- API chính trả response verify cho người dùng.
+
+Nếu ticket-service trả lỗi 4xx / 5xx:
+- API chính đọc payload lỗi từ ticket-service.
+- Sau đó trả lại HttpException với status tương ứng.
+
+Nếu ticket-service chậm quá 5 giây hoặc không kết nối được:
+- fetch bị timeout / throw.
+- API chính trả HTTP 503 Service Unavailable.
+- Payload có error dạng ticket_service_unavailable và message "Ticket service is unavailable".
+- Người dùng thấy request chờ khoảng 5 giây rồi nhận lỗi service unavailable.
+
+Tương tự, QR controller gọi qr-service cũng timeout 5 giây và trả qr_service_unavailable nếu service B chậm / down.
+
+Điểm còn thiếu:
+- Chưa có circuit breaker để tự ngắt khi service B liên tục lỗi.
+- Chưa có retry có kiểm soát.
+- Chưa có fallback cache cho verify.
+- Nếu nhiều request cùng timeout 5 giây, service A vẫn bị giữ tài nguyên trong thời gian chờ.
+
+Kết luận: hiện tại hệ thống có timeout để không treo vô hạn, nhưng chưa có circuit breaker / fallback nâng cao.
+
+
+============================================================
+C9. CONSUMER NHẬN / GỬI TRÙNG MỘT THÔNG ĐIỆP 2 LẦN THÌ DỮ LIỆU CÓ BỊ TRÙNG KHÔNG?
+============================================================
+
+Hệ thống chưa dùng message broker trung tâm, nhưng có nhiều luồng giống bài toán "xử lý trùng".
+
+1. Verify vé / QR
+- Ticket và ExternalQrCode được update bằng updateMany với điều kiện isUsed = false.
+- Request đầu tiên update thành công.
+- Request thứ hai không update được vì isUsed đã true.
+- Kết quả: không bị dùng vé trùng; request sau nhận "already used".
+- Redis gate:used:<tenant>:<jti> là lớp chống replay bổ sung.
+
+2. Webhook outbox
+- WebhookEvent có dedupeKey unique.
+- Khi enqueue webhook có dedupeKey, code dùng upsert.
+- Nếu cùng sự kiện bị enqueue lại, DB không tạo bản ghi trùng.
+- Worker còn có lockedUntil và attempts để tránh nhiều worker xử lý cùng một event.
+- Kết quả: tương đối an toàn với gửi trùng.
+
+3. API idempotency
+- QrPlatformService có ApiIdempotency.
+- Nếu client gửi cùng Idempotency-Key với cùng request, server trả lại response cũ.
+- Nếu cùng key nhưng body khác, server trả conflict.
+- Kết quả: tạo QR qua API có cơ chế chống trùng tốt hơn.
+
+4. Payment callback / markTicketOrderPaid
+- Có guard: nếu order.status đã PAID thì return.
+- Nhưng nếu hai callback cùng tới đúng thời điểm trước khi status được update xong, cả hai có thể cùng pass guard.
+- Vì các bước tạo ticket / tăng soldTickets / tạo payout chưa nằm trong transaction có lock nên vẫn có rủi ro trùng vé hoặc payout.
+
+Kết luận:
+- Verify vé / QR: an toàn hơn nhờ updateMany điều kiện isUsed=false.
+- Webhook outbox: an toàn hơn nhờ dedupeKey unique và worker lock.
+- Tạo QR API: có idempotency key.
+- Payment callback demo: còn rủi ro race condition, cần transaction + lock / idempotency DB-level.
+
+
+============================================================
+C10. CHỈ RA MỘT CHỖ NHÓM BIẾT CHƯA TỐT NHƯNG CỐ TÌNH ĐỂ LẠI; NẾU CÓ THÊM THỜI GIAN NHÓM SỬA GÌ TRƯỚC?
+============================================================
+
+Chỗ chưa tốt rõ nhất: luồng mua vé và đánh dấu thanh toán vé.
+
+Vấn đề:
+- buyTickets kiểm tra số vé còn bằng show.soldTickets + quantity.
+- Sau đó mới tạo TicketOrder.
+- markTicketOrderPaid sau đó mới tạo Ticket, tăng soldTickets và tạo Payout.
+- Các bước quan trọng chưa nằm trong cùng một transaction có lock.
+
+Rủi ro:
+1. Hai người mua chỗ cuối cùng cùng lúc có thể over-sell.
+2. Payment callback trùng có thể tạo vé / payout trùng trong một race condition.
+3. Nếu lỗi giữa markTicketOrderPaid, trạng thái PAID, Ticket, soldTickets và Payout có thể lệch nhau.
+
+Lý do tạm để lại:
+- Đây là bản demo / MVP, thanh toán đang có PAYMENT_DEMO_MODE và setTimeout giả lập.
+- Nhóm ưu tiên hoàn thiện luồng end-to-end, QR verify, API key, dashboard và tách service trước.
+- Race condition đặt vé là vấn đề production cần xử lý kỹ bằng transaction / locking.
+
+Nếu có thêm thời gian, nhóm nên sửa theo thứ tự:
+
+1. Sửa buyTickets / markTicketOrderPaid trước
+- Dùng prisma.$transaction.
+- Lock dòng Show hoặc dùng conditional update.
+- Thêm reservedTickets hoặc cơ chế giữ chỗ có TTL.
+- Đảm bảo không over-sell.
+
+2. Làm idempotency cho payment callback
+- Lưu idempotency key / payment event id.
+- Unique constraint để callback trùng không tạo vé / payout trùng.
+
+3. Chuyển side effect sang outbox
+- Tạo Ticket, Payout, WebhookEvent trong transaction.
+- Redis cache, realtime, email, webhook xử lý bằng worker retry.
+
+4. Bổ sung test concurrency
+- Test hai request cùng mua chỗ cuối.
+- Test hai webhook cùng mark paid.
+- Test lỗi giữa transaction phải rollback.
+
+5. Bổ sung cơ chế revoke toàn bộ session theo user
+- Thêm sessionVersion hoặc bảng UserSession.
+- Admin có thể force logout một user khỏi mọi thiết bị.
+
+Kết luận: điểm nên sửa đầu tiên là chống over-selling và idempotency thanh toán, vì đây là rủi ro ảnh hưởng trực tiếp đến tiền, vé và trải nghiệm người dùng.
+
+============================================================
+HẾT
+============================================================

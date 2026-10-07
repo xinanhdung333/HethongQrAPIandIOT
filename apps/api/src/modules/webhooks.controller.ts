@@ -19,6 +19,18 @@ export class WebhooksController {
     return this.platform.webhook(dto.order_id, dto.kind);
   }
 
+  @Post("momo")
+  async momo(@Body() dto: Record<string, unknown>) {
+    this.verifyMomoIpn(dto);
+    const orderId = String(dto.orderId ?? "");
+    if (!orderId) throw new BadRequestException({ error: "invalid_momo_order", message: "MoMo orderId is required" });
+    if (Number(dto.resultCode) !== 0) {
+      return { received: true, paid: false, order_id: orderId, result_code: dto.resultCode };
+    }
+    const paid = await this.platform.webhook(orderId);
+    return { received: true, paid: true, order_id: orderId, order: paid };
+  }
+
   private async verifyPaymentLink(orderId: string, kind: PayosWebhookDto["kind"], expires: string, signature: string) {
     if (process.env.PAYMENT_DEMO_MODE !== "true" || process.env.NODE_ENV === "production") {
       throw new ForbiddenException({ error: "demo_payment_disabled", message: "Demo payment callbacks are disabled" });
@@ -58,6 +70,34 @@ export class WebhooksController {
     }
     if (!(await this.redis.setIfAbsent(replayKey, "1", 600))) {
       throw new UnauthorizedException({ error: "replay_detected", message: "Webhook nonce was already used" });
+    }
+  }
+
+  private verifyMomoIpn(dto: Record<string, unknown>) {
+    const accessKey = process.env.MOMO_ACCESS_KEY ?? "F8BBA842ECF85";
+    const secretKey = process.env.MOMO_SECRET_KEY ?? "K951B6PE1waDMi640xX08PD3vg6EkVlz";
+    const signature = String(dto.signature ?? "");
+    if (!signature) throw new UnauthorizedException({ error: "missing_momo_signature", message: "Missing MoMo signature" });
+    const rawSignature = [
+      `accessKey=${accessKey}`,
+      `amount=${dto.amount ?? ""}`,
+      `extraData=${dto.extraData ?? ""}`,
+      `message=${dto.message ?? ""}`,
+      `orderId=${dto.orderId ?? ""}`,
+      `orderInfo=${dto.orderInfo ?? ""}`,
+      `orderType=${dto.orderType ?? ""}`,
+      `partnerCode=${dto.partnerCode ?? ""}`,
+      `payType=${dto.payType ?? ""}`,
+      `requestId=${dto.requestId ?? ""}`,
+      `responseTime=${dto.responseTime ?? ""}`,
+      `resultCode=${dto.resultCode ?? ""}`,
+      `transId=${dto.transId ?? ""}`
+    ].join("&");
+    const expected = crypto.createHmac("sha256", secretKey).update(rawSignature).digest("hex");
+    const left = Buffer.from(signature);
+    const right = Buffer.from(expected);
+    if (left.length !== right.length || !crypto.timingSafeEqual(left, right)) {
+      throw new UnauthorizedException({ error: "invalid_momo_signature", message: "MoMo signature is invalid" });
     }
   }
 }

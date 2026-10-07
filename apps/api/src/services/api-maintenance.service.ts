@@ -32,9 +32,18 @@ export class ApiMaintenanceService implements OnModuleInit, OnModuleDestroy {
       this.enqueueQuotaBurstWarnings(now),
       this.maintainRotatedKeys(now),
       this.sampleStatus(now),
+      this.forfeitUnpaidRentals(now),
       this.cleanupOldRows(now)
     ]);
     return { webhooks, notifications, expired, quota, anomalies, rotation, samples, cleanup };
+  }
+
+  private async forfeitUnpaidRentals(now: Date) {
+    const result = await this.prisma.rentalOrder.updateMany({
+      where: { type: "RENT", status: RentalStatus.DEPOSIT_PAID, paymentDueAt: { lt: now } },
+      data: { status: RentalStatus.DEPOSIT_FORFEITED }
+    });
+    return result.count;
   }
 
   private async enqueueExpiredQr(now: Date) {

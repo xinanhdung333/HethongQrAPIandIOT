@@ -1,0 +1,1 @@
+import { AdminResourcePage } from "../../admin-resource-page"; export default function Page() { return <AdminResourcePage title="Tồn kho linh kiện" endpoint="/admin/components/inventory" columns={["Mã", "Tên", "Tồn thực tế", "Giá", "Thao tác"]} />; }

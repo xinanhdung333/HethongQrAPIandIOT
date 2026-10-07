@@ -1,0 +1,1 @@
+import { AdminResourcePage } from "../../admin-resource-page"; export default function Page() { return <AdminResourcePage title="Tương thích linh kiện" endpoint="/admin/products?product_type=linh_kien" columns={["Mã", "Linh kiện", "Loại", "Tương thích", "Thao tác"]} />; }

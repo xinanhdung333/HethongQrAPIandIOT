@@ -14,7 +14,9 @@ export function AuthClient({ mode }: { mode: "login" | "register" }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function submit(formData: FormData) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
     setLoading(true);
     setMessage("");
     try {
@@ -38,7 +40,7 @@ export function AuthClient({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <form action={submit} className="panel mx-auto grid max-w-md gap-5 p-6">
+    <form onSubmit={submit} className="panel mx-auto grid max-w-md gap-5 p-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h1>
         <p className="mt-2 text-sm text-zinc-600">JWT có jti và có thể logout để revoke phiên.</p>

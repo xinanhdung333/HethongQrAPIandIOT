@@ -43,6 +43,15 @@ export class RentalsController {
     return result;
   }
 
+  @Post(":id/pay-remaining")
+  async payRemaining(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const session = await this.allowCustomerOnly(authorization, res);
+    if (!session) return;
+    const result = await this.platform.createRemainingRentalPayment(id, session.sub);
+    await this.activity.record({ session, action: "PAY_RENTAL_REMAINING", targetType: "RentalOrder", targetId: id, metadata: { remaining_amount: result.remaining_amount }, req });
+    return result;
+  }
+
   @Patch(":id/return")
   async returnOrder(@Param("id") id: string, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const session = await this.allowCustomerOnly(authorization, res);

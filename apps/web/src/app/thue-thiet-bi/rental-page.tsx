@@ -7,7 +7,7 @@ import { RentalForm } from "./rental-form";
 export const dynamic = "force-dynamic";
 
 export default async function RentalPage() {
-  const products = (await api<Product[]>("/products").catch(() => [])).filter((product) => product.type !== "COMPONENT");
+  const products = (await api<Product[]>("/products").catch(() => [])).filter((product) => product.productType === "THIET_BI_THUE");
   return (
     <RequireLogin>
       <main className="shell py-16 md:py-24">

@@ -1,0 +1,1 @@
+import { AdminResourcePage } from "../../admin-resource-page"; export default function Page() { return <AdminResourcePage title="Kho máy theo serial" endpoint="/admin/rental/units" columns={["Serial", "Thiết bị", "Trạng thái", "Vị trí", "Thao tác"]} />; }

@@ -4,6 +4,7 @@ import { ReactNode, useState } from "react";
 import Link from "next/link";
 import { Braces, Copy, KeyRound, Loader2, LockKeyhole, Play, ShieldCheck, Webhook, Zap, Fingerprint, Radio, RefreshCw } from "lucide-react";
 import { api, money } from "@/lib/api";
+import { PaymentMethod, PaymentMethodSelect } from "@/components/payment-method-select";
 
 const plans = {
   starter: { label: "Starter", price: 199000, quota: 5000, rate: "60 req/phut", mode: "Online only - Dùng HMAC" },
@@ -31,6 +32,7 @@ export default function ApiRentalPage() {
   const [resourceId, setResourceId] = useState("door-001-session");
   const [explorerResult, setExplorerResult] = useState("");
   const [sdkTab, setSdkTab] = useState<keyof typeof sdkSamples>("node");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("payos_demo");
 
   const selectedPlan = plans[plan];
   const total = selectedPlan.price * duration;
@@ -49,7 +51,7 @@ export default function ApiRentalPage() {
     try {
       const result = await api<{ payment_url: string }>("/api-rentals", {
         method: "POST",
-        body: JSON.stringify({ app_name: appName, website, callback_url: callbackUrl, plan, duration, scopes: selectedScopes })
+        body: JSON.stringify({ app_name: appName, website, callback_url: callbackUrl, plan, duration, scopes: selectedScopes, payment_method: paymentMethod })
       });
       const paymentUrl = new URL(result.payment_url, window.location.origin);
       if (enableOfflineRsa) paymentUrl.searchParams.set("enable_offline_rsa", "1");
@@ -200,6 +202,7 @@ export default function ApiRentalPage() {
             )}
           </div>}
 
+          <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm"><div className="flex justify-between gap-3"><span className="text-zinc-500">Thanh toán demo</span><b className="text-[15px]">{money(total)}</b></div></div>
           <button className="btn btn-primary h-11 text-[14px] font-semibold" disabled={submitting}>{submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />} Thanh toán và cấp key</button>
           </form>

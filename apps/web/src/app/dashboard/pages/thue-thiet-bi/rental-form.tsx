@@ -1,100 +1,15 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CreditCard } from "lucide-react";
 import { api, money, Product } from "@/lib/api";
+import { PaymentMethod, PaymentMethodSelect } from "@/components/payment-method-select";
 
+const durations = [{ value: 1, label: "1 tháng", note: "Linh hoạt" }, { value: 3, label: "3 tháng", note: "Phổ biến" }, { value: 12, label: "12 tháng", note: "Dài hạn" }];
 export function RentalForm({ products }: { products: Product[] }) {
-  const search = useSearchParams();
-  const [items, setItems] = useState(products);
-  const [productId, setProductId] = useState(search.get("product") || products[0]?.id || "");
-  const [quantity, setQuantity] = useState(1);
-  const [duration, setDuration] = useState(1);
-  const [address, setAddress] = useState("123 Nguyễn Huệ, Quận 1, TP.HCM");
-  const [agree, setAgree] = useState(false);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    void api<Product[]>("/products", { cache: "no-store" }).then((result) => {
-      if (!result) return;
-      const rentable = result.filter((product) => product.type !== "COMPONENT");
-      setItems(rentable);
-      setProductId((current) => current || rentable[0]?.id || "");
-    });
-  }, []);
-
-  const product = items.find((item) => item.id === productId) || items[0];
-  const breakdown = useMemo(() => {
-    if (!product) return { rent: 0, deposit: 0, install: 300000, total: 0 };
-    const rent = product.priceRentMonth * duration * quantity;
-    const deposit = product.depositFee * quantity;
-    const install = 300000;
-    return { rent, deposit, install, total: rent + deposit + install };
-  }, [product, duration, quantity]);
-
-  async function submit() {
-    if (!product) return;
-    setLoading(true);
-    try {
-      const result = await api<{ payment_demo_url: string }>("/rentals", {
-        method: "POST",
-        body: JSON.stringify({
-          product_id: product.id,
-          type: "rent",
-          duration,
-          quantity,
-          shipping_address: { address },
-          agree_damage_terms: agree
-        })
-      });
-      if (!result) return;
-      window.location.href = result.payment_demo_url;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-      <section className="panel grid gap-5 p-6">
-        <label className="grid gap-2 text-sm font-medium">Sản phẩm
-          <select className="field" value={product?.id ?? ""} onChange={(event) => setProductId(event.target.value)}>
-            {items.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium">Số lượng
-            <input className="field" type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">Thời gian
-            <select className="field" value={duration} onChange={(event) => setDuration(Number(event.target.value))}>
-              <option value={1}>1 tháng</option>
-              <option value={3}>3 tháng</option>
-              <option value={12}>12 tháng</option>
-            </select>
-          </label>
-        </div>
-        <label className="grid gap-2 text-sm font-medium">Địa chỉ lắp đặt
-          <textarea className="field min-h-28" value={address} onChange={(event) => setAddress(event.target.value)} />
-        </label>
-        <label className="flex gap-3 text-sm text-zinc-700">
-          <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
-          Đồng ý điều khoản thiệt hại: mất đền 100%, hỏng đầu quét 1tr.
-        </label>
-      </section>
-      <aside className="panel h-fit p-6">
-        <h2 className="text-xl font-semibold tracking-tight">Chi tiết phí</h2>
-        <div className="mt-5 grid gap-3 text-sm">
-          <div className="flex justify-between"><span>Tiền thuê</span><b>{money(breakdown.rent)}</b></div>
-          <div className="flex justify-between"><span>Cọc</span><b>{money(breakdown.deposit)}</b></div>
-          <div className="flex justify-between"><span>Lắp đặt</span><b>{money(breakdown.install)}</b></div>
-          <div className="border-t border-zinc-200 pt-3 flex justify-between text-base"><span>Tổng</span><b>{money(breakdown.total)}</b></div>
-        </div>
-        <button disabled={!product || !agree || loading} onClick={submit} className="btn btn-primary mt-6 w-full disabled:cursor-not-allowed disabled:bg-zinc-300">
-          <CreditCard size={16} />
-          {loading ? "Đang tạo đơn" : "Đặt thuê demo"}
-        </button>
-      </aside>
-    </div>
-  );
+  const search = useSearchParams(); const [items, setItems] = useState(products); const [productId, setProductId] = useState(search.get("product") || products[0]?.id || ""); const [quantity, setQuantity] = useState(1); const [duration, setDuration] = useState(1); const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); }); const [address, setAddress] = useState("123 Nguyễn Huệ, Quận 1, TP.HCM"); const [agree, setAgree] = useState(false); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("payos_demo");
+  useEffect(() => { void api<Product[]>("/products", { cache: "no-store" }).then((r) => { const list = r.filter((p) => p.productType === "THIET_BI_THUE"); setItems(list); setProductId((v) => v || list[0]?.id || ""); }).catch(() => undefined); }, []);
+  const product = items.find((p) => p.id === productId) || items[0]; const safeQuantity = product ? Math.min(quantity, Math.max(product.stock, 1)) : quantity; const breakdown = useMemo(() => { if (!product) return { deposit: 0, total: 0 }; const deposit = product.depositFee * safeQuantity; return { deposit, total: product.priceRentMonth * duration * safeQuantity + deposit + 300000 }; }, [product, duration, safeQuantity]);
+  async function submit() { if (!product || !agree || !address.trim()) return; setError(""); setLoading(true); try { const result = await api<{ payment_demo_url: string }>("/rentals", { method: "POST", body: JSON.stringify({ product_id: product.id, type: "rent", duration, quantity: safeQuantity, start_date: startDate, shipping_address: { address: address.trim() }, agree_damage_terms: agree, payment_method: paymentMethod }) }); if (result) window.location.href = result.payment_demo_url; } catch (e) { setError(e instanceof Error ? e.message : "Không thể tạo đơn thuê."); } finally { setLoading(false); } }
+  if (!items.length) return <section className="panel p-8 text-center">Chưa có thiết bị cho thuê</section>;
+  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]"><section className="panel p-5"><h2 className="font-semibold">Cấu hình đơn thuê</h2><div className="mt-6 grid gap-6"><div><b>{product?.name}</b><p className="mt-1 text-sm text-zinc-500">{product && `${money(product.priceRentMonth)}/tháng · còn ${product.stock} thiết bị`}</p></div><div className="grid gap-4 md:grid-cols-[180px_1fr]"><div><p className="mb-2 text-xs font-medium text-zinc-500">Số lượng</p><div className="flex h-11 items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/40 px-2"><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-emerald-100" onClick={() => setQuantity((v) => Math.max(1, v - 1))}>−</button><b>{safeQuantity}</b><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-emerald-100" onClick={() => setQuantity((v) => Math.min(product?.stock || 1, v + 1))}>+</button></div></div><div><p className="mb-2 text-xs font-medium text-zinc-500">Thời hạn</p><div className="grid grid-cols-3 gap-2">{durations.map((d) => <button key={d.value} type="button" onClick={() => setDuration(d.value)} className={`min-h-11 rounded-lg border px-2 py-1.5 text-left transition ${duration === d.value ? "border-emerald-300 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-200" : "border-zinc-200 bg-white hover:border-emerald-300"}`}><b className="block text-xs sm:text-sm">{d.label}</b><span className={`text-[10px] ${duration === d.value ? "text-emerald-600" : "text-zinc-500"}`}>{d.note}</span></button>)}</div></div></div><label className="grid gap-2 text-sm font-medium">Ngày bắt đầu thuê<input type="date" className="field" value={startDate} min={startDate} onChange={(e) => setStartDate(e.target.value)} /></label><textarea className="field min-h-24" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Địa chỉ lắp đặt" /><label className="flex gap-2 text-sm"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> Tôi đồng ý điều khoản bảo quản thiết bị.</label></div></section><aside className="grid gap-4"><section className="panel p-5"><PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} /></section><section className="panel p-5"><h2 className="font-semibold">Tóm tắt đơn thuê</h2><p className="mt-3 text-sm">Tiền giữ máy thanh toán ngay: <b>{money(breakdown.deposit)}</b></p><p className="mt-2 text-sm text-zinc-500">Tổng dự kiến: <b>{money(breakdown.total)}</b></p>{error && <p className="mt-3 text-sm text-red-700">{error}</p>}<button disabled={!product || !agree || !address.trim() || loading || !product.stock} onClick={() => void submit()} className="btn btn-primary mt-5 w-full">{loading ? "Đang tạo đơn..." : `Thanh toán ${money(breakdown.deposit)} và giữ máy`}</button></section></aside></div>;
 }

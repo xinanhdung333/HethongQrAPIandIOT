@@ -1,9 +1,5 @@
-import { IotDeveloperClient } from "../dashboard/iot-developer/iot-developer-client";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return (
-    <main className="shell py-8">
-      <IotDeveloperClient />
-    </main>
-  );
+  redirect("/dashboard/iot-developer");
 }

@@ -1,0 +1,369 @@
+[1] npm notice run @smartqr/web@1.0.0 dev
+[0] npm notice run @smartqr/api@1.0.0 dev
+[0] npm notice run nest start --watch
+[1] npm notice run next dev -p 3000
+[0] [2J[3J[H[[90m12:41:31 AM[0m] Starting compilation in watch mode...
+[0] 
+[1]   ▲ Next.js 14.2.35
+[1]   - Local:        http://localhost:3000
+[1] 
+[1]  ✓ Starting...
+[1]  ✓ Ready in 13.8s
+[0] [[90m12:42:03 AM[0m] Found 0 errors. Watching for file changes.
+[0] 
+[0] (node:8836) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+[0] (Use `node --trace-deprecation ...` to show where the warning was created)
+[1]  ○ Compiling /admin ...
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM    WARN [EnvValidation] Development environment is missing: QR_JWT_SECRET (using JWT_SECRET/dev-secret fallback), API_KEY_PEPPER (using local-development-api-key-pepper), API_SECRET_ENCRYPTION_KEY (using SHA-256 derived from JWT_SECRET), PAYMENT_LINK_SECRET (using payment-link-dev-secret), PAYOS_WEBHOOK_SECRET (using payos-demo-dev-secret)
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM     LOG [NestFactory] Starting Nest application... +520ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM    WARN [AuthService] Legacy rollover dates are not absolute; configure *_UNTIL to avoid reset on redeploy.
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM     LOG [InstanceLoader] ThrottlerModule dependencies initialized +36ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM     LOG [InstanceLoader] ConfigHostModule dependencies initialized +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM     LOG [InstanceLoader] ConfigModule dependencies initialized +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:10 AM     LOG [InstanceLoader] AppModule dependencies initialized +3ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [WebSocketsController] RealtimeGateway subscribed to the "join" message +122ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] ProductsController {/products}: +7ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/products, GET} route +3ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/products/:id/buy, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] RentalsController {/rentals}: +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/rentals, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/rentals/:id, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/rentals, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/rentals/:id/return, PATCH} route +2ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] ApiRentalsController {/api-rentals}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api-rentals, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api-rentals, POST} route +14ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api-rentals/api-keys/:id/scopes, PATCH} route +2ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] ShowsController {/}: +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/shows, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/shows/:id/end, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/e/:slug, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/e/:slug/buy, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] TicketsController {/api/v1/tickets}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/tickets/verify, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/tickets/:id/revoke, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] QrCodesController {/api/v1/qr-codes}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes, POST} route +6ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/bulk, POST} route +3ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/:id, GET} route +2ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/:id/revoke, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/:id/svg, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] DashboardController {/dashboard}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/dashboard, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] WebhooksController {/webhooks}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/webhooks/payos-demo, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/webhooks/momo, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] AuthController {/auth}: +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/register, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/login, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/me, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/locations/provinces, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/locations/districts, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/locations/wards, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/profile, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/auth/logout, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] AdminController {/admin}: +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/summary, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/users, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/users, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/users/:id, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/users/:id, DELETE} route +4ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/products, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/products/:id, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/categories, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/categories, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/categories/:id, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/categories/:id, DELETE} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/components/inventory, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/components/:id/stock, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/components/:id/compatibility, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/components/:id/compatibility, PUT} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/rental/units, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/rental/units/:id/status, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/rentals, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/rentals/:id, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/rentals/:id/workflow, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/products, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/products/:id, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/products/:id, DELETE} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/orders, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/orders/:id/status, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/shows, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/status, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/scan-key, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/scan-key/rotate, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/installation, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/tickets, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/api-keys, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/activity-logs, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/api-keys, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/static-pages, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/admin/static-pages/:slug, PATCH} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] CmsController {/cms}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/cms/pages, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/cms/pages/:slug, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] DeveloperController {/api/v1/developer}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/overview, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id, PATCH} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/rotate, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/revoke, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/suspend, POST} route +2ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/resume, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/test-key, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/keys, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/settings, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/secrets, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/secrets/reveal, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/plan, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/analytics, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/audit, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/audit/export, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/security-events, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/webhooks, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/webhooks/:id/retry, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] GatesController {/api/v1/gates}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/public-key, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/tenant-settings/enable-offline, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/tenant-settings, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/session-public-key, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/revoked-delta, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/usage-events, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/conflicts, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] StatusController {/api/v1/status}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/status, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] AccountSettingsController {/api/v1/account}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/settings, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/avatar, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts, POST} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id, PATCH} route +4ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id/default, POST} route +3ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id/reveal, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id, DELETE} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] PaymentsController {/api/v1/payments}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/payments, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] DeveloperPaymentsController {/api/v1/developer/payments}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/payments, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] AdminSettingsPaymentsController {/api/v1/admin}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/settings, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/settings, PATCH} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/users, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/payout-accounts/:id/reveal, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/incidents, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/incidents, POST} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/incidents/:id, PATCH} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/payments, GET} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/payments/:id/status, PATCH} route +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RoutesResolver] SecurityController {/api}: +0ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [RouterExplorer] Mapped {/api/csrf-token, GET} route +1ms
+[0] [Nest] 17168  - 10/07/2026, 12:42:11 AM     LOG [NestApplication] Nest application successfully started +818ms
+[1]  ✓ Compiled /admin in 18.9s (574 modules)
+[1]  GET /admin 200 in 400ms
+[1]  ○ Compiling /admin/products ...
+[1]  ✓ Compiled /admin/products in 1189ms (582 modules)
+[0] Unhandled API exception PrismaClientKnownRequestError: 
+[0] Invalid `this.prisma.product.findUnique()` invocation in
+[0] C:\HeThongQRthongminh\apps\api\dist\modules\admin.controller.js:259:51
+[0] 
+[0]   256 }
+[0]   257 async deleteProduct(id, authorization) {
+[0]   258     await this.assertAdmin(authorization);
+[0] → 259     const product = await this.prisma.product.findUnique(
+[0] The column `rentals.productId` does not exist in the current database.
+[0]     at $n.handleRequestError (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:7315)
+[0]     at $n.handleAndLogRequestError (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:6623)
+[0]     at $n.request (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:6307)
+[0]     at async l (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:130:9633)
+[0]     at async AdminController.deleteProduct (C:\HeThongQRthongminh\apps\api\dist\modules\admin.controller.js:259:25)
+[0]     at async C:\HeThongQRthongminh\node_modules\@nestjs\core\router\router-execution-context.js:46:28
+[0]     at async C:\HeThongQRthongminh\node_modules\@nestjs\core\router\router-proxy.js:9:17 {
+[0]   code: 'P2022',
+[0]   clientVersion: '5.22.0',
+[0]   meta: { modelName: 'Product', column: 'rentals.productId' }
+[0] }
+[0] [2J[3J[H[[90m12:45:46 AM[0m] File change detected. Starting incremental compilation...
+[0] 
+[0] [[90m12:45:50 AM[0m] Found 0 errors. Watching for file changes.
+[0] 
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM    WARN [EnvValidation] Development environment is missing: QR_JWT_SECRET (using JWT_SECRET/dev-secret fallback), API_KEY_PEPPER (using local-development-api-key-pepper), API_SECRET_ENCRYPTION_KEY (using SHA-256 derived from JWT_SECRET), PAYMENT_LINK_SECRET (using payment-link-dev-secret), PAYOS_WEBHOOK_SECRET (using payos-demo-dev-secret)
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [NestFactory] Starting Nest application... +305ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM    WARN [AuthService] Legacy rollover dates are not absolute; configure *_UNTIL to avoid reset on redeploy.
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [InstanceLoader] ThrottlerModule dependencies initialized +13ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [InstanceLoader] ConfigHostModule dependencies initialized +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [InstanceLoader] AppModule dependencies initialized +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [WebSocketsController] RealtimeGateway subscribed to the "join" message +41ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] ProductsController {/products}: +3ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/products, GET} route +3ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/products/:id/buy, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] RentalsController {/rentals}: +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/rentals, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/rentals/:id, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/rentals, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/rentals/:id/return, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] ApiRentalsController {/api-rentals}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api-rentals, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api-rentals, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api-rentals/api-keys/:id/scopes, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] ShowsController {/}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/shows, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/shows/:id/end, PATCH} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/e/:slug, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/e/:slug/buy, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] TicketsController {/api/v1/tickets}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/tickets/verify, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/tickets/:id/revoke, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] QrCodesController {/api/v1/qr-codes}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/bulk, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/:id, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/:id/revoke, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/qr-codes/:id/svg, GET} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] DashboardController {/dashboard}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/dashboard, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] WebhooksController {/webhooks}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/webhooks/payos-demo, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/webhooks/momo, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] AuthController {/auth}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/register, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/login, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/me, GET} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/locations/provinces, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/locations/districts, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/locations/wards, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/profile, PATCH} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/auth/logout, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] AdminController {/admin}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/summary, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/users, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/users, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/users/:id, PATCH} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/users/:id, DELETE} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/products, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/products/:id, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/categories, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/categories, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/categories/:id, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/categories/:id, DELETE} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/components/inventory, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/components/:id/stock, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/components/:id/compatibility, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/components/:id/compatibility, PUT} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/rental/units, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/rental/units/:id/status, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/rentals, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/rentals/:id, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/rentals/:id/workflow, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/products, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/products/:id, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/products/:id, DELETE} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/orders, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/orders/:id/status, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/shows, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/status, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/scan-key, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/scan-key/rotate, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/shows/:id/installation, PATCH} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/tickets, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/api-keys, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/activity-logs, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/api-keys, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/static-pages, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/admin/static-pages/:slug, PATCH} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] CmsController {/cms}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/cms/pages, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/cms/pages/:slug, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] DeveloperController {/api/v1/developer}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/overview, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/rotate, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/revoke, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/suspend, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/keys/:id/resume, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/test-key, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/keys, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/settings, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/secrets, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/secrets/reveal, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/rentals/:id/plan, PATCH} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/analytics, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/audit, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/audit/export, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/security-events, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/webhooks, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/webhooks/:id/retry, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] GatesController {/api/v1/gates}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/public-key, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/tenant-settings/enable-offline, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/tenant-settings, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/session-public-key, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/revoked-delta, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/usage-events, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/gates/conflicts, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] StatusController {/api/v1/status}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/status, GET} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] AccountSettingsController {/api/v1/account}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/settings, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/avatar, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id/default, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id/reveal, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/account/payout-accounts/:id, DELETE} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] PaymentsController {/api/v1/payments}: +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/payments, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] DeveloperPaymentsController {/api/v1/developer/payments}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/developer/payments, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] AdminSettingsPaymentsController {/api/v1/admin}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/settings, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/settings, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/users, GET} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/payout-accounts/:id/reveal, POST} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/incidents, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/incidents, POST} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/incidents/:id, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/payments, GET} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/v1/admin/payments/:id/status, PATCH} route +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RoutesResolver] SecurityController {/api}: +0ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [RouterExplorer] Mapped {/api/csrf-token, GET} route +1ms
+[0] [Nest] 32452  - 10/07/2026, 12:46:00 AM     LOG [NestApplication] Nest application successfully started +70ms
+[1]  GET /admin/products 200 in 282ms
+[0] Unhandled API exception PrismaClientKnownRequestError: 
+[0] Invalid `this.prisma.product.findUnique()` invocation in
+[0] C:\HeThongQRthongminh\apps\api\dist\modules\admin.controller.js:259:51
+[0] 
+[0]   256 }
+[0]   257 async deleteProduct(id, authorization) {
+[0]   258     await this.assertAdmin(authorization);
+[0] → 259     const product = await this.prisma.product.findUnique(
+[0] The column `rentals.productId` does not exist in the current database.
+[0]     at $n.handleRequestError (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:7315)
+[0]     at $n.handleAndLogRequestError (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:6623)
+[0]     at $n.request (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:6307)
+[0]     at async l (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:130:9633)
+[0]     at async AdminController.deleteProduct (C:\HeThongQRthongminh\apps\api\dist\modules\admin.controller.js:259:25)
+[0]     at async C:\HeThongQRthongminh\node_modules\@nestjs\core\router\router-execution-context.js:46:28
+[0]     at async C:\HeThongQRthongminh\node_modules\@nestjs\core\router\router-proxy.js:9:17 {
+[0]   code: 'P2022',
+[0]   clientVersion: '5.22.0',
+[0]   meta: { modelName: 'Product', column: 'rentals.productId' }
+[0] }
+[0] Unhandled API exception PrismaClientKnownRequestError: 
+[0] Invalid `this.prisma.product.findUnique()` invocation in
+[0] C:\HeThongQRthongminh\apps\api\dist\modules\admin.controller.js:259:51
+[0] 
+[0]   256 }
+[0]   257 async deleteProduct(id, authorization) {
+[0]   258     await this.assertAdmin(authorization);
+[0] → 259     const product = await this.prisma.product.findUnique(
+[0] The column `rentals.productId` does not exist in the current database.
+[0]     at $n.handleRequestError (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:7315)
+[0]     at $n.handleAndLogRequestError (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:6623)
+[0]     at $n.request (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:121:6307)
+[0]     at async l (C:\HeThongQRthongminh\node_modules\@prisma\client\runtime\library.js:130:9633)
+[0]     at async AdminController.deleteProduct (C:\HeThongQRthongminh\apps\api\dist\modules\admin.controller.js:259:25)
+[0]     at async C:\HeThongQRthongminh\node_modules\@nestjs\core\router\router-execution-context.js:46:28
+[0]     at async C:\HeThongQRthongminh\node_modules\@nestjs\core\router\router-proxy.js:9:17 {
+[0]   code: 'P2022',
+[0]   clientVersion: '5.22.0',
+[0]   meta: { modelName: 'Product', column: 'rentals.productId' }
+[0] }

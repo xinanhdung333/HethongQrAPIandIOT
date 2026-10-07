@@ -2,15 +2,26 @@ import Link from "next/link";
 import { ArrowRight, KeyRound, Radio, ScanLine, Store } from "lucide-react";
 import { QrHeroShowcase } from "@/components/qr-hero-showcase";
 import { Reveal } from "@/components/reveal";
-import { api, money, Product } from "@/lib/api";
+import { api, money, Product, StaticPage } from "@/lib/api";
+import nextDynamic from "next/dynamic";
+
+const CmsThreeMenu = nextDynamic(() => import("@/components/cms-three-menu").then(mod => mod.CmsThreeMenu), { ssr: false });
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const products = await api<Product[]>("/products").catch(() => []);
+  const pages = await api<StaticPage[]>("/cms/pages").catch(() => []);
+  
   return (
     <main>
       <QrHeroShowcase />
+      
+      {pages && pages.length > 0 && (
+        <section className="shell">
+          <CmsThreeMenu pages={pages} />
+        </section>
+      )}
 
       <section className="shell py-24 md:py-32">
         <Reveal>

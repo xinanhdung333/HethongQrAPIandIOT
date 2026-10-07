@@ -31,7 +31,7 @@ export default function TicketsPage() {
 
   useEffect(() => {
     setError("");
-    void api<DashboardData>("/dashboard", { cache: "no-store" })
+      void api<DashboardData>("/dashboard?view=tickets", { cache: "no-store" })
       .then((result) => setData({
         ...result,
         purchasedTicketOrders: result.purchasedTicketOrders ?? []

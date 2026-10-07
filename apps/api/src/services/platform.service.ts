@@ -22,6 +22,7 @@ const API_PLAN_PRICES = { starter: 199000, business: 499000 };
 const API_PLAN_QUOTAS = { starter: 5000, business: 30000 };
 const API_PUBLIC_URL = process.env.API_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
 const GATE_USED_TTL_SECONDS = 60 * 60 * 24 * 400;
+const TICKET_RESERVATION_MINUTES = 10;
 
 @Injectable()
 export class PlatformService {
@@ -41,28 +42,40 @@ export class PlatformService {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) throw new BadRequestException("Email da ton tai");
     const user = await this.prisma.user.create({
-      data: { email: dto.email, passwordHash: await this.auth.hashPassword(dto.password), role: UserRole.CUSTOMER }
+      data: { email: dto.email, passwordHash: await this.auth.hashPassword(dto.password), role: UserRole.CUSTOMER },
+      select: { id: true, email: true, role: true }
     });
     const token = await this.auth.signJwt({ sub: user.id, email: user.email, role: user.role }, 60 * 60 * 24);
-    return { user: this.publicUser(user), access_token: token };
+    return { user: this.authUser(user), access_token: token };
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email }, select: { id: true, email: true, role: true, passwordHash: true } });
     if (!user || !(await this.auth.comparePassword(dto.password, user.passwordHash))) {
       throw new UnauthorizedException("Email hoac mat khau khong dung");
     }
     const token = await this.auth.signJwt({ sub: user.id, email: user.email, role: user.role }, 60 * 60 * 24);
-    return { user: this.publicUser(user), access_token: token };
+    return { user: this.authUser(user), access_token: token };
   }
 
   async me(token: string) {
     const decoded = await this.auth.verifyJwt<{ sub: string; email: string; role: string; jti: string }>(token);
-    return { user: { id: decoded.sub, email: decoded.email, role: decoded.role } };
+    const user = await this.prisma.user.findUnique({
+      where: { id: decoded.sub },
+      select: { id: true, email: true, role: true, fullName: true, phone: true, addressLine: true, provinceName: true, provinceCode: true, districtName: true, districtCode: true, wardName: true, wardCode: true }
+    });
+    if (!user) throw new UnauthorizedException("Tai khoan khong con ton tai");
+    return { user: this.profileUser(user) };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    if (!dto.email && !dto.password) throw new BadRequestException("No profile changes provided");
+    const profileFields: Array<keyof UpdateProfileDto> = [
+      "email", "password", "fullName", "phone", "addressLine", "provinceName", "provinceCode",
+      "districtName", "districtCode", "wardName", "wardCode"
+    ];
+    if (!profileFields.some((field) => dto[field] !== undefined)) {
+      throw new BadRequestException("No profile changes provided");
+    }
     const data: Prisma.UserUpdateInput = {};
     if (dto.email) {
       const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
@@ -70,9 +83,19 @@ export class PlatformService {
       data.email = dto.email;
     }
     if (dto.password) data.passwordHash = await this.auth.hashPassword(dto.password);
-    const user = await this.prisma.user.update({ where: { id: userId }, data });
+    const addressFields = [
+      "fullName", "phone", "addressLine", "provinceName", "provinceCode",
+      "districtName", "districtCode", "wardName", "wardCode"
+    ] as const;
+    for (const field of addressFields) {
+      if (dto[field] !== undefined) data[field] = dto[field]?.trim() || null;
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId }, data,
+      select: { id: true, email: true, role: true, fullName: true, phone: true, addressLine: true, provinceName: true, provinceCode: true, districtName: true, districtCode: true, wardName: true, wardCode: true }
+    });
     const token = await this.auth.signJwt({ sub: user.id, email: user.email, role: user.role }, 60 * 60 * 24);
-    return { user: this.publicUser(user), access_token: token };
+    return { user: this.profileUser(user), access_token: token };
   }
 
   async logout(token: string) {
@@ -88,66 +111,56 @@ export class PlatformService {
   }
 
   async buyProduct(productId: string, dto: BuyProductDto, userId: string) {
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
-    if (!product) throw new NotFoundException("Product not found");
-    if (product.stock < dto.quantity) throw new BadRequestException("Khong du ton kho");
-    const total = product.priceSell * dto.quantity;
-    const order = await this.prisma.rentalOrder.create({
-      data: {
-        userId,
-        productId: product.id,
-        type: OrderType.BUY,
-        duration: 0,
-        quantity: dto.quantity,
-        rentFee: 0,
-        depositFee: 0,
-        installFee: 0,
-        total,
-        status: RentalStatus.PENDING,
-        shippingAddress: dto.shipping_address as Prisma.InputJsonValue,
-        gateIds: []
-      }
+    const result = await this.prisma.$transaction(async tx => {
+      const product = await tx.product.findUnique({ where: { id: productId } });
+      if (!product) throw new NotFoundException("Product not found");
+      const reserved = await tx.product.updateMany({ where: { id: productId, stock: { gte: dto.quantity } }, data: { stock: { decrement: dto.quantity } } });
+      if (!reserved.count) throw new BadRequestException("Khong du ton kho");
+      const total = product.priceSell * dto.quantity;
+      const order = await tx.rentalOrder.create({
+        data: { userId, productId, type: OrderType.BUY, duration: 0, quantity: dto.quantity, rentFee: 0, depositFee: 0, installFee: 0, total, status: RentalStatus.PENDING, shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [] }
+      });
+      return { order, total };
     });
-    await this.prisma.product.update({ where: { id: product.id }, data: { stock: product.stock - dto.quantity } });
-    const payment = this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "rental" });
-    setTimeout(() => void this.markRentalPaid(order.id), 5000);
+    const { order, total } = result;
+    const paymentMethod = dto.payment_method ?? "payos_demo";
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "rental", method: paymentMethod });
+    if (paymentMethod === "payos_demo") setTimeout(() => void this.markRentalPaid(order.id), 5000);
     await this.redis.del("cache:products");
     return { order_id: order.id, payment_demo_url: payment.paymentUrl, total };
   }
 
   async createRental(dto: RentalDto, userId: string) {
     if (!dto.agree_damage_terms) throw new BadRequestException("Must agree to damage terms");
-    const product = await this.prisma.product.findUnique({ where: { id: dto.product_id } });
-    if (!product) throw new NotFoundException("Product not found");
-
     const isRent = dto.type === "rent";
-    if (isRent && product.priceRentMonth <= 0) throw new BadRequestException("Product is not available for rent");
+    const startDate = isRent ? new Date(`${dto.start_date ?? ""}T00:00:00.000Z`) : null;
+    if (isRent && (!dto.start_date || !startDate || Number.isNaN(startDate.getTime()) || startDate <= new Date())) {
+      throw new BadRequestException("Ngày bắt đầu thuê phải là ngày trong tương lai");
+    }
     if (isRent && ![1, 3, 12].includes(dto.duration)) throw new BadRequestException("Duration must be 1, 3, or 12 months");
-    if (product.stock < dto.quantity) throw new BadRequestException("Khong du ton kho");
-    const rentFee = isRent ? product.priceRentMonth * dto.duration * dto.quantity : 0;
-    const depositFee = isRent ? product.depositFee * dto.quantity : 0;
-    const sellFee = isRent ? 0 : product.priceSell * dto.quantity;
-    const total = rentFee + depositFee + (isRent ? INSTALL_FEE : 0) + sellFee;
-    const order = await this.prisma.rentalOrder.create({
-      data: {
-        userId,
-        productId: product.id,
-        type: isRent ? OrderType.RENT : OrderType.BUY,
-        duration: dto.duration,
-        quantity: dto.quantity,
-        rentFee,
-        depositFee,
-        installFee: isRent ? INSTALL_FEE : 0,
-        total,
-        shippingAddress: dto.shipping_address as Prisma.InputJsonValue,
-        gateIds: [],
-        status: RentalStatus.PENDING
-      }
+    const depositPercent = Math.min(100, Math.max(1, Number(process.env.RENTAL_DEPOSIT_PERCENT ?? 10)));
+    const result = await this.prisma.$transaction(async tx => {
+      const product = await tx.product.findUnique({ where: { id: dto.product_id } });
+      if (!product) throw new NotFoundException("Product not found");
+      if (isRent && product.priceRentMonth <= 0) throw new BadRequestException("Product is not available for rent");
+      const reserved = await tx.product.updateMany({ where: { id: dto.product_id, stock: { gte: dto.quantity } }, data: { stock: { decrement: dto.quantity } } });
+      if (!reserved.count) throw new BadRequestException("Khong du ton kho");
+      const rentFee = isRent ? product.priceRentMonth * dto.duration * dto.quantity : 0;
+      const depositFee = isRent ? product.depositFee * dto.quantity : 0;
+      const sellFee = isRent ? 0 : product.priceSell * dto.quantity;
+      const total = rentFee + depositFee + (isRent ? INSTALL_FEE : 0) + sellFee;
+      const depositAmount = isRent ? product.depositFee * dto.quantity : 0;
+      const paymentDueAt = startDate ? new Date(startDate.getTime() - 24 * 60 * 60 * 1000) : null;
+      const order = await tx.rentalOrder.create({
+        data: { userId, productId: product.id, type: isRent ? OrderType.RENT : OrderType.BUY, duration: dto.duration, quantity: dto.quantity, rentFee, depositFee, installFee: isRent ? INSTALL_FEE : 0, total, startDate, paymentDueAt, depositAmount, depositPercent, shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [], status: RentalStatus.PENDING }
+      });
+      return { order, rentFee, depositFee, sellFee, total, depositAmount, paymentDueAt };
     });
-    await this.prisma.product.update({ where: { id: product.id }, data: { stock: product.stock - dto.quantity } });
+    const { order, rentFee, depositFee, sellFee, total, depositAmount, paymentDueAt } = result;
     await this.redis.del("cache:products");
-    const payment = this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "rental" });
-    setTimeout(() => void this.markRentalPaid(order.id), 5000);
+    const paymentMethod = dto.payment_method ?? "payos_demo";
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: isRent ? depositAmount : total, kind: "rental", method: paymentMethod });
+    if (paymentMethod === "payos_demo") setTimeout(() => void this.markRentalPaid(order.id), 5000);
     return {
       order_id: order.id,
       payment_demo_url: payment.paymentUrl,
@@ -156,7 +169,11 @@ export class PlatformService {
         deposit_fee: depositFee,
         install_fee: isRent ? INSTALL_FEE : 0,
         sell_fee: sellFee,
-        total
+        total,
+        deposit_amount: depositAmount,
+        deposit_percent: depositPercent,
+        payment_due_at: paymentDueAt?.toISOString() ?? null,
+        start_date: startDate?.toISOString() ?? null
       }
     };
   }
@@ -176,6 +193,17 @@ export class PlatformService {
     });
     if (!order) throw new NotFoundException("Rental not found");
     return order;
+  }
+
+  async createRemainingRentalPayment(id: string, userId: string) {
+    const order = await this.prisma.rentalOrder.findFirst({ where: { id, userId } });
+    if (!order) throw new NotFoundException("Rental not found");
+    if (order.type !== OrderType.RENT) throw new ForbiddenException("Only rental orders can pay remaining balance");
+    const remaining = Math.max(0, order.total - order.depositAmount);
+    if (!remaining) throw new BadRequestException("Rental has no remaining balance");
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method: "payos_demo" });
+    if (payment) setTimeout(() => void this.markRentalPaid(order.id), 5000);
+    return { order_id: order.id, payment_demo_url: payment.paymentUrl, remaining_amount: remaining };
   }
 
   async createShow(dto: ShowDto, userId: string) {
@@ -212,16 +240,20 @@ export class PlatformService {
   async endShow(id: string, userId: string) {
     const result = await this.prisma.show.updateMany({ where: { id, ownerId: userId }, data: { status: "ENDED" } });
     if (!result.count) throw new NotFoundException("Show not found");
-    return this.prisma.show.findUnique({ where: { id } });
+    return this.prisma.show.findUnique({
+      where: { id },
+      select: { id: true, slug: true, name: true, status: true, soldTickets: true, totalTickets: true, startAt: true, endAt: true }
+    });
   }
 
   async createShowScanKey(showId: string, userId: string) {
-    const issued = await this.keys.issueKey({
+    const issued = await this.prisma.$transaction(tx => this.keys.issueKey({
       userId,
       showId,
       scopes: ["ticket:verify"],
-      source: "self"
-    });
+      source: "self",
+      tx
+    }));
     return { api_key_once: issued.api_key_once, show_id: showId, key_prefix: issued.key.prefix };
   }
 
@@ -244,53 +276,99 @@ export class PlatformService {
     const cacheKey = `cache:show:${slug}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
-    const show = await this.prisma.show.findUnique({ where: { slug } });
+    const show = await this.prisma.show.findUnique({
+      where: { slug },
+      select: {
+        id: true, slug: true, name: true, description: true, bannerUrl: true, themeColor: true,
+        location: true, startAt: true, endAt: true, ticketPrice: true, totalTickets: true,
+        soldTickets: true, status: true
+      }
+    });
     if (!show) throw new NotFoundException("Show not found");
     await this.redis.set(cacheKey, JSON.stringify(show), 60 * 2);
     return show;
   }
 
-  async buyTickets(slug: string, buyer: { buyer_name: string; buyer_email: string; buyer_phone: string; buyer_note?: string; quantity: number }) {
-    const show = await this.prisma.show.findUnique({ where: { slug } });
-    if (!show) throw new NotFoundException("Show not found");
-    if (show.soldTickets + buyer.quantity > show.totalTickets) throw new BadRequestException("Sold out");
-    const totalAmount = show.ticketPrice * buyer.quantity;
-    const platformFee = Math.round(totalAmount * PLATFORM_FEE_RATE);
-    const order = await this.prisma.ticketOrder.create({
-      data: {
-        showId: show.id,
-        buyerName: buyer.buyer_name,
-        buyerEmail: buyer.buyer_email,
-        buyerPhone: buyer.buyer_phone,
-        buyerNote: buyer.buyer_note?.trim() || null,
-        quantity: buyer.quantity,
-        totalAmount,
-        platformFee,
-        payoutAmount: totalAmount - platformFee
+  async buyTickets(slug: string, buyer: { buyer_name: string; buyer_email: string; buyer_phone: string; buyer_note?: string; quantity: number; payment_method?: "payos_demo" | "momo" }) {
+    if (!Number.isInteger(buyer.quantity) || buyer.quantity < 1) throw new BadRequestException("Quantity must be at least 1");
+    const reservation = await this.withTicketReservationLock(slug, () => this.prisma.$transaction(async tx => {
+      const show = await tx.show.findUnique({ where: { slug } });
+      if (!show) throw new NotFoundException("Show not found");
+      await tx.$queryRaw`SELECT id FROM "shows" WHERE id = ${show.id} FOR UPDATE`;
+      const now = new Date();
+      const expiredOrders = await tx.ticketOrder.findMany({ where: { showId: show.id, status: TicketOrderStatus.PENDING, reservationExpiresAt: { lte: now } }, select: { id: true, quantity: true } });
+      let released = 0;
+      for (const expired of expiredOrders) {
+        const expiredResult = await tx.ticketOrder.updateMany({ where: { id: expired.id, status: TicketOrderStatus.PENDING }, data: { status: TicketOrderStatus.EXPIRED } });
+        if (expiredResult.count) released += expired.quantity;
       }
-    });
-    const payment = this.payos.createPaymentLink({ orderId: order.id, amount: totalAmount, kind: "ticket" });
-    await this.prisma.ticketOrder.update({ where: { id: order.id }, data: { payosPaymentId: payment.paymentId } });
-    setTimeout(() => void this.markTicketOrderPaid(order.id), 5000);
+      if (released) await tx.show.update({ where: { id: show.id }, data: { reservedTickets: { decrement: released } } });
+      const available = show.totalTickets - show.soldTickets - show.reservedTickets + released;
+      if (available < buyer.quantity) throw new BadRequestException("Sold out");
+      const reservationExpiresAt = new Date(now.getTime() + TICKET_RESERVATION_MINUTES * 60 * 1000);
+      const totalAmount = show.ticketPrice * buyer.quantity;
+      const platformFee = Math.round(totalAmount * PLATFORM_FEE_RATE);
+      await tx.show.update({ where: { id: show.id }, data: { reservedTickets: { increment: buyer.quantity } } });
+      const order = await tx.ticketOrder.create({
+        data: { showId: show.id, buyerName: buyer.buyer_name, buyerEmail: buyer.buyer_email, buyerPhone: buyer.buyer_phone, buyerNote: buyer.buyer_note?.trim() || null, quantity: buyer.quantity, totalAmount, platformFee, payoutAmount: totalAmount - platformFee, reservationExpiresAt }
+      });
+      return { order, totalAmount };
+    }));
+    let payment;
+    try {
+      payment = await this.payos.createPaymentLink({ orderId: reservation.order.id, amount: reservation.totalAmount, kind: "ticket", method: buyer.payment_method ?? "payos_demo" });
+      await this.prisma.ticketOrder.update({ where: { id: reservation.order.id }, data: { payosPaymentId: payment.paymentId } });
+    } catch (error) {
+      await this.releaseTicketReservation(reservation.order.id);
+      throw error;
+    }
+    const order = reservation.order;
+    if ((buyer.payment_method ?? "payos_demo") === "payos_demo") setTimeout(() => void this.markTicketOrderPaid(order.id), 5000);
     return { payment_url: payment.paymentUrl, order_id: order.id };
+  }
+
+  private async releaseTicketReservation(orderId: string) {
+    await this.prisma.$transaction(async tx => {
+      const order = await tx.ticketOrder.findUnique({ where: { id: orderId }, select: { showId: true, quantity: true, status: true } });
+      if (!order || order.status !== TicketOrderStatus.PENDING) return;
+      await tx.$queryRaw`SELECT id FROM "shows" WHERE id = ${order.showId} FOR UPDATE`;
+      const released = await tx.ticketOrder.updateMany({ where: { id: orderId, status: TicketOrderStatus.PENDING }, data: { status: TicketOrderStatus.EXPIRED } });
+      if (released.count) await tx.show.update({ where: { id: order.showId }, data: { reservedTickets: { decrement: order.quantity } } });
+    });
+  }
+
+  private async withTicketReservationLock<T>(showKey: string, work: () => Promise<T>): Promise<T> {
+    const key = `ticket:reservation:lock:${showKey}`;
+    const token = crypto.randomUUID();
+    const lockTtlSeconds = 5;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (await this.redis.setIfAbsent(key, token, lockTtlSeconds)) {
+        try {
+          return await work();
+        } finally {
+          await this.redis.releaseIfValue(key, token);
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    // DB row locking remains the final safety net if Redis is unavailable or saturated.
+    return work();
   }
 
   async markRentalPaid(orderId: string) {
     const order = await this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
     if (!order || order.status !== RentalStatus.PENDING) return order;
-    if (order.type === OrderType.BUY) {
-      const paid = await this.prisma.rentalOrder.update({ where: { id: orderId }, data: { status: RentalStatus.PAID } });
-      this.realtime.emitTicketVerified(order.userId, { type: "product:paid", order_id: orderId });
-      return paid;
-    }
-    const paid = await this.prisma.rentalOrder.update({
-      where: { id: orderId },
+    const nextStatus = order.type === OrderType.BUY ? RentalStatus.PAID : (order.startDate && order.startDate > new Date() ? RentalStatus.DEPOSIT_PAID : RentalStatus.ACTIVE);
+    const claimed = await this.prisma.rentalOrder.updateMany({
+      where: { id: orderId, status: RentalStatus.PENDING },
       data: {
-        status: RentalStatus.ACTIVE,
-        gateIds: Array.from({ length: order.quantity }, (_, index) => `gate-${order.id.slice(0, 5)}-${index + 1}`)
+        status: nextStatus,
+        ...(order.type === OrderType.RENT ? { gateIds: Array.from({ length: order.quantity }, (_, index) => `gate-${order.id.slice(0, 5)}-${index + 1}`) } : {})
       }
     });
-    this.realtime.emitTicketVerified(order.userId, { type: "rental:active", order_id: orderId });
+    if (!claimed.count) return this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
+    const paid = await this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
+    this.realtime.emitTicketVerified(order.userId, { type: order.type === OrderType.BUY ? "product:paid" : "rental:active", order_id: orderId });
     return paid;
   }
 
@@ -325,7 +403,7 @@ export class PlatformService {
         total
       }
     });
-    const payment = this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "api" });
+    const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "api", method: dto.payment_method ?? "payos_demo" });
     await this.prisma.apiRentalOrder.update({ where: { id: order.id }, data: { payosPaymentId: payment.paymentId } });
     return {
       payment_url: payment.paymentUrl,
@@ -338,10 +416,9 @@ export class PlatformService {
     const order = await this.prisma.apiRentalOrder.findUnique({ where: { id: orderId } });
     if (!order || order.status !== RentalStatus.PENDING) return order;
     const result = await this.prisma.$transaction(async tx => {
-      const paid = await tx.apiRentalOrder.update({
-        where: { id: orderId },
-        data: { status: RentalStatus.ACTIVE }
-      });
+      const claimed = await tx.apiRentalOrder.updateMany({ where: { id: orderId, status: RentalStatus.PENDING }, data: { status: RentalStatus.ACTIVE } });
+      if (!claimed.count) return { claimed: false, paid: await tx.apiRentalOrder.findUnique({ where: { id: orderId } }), issued: null };
+      const paid = await tx.apiRentalOrder.findUniqueOrThrow({ where: { id: orderId } });
       const issued = await this.keys.issueKey({
         userId: order.userId,
         rentalId: order.id,
@@ -350,8 +427,9 @@ export class PlatformService {
         source: "self",
         tx
       });
-      return { paid, issued };
+      return { claimed: true, paid, issued };
     });
+    if (!result.claimed || !result.issued) return result.paid;
     this.realtime.emitTicketVerified(order.userId, { type: "api_rental:active", order_id: orderId, api_key_prefix: result.issued.key.prefix });
     return { ...result.paid, apiKeyPrefix: result.issued.key.prefix, api_key_once: result.issued.api_key_once };
   }
@@ -438,10 +516,9 @@ export class PlatformService {
   async markTicketOrderPaid(orderId: string) {
     const order = await this.prisma.ticketOrder.findUnique({ where: { id: orderId }, include: { show: true, tickets: true } });
     if (!order || order.status === TicketOrderStatus.PAID) return order;
-    const updated = await this.prisma.ticketOrder.update({ where: { id: orderId }, data: { status: TicketOrderStatus.PAID } });
-    const tickets = [];
     const tenantId = order.show.ownerId;
     const offlineCapable = await isOfflineCapable(this.prisma, tenantId);
+    const preparedTickets: Array<{ showId: string; ticketOrderId: string; jti: string; qrJwt: string; qrOfflineJwt: string | null }> = [];
     for (let i = 0; i < order.quantity; i += 1) {
       const jti = crypto.randomBytes(18).toString("hex");
       const showEndAt = order.show.endAt ?? order.show.startAt;
@@ -460,16 +537,35 @@ export class PlatformService {
           type: "ticket_offline"
         }, tenantId)
         : null;
-      tickets.push(await this.prisma.ticket.create({ data: { showId: order.showId, ticketOrderId: order.id, jti, qrJwt, qrOfflineJwt } }));
+      preparedTickets.push({ showId: order.showId, ticketOrderId: order.id, jti, qrJwt, qrOfflineJwt });
     }
-    const soldTickets = order.show.soldTickets + order.quantity;
-    await this.prisma.show.update({ where: { id: order.showId }, data: { soldTickets } });
-    await this.prisma.payout.create({
-      data: { showOwnerId: order.show.ownerId, ticketOrderId: order.id, amount: order.payoutAmount }
+    const result = await this.prisma.$transaction(async tx => {
+      // Claim the order atomically so duplicate payment webhooks cannot issue tickets twice.
+      const claimed = await tx.ticketOrder.updateMany({
+        where: { id: orderId, status: TicketOrderStatus.PENDING, OR: [{ reservationExpiresAt: null }, { reservationExpiresAt: { gt: new Date() } }] },
+        data: { status: TicketOrderStatus.PAID }
+      });
+      if (!claimed.count) {
+        const expired = await tx.ticketOrder.updateMany({ where: { id: orderId, status: TicketOrderStatus.PENDING, reservationExpiresAt: { lte: new Date() } }, data: { status: TicketOrderStatus.EXPIRED } });
+        if (expired.count) await tx.show.update({ where: { id: order.showId }, data: { reservedTickets: { decrement: order.quantity } } });
+        return { claimed: false, order: await tx.ticketOrder.findUnique({ where: { id: orderId }, include: { show: true, tickets: true } }) };
+      }
+      await tx.ticket.createMany({ data: preparedTickets });
+      const inventory = await tx.show.updateMany({ where: { id: order.showId, reservedTickets: { gte: order.quantity } }, data: { reservedTickets: { decrement: order.quantity }, soldTickets: { increment: order.quantity } } });
+      if (!inventory.count) throw new BadRequestException("Ticket reservation is no longer available");
+      const show = await tx.show.findUniqueOrThrow({ where: { id: order.showId }, select: { soldTickets: true } });
+      await tx.payout.create({ data: { showOwnerId: order.show.ownerId, ticketOrderId: order.id, amount: order.payoutAmount } });
+      return {
+        claimed: true,
+        soldTickets: show.soldTickets,
+        order: await tx.ticketOrder.findUnique({ where: { id: orderId }, include: { show: true, tickets: true } })
+      };
     });
+    if (!result.order) return null;
+    if (!result.claimed) return result.order;
     await this.redis.del(`cache:show:${order.show.slug}`);
-    this.realtime.emitTicketSold(order.showId, { order_id: orderId, quantity: order.quantity, sold_tickets: soldTickets, payout_amount: order.payoutAmount });
-    return { ...updated, tickets };
+    this.realtime.emitTicketSold(order.showId, { order_id: orderId, quantity: order.quantity, sold_tickets: result.soldTickets, payout_amount: order.payoutAmount });
+    return result.order;
   }
 
   async webhook(orderId: string, kind?: "rental" | "ticket" | "api") {
@@ -588,26 +684,47 @@ export class PlatformService {
     return { revoked: true, ticket_id: ticket.id, jti: ticket.jti, revoked_at: revokedAt.toISOString() };
   }
 
-  async dashboard(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-    if (!user) throw new NotFoundException("User not found");
-    const [rentals, apiRentals, shows, apiKeys, ticketOrders, purchasedTicketOrders, payouts, tickets, externalQrCodes] = await Promise.all([
-      this.prisma.rentalOrder.findMany({ where: { userId }, include: { product: true }, orderBy: { createdAt: "desc" } }),
-      this.prisma.apiRentalOrder.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
-      this.prisma.show.findMany({ where: { ownerId: userId }, orderBy: { createdAt: "desc" } }),
-      this.prisma.apiKey.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
-      this.prisma.ticketOrder.findMany({ where: { show: { ownerId: userId } }, include: { show: true, tickets: true }, orderBy: { createdAt: "desc" } }),
-      this.prisma.ticketOrder.findMany({ where: { buyerEmail: user.email }, include: { show: true, tickets: true }, orderBy: { createdAt: "desc" } }),
-      this.prisma.payout.findMany({ where: { showOwnerId: userId }, orderBy: { createdAt: "desc" } }),
-      this.prisma.ticket.findMany({ where: { show: { ownerId: userId } }, include: { show: true }, orderBy: { createdAt: "desc" }, take: 20 }),
-      this.prisma.externalQrCode.findMany({
-        where: { userId },
-        include: { scanLogs: { orderBy: { createdAt: "desc" }, take: 3 } },
-        orderBy: { createdAt: "desc" },
-        take: 20
-      })
+  async dashboard(userId: string, requestedView?: string) {
+    const view = requestedView ?? "overview";
+    const user = view === "tickets"
+      ? await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+      : { email: "" };
+    if (view === "tickets" && !user) throw new NotFoundException("User not found");
+
+    const empty = { rentals: [], apiRentals: [], shows: [], apiKeys: [], ticketOrders: [], purchasedTicketOrders: [], payouts: [], tickets: [], externalQrCodes: [] };
+    if (view === "rentals") {
+      return { ...empty, rentals: await this.prisma.rentalOrder.findMany({ where: { userId }, select: { id: true, type: true, status: true, total: true, quantity: true, duration: true, gateIds: true, createdAt: true, product: { select: { name: true, type: true } } }, orderBy: { createdAt: "desc" } }) };
+    }
+    if (view === "api-rentals") {
+      return { ...empty, apiRentals: await this.prisma.apiRentalOrder.findMany({ where: { userId }, select: { id: true, appName: true, website: true, plan: true, duration: true, quota: true, scopes: true, total: true, status: true, apiKeyPrefix: true, createdAt: true }, orderBy: { createdAt: "desc" } }) };
+    }
+    if (view === "tickets") {
+      const purchasedTicketOrders = await this.prisma.ticketOrder.findMany({
+        where: { buyerEmail: user!.email }, orderBy: { createdAt: "desc" },
+        select: { id: true, status: true, quantity: true, totalAmount: true, buyerName: true, buyerEmail: true, createdAt: true, show: { select: { id: true, name: true, startAt: true } }, tickets: { select: { id: true, qrJwt: true, qrOfflineJwt: true, isUsed: true } } }
+      });
+      return { ...empty, purchasedTicketOrders };
+    }
+    if (view === "shows") {
+      const [shows, apiKeys, ticketOrders] = await Promise.all([
+        this.prisma.show.findMany({ where: { ownerId: userId }, select: { id: true, slug: true, name: true, status: true, installationStatus: true, scannerCount: true, installationNote: true, soldTickets: true, totalTickets: true, ticketPrice: true, location: true, startAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+        this.prisma.apiKey.findMany({ where: { userId }, select: { id: true, prefix: true, quota: true, scopes: true, rentalId: true, showId: true, status: true, isTest: true, allowedIps: true, rateLimit: true, revokeAt: true, suspendUntil: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+        this.prisma.ticketOrder.findMany({ where: { show: { ownerId: userId } }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, quantity: true, totalAmount: true, payoutAmount: true, buyerName: true, buyerEmail: true, buyerPhone: true, buyerNote: true, createdAt: true, show: { select: { id: true, name: true, slug: true, startAt: true, location: true } }, tickets: { select: { id: true, qrJwt: true, qrOfflineJwt: true, isUsed: true } } } })
+      ]);
+      return { ...empty, shows, apiKeys: apiKeys.map(key => this.publicApiKey(key)), ticketOrders };
+    }
+
+    const [rentals, apiRentals, shows, apiKeys, ticketOrders, payouts, tickets, externalQrCodes] = await Promise.all([
+      this.prisma.rentalOrder.findMany({ where: { userId }, select: { id: true, type: true, status: true, total: true, quantity: true, duration: true, gateIds: true, createdAt: true, product: { select: { name: true, type: true } } }, orderBy: { createdAt: "desc" } }),
+      this.prisma.apiRentalOrder.findMany({ where: { userId }, select: { id: true, appName: true, plan: true, duration: true, quota: true, total: true, status: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+      this.prisma.show.findMany({ where: { ownerId: userId }, select: { id: true, slug: true, name: true, status: true, soldTickets: true, totalTickets: true, ticketPrice: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+      this.prisma.apiKey.findMany({ where: { userId }, select: { id: true, prefix: true, quota: true, scopes: true, rentalId: true, showId: true, status: true, isTest: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
+      this.prisma.ticketOrder.findMany({ where: { show: { ownerId: userId } }, select: { id: true, status: true, quantity: true, totalAmount: true, buyerName: true, buyerEmail: true, createdAt: true, show: { select: { id: true, name: true } }, tickets: { select: { isUsed: true } } }, orderBy: { createdAt: "desc" } }),
+      this.prisma.payout.findMany({ where: { showOwnerId: userId }, select: { id: true, amount: true, status: true }, orderBy: { createdAt: "desc" } }),
+      this.prisma.ticket.findMany({ where: { show: { ownerId: userId } }, select: { id: true, isUsed: true, qrOfflineJwt: true, show: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
+      this.prisma.externalQrCode.findMany({ where: { userId }, select: { id: true, code: true, resourceType: true, resourceId: true, customerRef: true, isUsed: true, expiresAt: true, createdAt: true, scanLogs: { select: { id: true, gateId: true, valid: true, reason: true, ip: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { createdAt: "desc" }, take: 20 })
     ]);
-    return { rentals, apiRentals: apiRentals.map(order => ({ ...order, signingSecret: undefined, webhookSecret: undefined })), shows, apiKeys: apiKeys.map(key => this.publicApiKey(key)), ticketOrders, purchasedTicketOrders, payouts, tickets, externalQrCodes };
+    return { rentals, apiRentals, shows, apiKeys: apiKeys.map(key => this.publicApiKey(key)), ticketOrders, purchasedTicketOrders: [], payouts, tickets, externalQrCodes };
   }
 
   private async assertApiKey(raw: string, requiredScope?: ApiKeyScope) {
@@ -654,14 +771,14 @@ export class PlatformService {
     }
   }
 
-  private publicApiKey(key: { id: string; userId: string; prefix: string; quota: number; scopes: unknown; rentalId?: string | null; status?: string; isTest?: boolean; allowedIps?: unknown; rateLimit?: number; revokeAt?: Date | null; suspendUntil?: Date | null; createdAt: Date }) {
+  private publicApiKey(key: { id: string; userId?: string; prefix: string; quota: number; scopes: unknown; rentalId?: string | null; showId?: string | null; status?: string; isTest?: boolean; allowedIps?: unknown; rateLimit?: number; revokeAt?: Date | null; suspendUntil?: Date | null; createdAt: Date }) {
     return {
       id: key.id,
-      userId: key.userId,
       prefix: key.prefix,
       quota: key.quota,
       scopes: Array.isArray(key.scopes) ? key.scopes : FULL_API_KEY_SCOPES,
       rentalId: key.rentalId ?? null,
+      showId: key.showId ?? null,
       status: key.status ?? "active",
       isTest: key.isTest ?? false,
       allowedIps: Array.isArray(key.allowedIps) ? key.allowedIps : [],
@@ -680,8 +797,38 @@ export class PlatformService {
     return user.id;
   }
 
-  private publicUser(user: { id: string; email: string; role: string }) {
+  private authUser(user: { id: string; email: string; role: string }) {
     return { id: user.id, email: user.email, role: user.role };
+  }
+
+  private profileUser(user: {
+    id: string;
+    email: string;
+    role: string;
+    fullName?: string | null;
+    phone?: string | null;
+    addressLine?: string | null;
+    provinceName?: string | null;
+    provinceCode?: string | null;
+    districtName?: string | null;
+    districtCode?: string | null;
+    wardName?: string | null;
+    wardCode?: string | null;
+  }) {
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      fullName: user.fullName ?? null,
+      phone: user.phone ?? null,
+      addressLine: user.addressLine ?? null,
+      provinceName: user.provinceName ?? null,
+      provinceCode: user.provinceCode ?? null,
+      districtName: user.districtName ?? null,
+      districtCode: user.districtCode ?? null,
+      wardName: user.wardName ?? null,
+      wardCode: user.wardCode ?? null
+    };
   }
 
   private async uniqueSlug(name: string) {

@@ -1,9 +1,12 @@
+
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CreditCard } from "lucide-react";
 import { api, money, Product } from "@/lib/api";
+import { PaymentMethod, PaymentMethodSelect } from "@/components/payment-method-select";
 
 export function RentalForm({ products }: { products: Product[] }) {
   const search = useSearchParams();
@@ -14,10 +17,11 @@ export function RentalForm({ products }: { products: Product[] }) {
   const [address, setAddress] = useState("123 Nguyễn Huệ, Quận 1, TP.HCM");
   const [agree, setAgree] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("payos_demo");
   useEffect(() => {
     void api<Product[]>("/products", { cache: "no-store" }).then((result) => {
       if (!result) return;
-      const rentable = result.filter((product) => product.type !== "COMPONENT");
+      const rentable = result.filter((product) => product.productType === "THIET_BI_THUE");
       setItems(rentable);
       setProductId((current) => current || rentable[0]?.id || "");
     });
@@ -44,7 +48,8 @@ export function RentalForm({ products }: { products: Product[] }) {
           duration,
           quantity,
           shipping_address: { address },
-          agree_damage_terms: agree
+          agree_damage_terms: agree,
+          payment_method: paymentMethod
         })
       });
       if (!result) return;
@@ -84,6 +89,9 @@ export function RentalForm({ products }: { products: Product[] }) {
       </section>
       <aside className="panel h-fit p-6">
         <h2 className="text-xl font-semibold tracking-tight">Chi tiết phí</h2>
+        <div className="mt-5">
+          <PaymentMethodSelect value={paymentMethod} onChange={setPaymentMethod} />
+        </div>
         <div className="mt-5 grid gap-3 text-sm">
           <div className="flex justify-between"><span>Tiền thuê</span><b>{money(breakdown.rent)}</b></div>
           <div className="flex justify-between"><span>Cọc</span><b>{money(breakdown.deposit)}</b></div>

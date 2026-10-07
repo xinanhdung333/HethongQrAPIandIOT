@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/brand/smartqr-icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/brand/smartqr-icon.svg">
+    <title>Web QR Thông Minh & API QR Bảo Mật | Monochrome GSAP</title>
+    
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- GSAP & ScrollTrigger CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        /* Perspective and 3D depth styles */
+        .perspective-container {
+            perspective: 1200px;
+        }
+
+        .card-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.2s cubic-bezier(0.1, 0.4, 0.2, 1);
+        }
+
+        .translate-z-1 { transform: translateZ(30px); }
+        .translate-z-2 { transform: translateZ(60px); }
+        .translate-z-3 { transform: translateZ(90px); }
+
+        /* Glassmorphism Header */
+        .navbar-scrolled {
+            background-color: rgba(0, 0, 0, 0.92);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+        }
+
+        /* Dynamic word split span animations */
+        .word-span {
+            display: inline-block;
+            will-change: transform, opacity;
+        }
+
+        /* Subtle Grid Pattern Background */
+        .bg-grid-pattern {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #000000;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
+
+        /* Laser scanning line animation */
+        @keyframes scan-laser {
+            0% { top: 0%; opacity: 0.8; }
+            50% { top: 95%; opacity: 1; }
+            100% { top: 0%; opacity: 0.8; }
+        }
+        .animate-scan-laser {
+            animation: scan-laser 2.5s ease-in-out infinite;
+        }
+
+        /* Toggle Switch styling */
+        .toggle-checkbox:checked {
+            right: 0;
+            background-color: #ffffff;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #27272a;
+        }
+    </style>
+</head>
+<body class="relative text-zinc-100 antialiased selection:bg-white selection:text-black bg-grid-pattern">
+
+    <!-- Top Solid Progress Bar -->
+    <div id="scroll-progress-bar" class="fixed top-0 left-0 h-1 bg-white z-50 w-0 transition-all duration-75"></div>
+
+    <!-- Corner Scroll Percentage & Layer Indicator Badge -->
+    <div class="fixed bottom-6 right-6 z-40 bg-zinc-950/90 backdrop-blur-md border border-zinc-800 px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 text-xs font-mono text-zinc-300 pointer-events-none">
+        <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+        <span>SECURE QR API</span>
+        <span class="text-zinc-600">|</span>
+        <span>SCROLL: <strong id="scroll-percent" class="text-white">0%</strong></span>
+    </div>
+
+    <!-- Navigation Header -->
+  <div id="header-slot"></div>
+
+  <script>
+    fetch('/landing/components/header.html')
+     .then(r => r.text())
+     .then(html => {
+        document.getElementById('header-slot').innerHTML = html;
+      });
+  </script>
+
+  <!-- content cũ của page... -->
+    <!-- 1. HERO SECTION (MULTI-LAYER PARALLAX) -->
+    <section id="hero" class="relative min-h-[140vh] flex flex-col justify-center pt-32 pb-32 px-6 overflow-hidden">
+        
+        <!-- -->
+        <canvas id="hero-particle-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-0 opacity-40"></canvas>
+
+        <!-- LAYER 0 (Deepest Background Glows & Floating Elements) -->
+        <div id="hero-layer-bg-1" class="absolute top-1/4 -left-20 w-[500px] h-[500px] bg-zinc-800/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div id="hero-layer-bg-2" class="absolute bottom-1/4 -right-20 w-[600px] h-[600px] bg-zinc-900/30 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Floating Background Numbers (Fast Drift) -->
+        <div id="hero-float-num-1" class="absolute top-36 left-12 font-mono text-[120px] font-extrabold text-zinc-900 select-none pointer-events-none hidden lg:block">
+            QR
+        </div>
+        <div id="hero-float-num-2" class="absolute top-96 right-16 font-mono text-[140px] font-extrabold text-zinc-900 select-none pointer-events-none hidden lg:block">
+            API
+        </div>
+
+        <div class="max-w-5xl mx-auto text-center relative z-20 flex flex-col items-center">
+            
+            <!-- LAYER 1: Category Badge (Mid Speed) -->
+            <!-- ADMIN CONTENT: EDIT BADGE TEXT -->
+            <div id="hero-badge" class="opacity-0 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-700 text-zinc-300 text-xs font-semibold tracking-wide uppercase mb-8 shadow-2xl cursor-pointer hover:border-white transition-colors">
+                <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                Nền Tảng Web QR & Cho Thuê API QR Bảo Mật
+            </div>
+
+            <!-- LAYER 2: Main Title (Slow Drift / Hero Focus) -->
+            <!-- ADMIN CONTENT: EDIT HERO TITLE CONTENT -->
+            <h1 id="hero-title" class="text-4xl sm:text-6xl md:text-8xl font-extrabold tracking-tight leading-[1.05] mb-8 max-w-5xl text-white">
+                Web QR Thông Minh & Cho Thuê API QR Mã Hóa Cao
+            </h1>
+
+            <!-- LAYER 3: Subtitle (Fast Drift Upward) -->
+            <!-- ADMIN CONTENT: EDIT HERO SUBTITLE -->
+            <p id="hero-sub" class="opacity-0 text-zinc-400 text-lg sm:text-2xl max-w-3xl font-normal leading-relaxed mb-12">
+                Khởi tạo mã QR động, thay đổi URL đích linh hoạt và tích hợp API khởi tạo QR đính kèm bảo mật AES-256 / HMAC siêu tốc cho mọi ứng dụng.
+            </p>
+
+            <!-- LAYER 4: Interactive Floating Buttons (Cross Parallax & Magnetic) -->
+            <!-- ADMIN CONTENT: EDIT CTA BUTTON TEXT & LINKS -->
+            <div id="hero-cta" class="opacity-0 flex flex-col sm:flex-row items-center gap-5 w-full sm:w-auto mb-16 z-30">
+                <a href="#contact" class="magnetic-btn hero-btn-primary w-full sm:w-auto px-9 py-4 rounded-full bg-white text-black font-extrabold text-base shadow-2xl hover:bg-zinc-200 transition-all text-center">
+                    Đăng ký thuê API ngay ↓
+                </a>
+                <a href="#depth" class="magnetic-btn hero-btn-secondary w-full sm:w-auto px-9 py-4 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-semibold text-base transition-all text-center">
+                    Xem kiến trúc mã hóa API
+                </a>
+            </div>
+
+            <!-- -->
+            <!-- LAYER 5: Live Interactive Web QR & API Sandbox -->
+            <div id="hero-image-wrapper" class="opacity-0 w-full max-w-4xl rounded-3xl p-6 sm:p-8 bg-zinc-950/90 border border-zinc-800 shadow-2xl backdrop-blur-xl group text-left">
+                
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 pb-6 border-b border-zinc-800">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-white animate-pulse"></span>
+                            <h3 class="text-lg font-bold text-white">LIVE INTERACTIVE API SANDBOX</h3>
+                        </div>
+                        <p class="text-xs text-zinc-400 mt-1">Thử nghiệm nhập dữ liệu để mã hóa và sinh Web QR ngay trực tiếp bên dưới</p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-400">LATENCY: 14ms</span>
+                        <span class="px-3 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-400">AES-256 HMAC</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                    
+                    <!-- Sandbox Controls (Left) -->
+                    <div class="lg:col-span-7 space-y-5">
+                        
+                        <!-- Input URL -->
+                        <div>
+                            <label class="block text-xs font-mono text-zinc-400 mb-2 uppercase">1. Nhập URL / Nội dung mã hóa Web QR:</label>
+                            <input id="sandbox-input" type="text" value="https://smartqr.io/secure-link-9921" class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white font-mono focus:outline-none focus:border-white transition-colors" placeholder="Nhập đường dẫn URL bất kỳ..." />
+                        </div>
+
+                        <!-- Presets -->
+                        <div>
+                            <span class="block text-xs font-mono text-zinc-500 mb-2">Mẫu nhanh:</span>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" onclick="setPreset('https://smartqr.io/pay/inv-88219')" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 font-mono border border-zinc-800 transition-colors">⚡ Cổng Thanh Toán</button>
+                                <button type="button" onclick="setPreset('https://smartqr.io/verify/serial-49912')" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 font-mono border border-zinc-800 transition-colors">🛡️ Tem Chống Hàng Giả</button>
+                                <button type="button" onclick="setPreset('https://smartqr.io/wifi/connect-vip')" class="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 font-mono border border-zinc-800 transition-colors">🔑 Đăng Nhập OTP Wi-Fi</button>
+                            </div>
+                        </div>
+
+                        <!-- Toggles -->
+                        <div class="pt-2 grid grid-cols-2 gap-4">
+                            <div class="bg-black border border-zinc-850 p-3 rounded-xl flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs font-bold text-white">Chữ Ký HMAC-SHA256</div>
+                                    <div class="text-[10px] text-zinc-500">Chống can thiệp URL</div>
+                                </div>
+                                <input type="checkbox" id="toggle-hmac" checked onchange="updateInteractiveQR()" class="w-4 h-4 accent-white cursor-pointer"/>
+                            </div>
+
+                            <div class="bg-black border border-zinc-850 p-3 rounded-xl flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs font-bold text-white">Xác Thực OTP / Pass</div>
+                                    <div class="text-[10px] text-zinc-500">Yêu cầu PIN khi quét</div>
+                                </div>
+                                <input type="checkbox" id="toggle-otp" onchange="updateInteractiveQR()" class="w-4 h-4 accent-white cursor-pointer"/>
+                            </div>
+                        </div>
+
+                        <!-- Code preview output -->
+                        <div>
+                            <div class="flex items-center justify-between text-xs font-mono text-zinc-500 mb-1">
+                                <span>API Request Snippet (cURL):</span>
+                                <button id="copy-curl-btn" onclick="copyCurlCode()" class="hover:text-white transition-colors">[Sao chép]</button>
+                            </div>
+                            <pre id="curl-snippet" class="bg-black border border-zinc-850 p-3 rounded-xl text-[11px] font-mono text-zinc-400 overflow-x-auto">curl -X POST "https://api.smartqr.io/v1/generate" \
+  -H "Authorization: Bearer sqr_live_883921" \
+  -d '{"target_url": "https://smartqr.io/secure-link-9921", "hmac": true}'</pre>
+                        </div>
+
+                    </div>
+
+                    <!-- Interactive QR Matrix & Scanner Render (Right) -->
+                    <div class="lg:col-span-5 flex flex-col items-center justify-center bg-black border border-zinc-800 rounded-2xl p-6 relative overflow-hidden group">
+                        
+                        <!-- Scanning laser effect -->
+                        <div class="absolute inset-x-0 h-1 bg-white shadow-[0_0_15px_#ffffff] animate-scan-laser z-20 pointer-events-none"></div>
+
+                        <!-- Dynamic Canvas QR matrix -->
+                        <div class="relative p-3 bg-white rounded-2xl shadow-2xl mb-4 transform group-hover:scale-105 transition-transform duration-300">
+                            <canvas id="qr-matrix-canvas" width="180" height="180" class="block"></canvas>
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="w-10 h-10 bg-black rounded-lg border-2 border-white flex items-center justify-center font-bold text-white text-xs font-mono shadow-xl">
+                                    SQR
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Realtime status badge -->
+                        <div class="text-center space-y-1 z-10">
+                            <div id="qr-status-text" class="text-xs font-mono text-white font-bold">STATUS: DYNAMIC WEB QR ACTIVE</div>
+                            <div id="qr-hash-preview" class="text-[10px] font-mono text-zinc-500 truncate max-w-[220px]">HASH: 0x8f2a991b...3f</div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 2. NARRATIVE SECTION WITH HORIZONTAL TEXT DRIFT & LAYERED IMAGES -->
+    <section id="narrative" class="py-36 px-6 relative bg-zinc-950 border-y border-zinc-900 overflow-hidden">
+        
+        <!-- Large Background Horizontal Scrolling Text -->
+        <div id="horizon-text-1" class="whitespace-nowrap font-extrabold text-[12vw] text-zinc-900/60 uppercase tracking-tighter select-none pointer-events-none mb-[-4vw]">
+            DYNAMIC QR • SECURE API • HMAC SHA256 • REALTIME ANALYTICS
+        </div>
+
+        <div class="max-w-6xl mx-auto relative z-10">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                
+                <!-- Left: Layered Text Content -->
+                <div class="lg:col-span-6 space-y-6">
+                    <span id="narrative-badge" class="inline-block text-zinc-400 font-mono text-xs tracking-widest uppercase border-b border-zinc-700 pb-1">Giải Pháp Web QR & Cho Thuê API</span>
+                    <h2 id="narrative-title" class="text-3xl sm:text-5xl font-extrabold text-white leading-tight">
+                        Mã QR động linh hoạt kết hợp API mã hóa bảo mật.
+                    </h2>
+                    <p id="narrative-desc-1" class="text-zinc-400 text-base sm:text-lg leading-relaxed">
+                        <!-- ADMIN CONTENT: EDIT NARRATIVE PARAGRAPH 1 -->
+                        <strong>Web QR Thông Minh:</strong> Cho phép doanh nghiệp cập nhật liên kết đích bất kỳ lúc nào mà không cần in lại mã QR vật lý. Tích hợp tính năng đặt mật khẩu truy cập, giới hạn số lượt quét và chống giả mạo link.
+                    </p>
+                    <p id="narrative-desc-2" class="text-zinc-400 text-base sm:text-lg leading-relaxed">
+                        <!-- ADMIN CONTENT: EDIT NARRATIVE PARAGRAPH 2 -->
+                        <strong>Dịch Vụ Cho Thuê API QR:</strong> Cung cấp endpoint RESTful API tạo mã QR hàng loạt với token chữ ký số HMAC, hỗ trợ kiểm soát chống spam, tích hợp cổng thanh toán và xác thực tem chống hàng giả.
+                    </p>
+
+                    <div id="narrative-button-box" class="pt-4">
+                        <a href="#depth" class="inline-flex items-center gap-3 px-7 py-3.5 rounded-full bg-white text-black font-extrabold text-sm hover:bg-zinc-200 transition-all shadow-xl hover:scale-105">
+                            <span>Khám phá cấu trúc API & Token Security</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Right: Overlapping Image Stack (Dual Parallax Layers) -->
+                <div class="lg:col-span-6 relative min-h-[480px] flex items-center justify-center">
+                    
+                    <!-- Background Card (Scrolls Faster Upward) -->
+                    <div id="narrative-card-back" class="absolute -top-6 -left-4 w-4/5 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-2xl z-0">
+                        <!-- ADMIN CONTENT: CARD BACK IMAGE -->
+                        <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80" 
+                             alt="API Server Infrastructure" 
+                             class="w-full h-56 object-cover rounded-xl grayscale contrast-125"
+                             onerror="this.onerror=null; this.src='https://placehold.co/800x450/000000/ffffff?text=Admin+API+Server+Image';" />
+                        <div class="mt-3 text-xs font-mono text-zinc-500">API GATEWAY: 99.99% UPTIME</div>
+                    </div>
+
+                    <!-- Foreground Card (Scrolls Slower / Overlaps) -->
+                    <div id="narrative-card-front" class="absolute -bottom-6 -right-4 w-4/5 bg-zinc-900/90 backdrop-blur-xl border border-zinc-700 rounded-2xl p-5 shadow-2xl z-10">
+                        <!-- ADMIN CONTENT: CARD FRONT IMAGE -->
+                        <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80" 
+                             alt="Smart QR Code Generator" 
+                             class="w-full h-56 object-cover rounded-xl grayscale contrast-125"
+                             onerror="this.onerror=null; this.src='https://placehold.co/800x450/000000/ffffff?text=Admin+Smart+QR+Mockup';" />
+                        <div class="mt-3 flex items-center justify-between text-xs font-mono">
+                            <span class="text-white font-bold">MÃ HÓA: HMAC-SHA256</span>
+                            <span class="text-zinc-400">LATENCY: &lt;20MS</span>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. PSEUDO 3D DEPTH & MOUSE INTERACTION SECTION -->
+    <section id="depth" class="py-36 px-6 relative bg-black overflow-hidden border-b border-zinc-900">
+        <div class="max-w-6xl mx-auto">
+            
+            <div class="text-center max-w-2xl mx-auto mb-20 space-y-4">
+                <span id="depth-tag" class="text-zinc-400 font-mono text-xs tracking-widest uppercase">Kiến Trúc API & Bảo Mật</span>
+                <h2 id="depth-title" class="text-3xl sm:text-5xl font-extrabold text-white">Lớp Bảo Mật Đa Tầng Cho API QR</h2>
+                <p id="depth-sub" class="text-zinc-400 text-base">Mỗi mã QR được tạo qua API đều tích hợp chữ ký mã hóa và cơ chế ngăn chặn gian lận tự động.</p>
+            </div>
+
+            <div class="perspective-container flex justify-center">
+                <!-- 3D Card with multiple TranslateZ inner layers -->
+                <div id="perspective-card" class="card-3d relative w-full max-w-2xl bg-zinc-950 border border-zinc-800 rounded-3xl p-8 sm:p-12 shadow-2xl hover:border-zinc-600 transition-colors">
+                    
+                    <div class="flex items-center justify-between mb-8 translate-z-1">
+                        <span class="px-3.5 py-1.5 rounded-full bg-white text-black font-mono text-xs font-bold">SECURITY ARCHITECTURE</span>
+                        <span class="text-xs text-zinc-500 font-mono">AES-256 + HMAC-SHA256</span>
+                    </div>
+
+                    <h3 class="text-3xl sm:text-4xl font-extrabold text-white mb-4 translate-z-2">Thuê API QR Đã Bảo Vệ End-to-End</h3>
+                    <p class="text-zinc-400 text-base mb-8 leading-relaxed translate-z-1">
+                        <!-- ADMIN CONTENT: EDIT 3D CARD TEXT -->
+                        API hỗ trợ cấp Key cấp doanh nghiệp, giới hạn Rate Limit tùy chỉnh, tự động phát hiện mã QR bị quét bất thường và cảnh báo realtime qua Webhook.
+                    </p>
+
+                    <!-- ADMIN CONTENT: REPLACE 3D CARD IMAGE -->
+                    <div class="translate-z-3 rounded-2xl overflow-hidden bg-black border border-zinc-800 shadow-2xl relative group mb-8">
+                        <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80" 
+                             alt="Secure API Flow Showcase" 
+                             class="w-full h-64 sm:h-80 object-cover grayscale contrast-125 group-hover:scale-105 transition-transform duration-500"
+                             onerror="this.onerror=null; this.src='https://placehold.co/1200x600/000000/ffffff?text=Admin+API+Security+Diagram';" />
+                        
+                        <div class="absolute bottom-4 left-4 bg-black/90 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-mono text-white border border-zinc-700">
+                            Protected Endpoint: /v1/qr/generate-secure
+                        </div>
+                    </div>
+
+                    <!-- Floating Action Button inside 3D Perspective -->
+                    <div class="translate-z-3 flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-zinc-800">
+                        <div class="text-xs text-zinc-500 font-mono">Hover chuột để di chuyển góc nhìn 3D</div>
+                        <a href="#pinned-steps" class="w-full sm:w-auto px-7 py-3 rounded-full bg-white text-black font-extrabold text-sm shadow-xl hover:bg-zinc-200 transition-all text-center">
+                            Xem quy trình tích hợp API ↓
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 4. PINNED MULTI-STEP SCROLL EXPERIENCE -->
+    <section id="pinned-steps" class="py-32 px-6 relative bg-zinc-950 border-b border-zinc-900">
+        <div class="max-w-6xl mx-auto">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                
+                <!-- Sticky Left Column (Pins while right column scrolls) -->
+                <div class="lg:col-span-5 lg:sticky lg:top-32 h-fit space-y-6">
+                    <span class="text-zinc-400 font-mono text-xs tracking-widest uppercase border-b border-zinc-700 pb-1">Quy Trình Thuê & Sử Dụng</span>
+                    <h2 class="text-3xl sm:text-5xl font-extrabold text-white leading-tight">
+                        3 Bước Thuê API & Khởi Tạo Web QR
+                    </h2>
+                    <p class="text-zinc-400 text-base leading-relaxed">
+                        Chỉ mất 5 phút đăng ký gói thuê API để bắt đầu tạo mã QR bảo mật hàng loạt cho website, ứng dụng hoặc sản phẩm vật lý.
+                    </p>
+                    <div class="pt-4">
+                        <a href="#cards" class="inline-flex items-center gap-3 px-8 py-3.5 rounded-full bg-white text-black font-extrabold text-sm hover:bg-zinc-200 transition-all shadow-xl">
+                            Xem Các Tính Năng Bảo Mật
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Scrolling Right Column Cards -->
+                <div class="lg:col-span-7 space-y-16">
+                    
+                    <!-- Step Card 1 -->
+                    <!-- ADMIN CONTENT: STEP 1 -->
+                    <div class="step-card bg-black border border-zinc-800 rounded-3xl p-8 sm:p-10 relative overflow-hidden shadow-2xl">
+                        <div class="flex items-center justify-between mb-6">
+                            <span class="w-12 h-12 rounded-2xl bg-white text-black font-extrabold font-mono text-xl flex items-center justify-center">01</span>
+                            <span class="text-xs font-mono text-zinc-500">API KEY PROVISIONING</span>
+                        </div>
+                        <h3 class="text-2xl font-bold text-white mb-3">Đăng Ký & Cấp Phát API Key</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Chọn gói thuê API theo tháng hoặc theo lượt gọi API (Pay-as-you-go). Nhận Bearer Token bảo mật tức thì qua Dashboard.</p>
+                        <!-- ADMIN CONTENT: STEP 1 IMAGE -->
+                        <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=800&q=80" alt="Step 1 API Key" class="w-full h-48 object-cover rounded-xl grayscale contrast-125 border border-zinc-800" onerror="this.onerror=null; this.src='https://placehold.co/800x400/000000/ffffff?text=Admin+API+Key+Setup';" />
+                    </div>
+
+                    <!-- Step Card 2 -->
+                    <!-- ADMIN CONTENT: STEP 2 -->
+                    <div class="step-card bg-black border border-zinc-800 rounded-3xl p-8 sm:p-10 relative overflow-hidden shadow-2xl">
+                        <div class="flex items-center justify-between mb-6">
+                            <span class="w-12 h-12 rounded-2xl bg-white text-black font-extrabold font-mono text-xl flex items-center justify-center">02</span>
+                            <span class="text-xs font-mono text-zinc-500">DYNAMIC RULE CONFIG</span>
+                        </div>
+                        <h3 class="text-2xl font-bold text-white mb-3">Cấu Hình Luồng Web QR & Bảo Mật</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Thiết lập tham số cho mã QR: Đặt password mở link, bật mã hóa chống quét lại, cấu hình webhook nhận dữ liệu khi có lượt quét mới.</p>
+                        <!-- ADMIN CONTENT: STEP 2 IMAGE -->
+                        <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80" alt="Step 2 Config" class="w-full h-48 object-cover rounded-xl grayscale contrast-125 border border-zinc-800" onerror="this.onerror=null; this.src='https://placehold.co/800x400/000000/ffffff?text=Admin+Dynamic+QR+Config';" />
+                    </div>
+
+                    <!-- Step Card 3 -->
+                    <!-- ADMIN CONTENT: STEP 3 -->
+                    <div class="step-card bg-black border border-zinc-800 rounded-3xl p-8 sm:p-10 relative overflow-hidden shadow-2xl">
+                        <div class="flex items-center justify-between mb-6">
+                            <span class="w-12 h-12 rounded-2xl bg-white text-black font-extrabold font-mono text-xl flex items-center justify-center">03</span>
+                            <span class="text-xs font-mono text-zinc-500">PRODUCTION DEPLOYMENT</span>
+                        </div>
+                        <h3 class="text-2xl font-bold text-white mb-3">Tích Hợp Hệ Thống & Phân Tích Realtime</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Gọi RESTful API để tạo mã QR SVG/PNG tốc độ cao, hiển thị trực tiếp lên app, web hoặc tem nhãn với báo cáo truy cập chính xác.</p>
+                        <!-- ADMIN CONTENT: STEP 3 IMAGE -->
+                        <img src="https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=800&q=80" alt="Step 3 Production" class="w-full h-48 object-cover rounded-xl grayscale contrast-125 border border-zinc-800" onerror="this.onerror=null; this.src='https://placehold.co/800x400/000000/ffffff?text=Admin+Production+Analytics';" />
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 5. CARDS GRID WITH OFFSET PARALLAX -->
+    <section id="cards" class="py-36 px-6 relative bg-black border-b border-zinc-900">
+        <div class="max-w-6xl mx-auto">
+            
+            <div class="text-center max-w-2xl mx-auto mb-20 space-y-4">
+                <span class="text-zinc-400 font-mono text-xs tracking-widest uppercase">Tính Năng Cốt Lõi</span>
+                <h2 class="text-3xl sm:text-5xl font-extrabold text-white">Web QR & API Mã Hóa Chuyên Sâu</h2>
+                <p class="text-zinc-400 text-base">Giải pháp hoàn hảo cho hệ thống quản lý kho, chống giả mạo tem nhãn và cổng thanh toán tự động.</p>
+            </div>
+
+            <!-- 4 Feature Cards Grid with Left / Right Parallax Speeds -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                
+                <!-- Left Column (Offset Downward) -->
+                <div id="cards-col-left" class="space-y-8 md:mt-12">
+                    
+                    <!-- Card 1 -->
+                    <!-- ADMIN CONTENT: CARD 1 -->
+                    <div class="feature-card bg-zinc-950 border border-zinc-800 rounded-3xl p-8 hover:border-white transition-all duration-300 relative group">
+                        <div class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 text-white flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-white group-hover:text-black transition-all">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">Mã Hóa URL & Đính Kèm Mật Khẩu</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Đường dẫn trong QR được mã hóa token thay đổi liên tục. Người dùng có thể phải nhập OTP hoặc Mật khẩu mới truy cập được Web QR.</p>
+                        <a href="#showcase" class="inline-flex items-center gap-2 text-xs font-bold text-white hover:underline">
+                            <span>Chi tiết tính năng bảo mật</span> →
+                        </a>
+                    </div>
+
+                    <!-- Card 2 -->
+                    <!-- ADMIN CONTENT: CARD 2 -->
+                    <div class="feature-card bg-zinc-950 border border-zinc-800 rounded-3xl p-8 hover:border-white transition-all duration-300 relative group">
+                        <div class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 text-white flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-white group-hover:text-black transition-all">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">API Phản Hồi Siêu Tốc & Multi-Region</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Cung cấp CDN API QR phân bổ toàn cầu, đáp ứng hàng chục nghìn truy vấn đồng thời với độ trễ phản hồi chỉ dưới 20ms.</p>
+                        <a href="#showcase" class="inline-flex items-center gap-2 text-xs font-bold text-white hover:underline">
+                            <span>Chi tiết tính năng bảo mật</span> →
+                        </a>
+                    </div>
+
+                </div>
+
+                <!-- Right Column (Offset Upward) -->
+                <div id="cards-col-right" class="space-y-8">
+                    
+                    <!-- Card 3 -->
+                    <!-- ADMIN CONTENT: CARD 3 -->
+                    <div class="feature-card bg-zinc-950 border border-zinc-800 rounded-3xl p-8 hover:border-white transition-all duration-300 relative group">
+                        <div class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 text-white flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-white group-hover:text-black transition-all">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">Phân Tích Quét Realtime & Geolocation</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Thống kê chi tiết thời gian, thiết bị, trình duyệt và vị trí địa lý của mỗi lượt quét QR trên bảng điều khiển trung tâm.</p>
+                        <a href="#showcase" class="inline-flex items-center gap-2 text-xs font-bold text-white hover:underline">
+                            <span>Chi tiết tính năng bảo mật</span> →
+                        </a>
+                    </div>
+
+                    <!-- Card 4 -->
+                    <!-- ADMIN CONTENT: CARD 4 -->
+                    <div class="feature-card bg-zinc-950 border border-zinc-800 rounded-3xl p-8 hover:border-white transition-all duration-300 relative group">
+                        <div class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 text-white flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-white group-hover:text-black transition-all">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 00-2 2v14a2 2 0 002 2h2a2 2 0 002-2V6a2 2 0 00-2-2h-2z"/></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-3">Thay Đổi Đích Web QR Không In Lại</h3>
+                        <p class="text-zinc-400 text-sm leading-relaxed mb-6">Đổi URL đích của hàng triệu mã QR đã in ấn chỉ trong 1 giây qua Dashboard hoặc lệnh gọi REST API.</p>
+                        <a href="#showcase" class="inline-flex items-center gap-2 text-xs font-bold text-white hover:underline">
+                            <span>Chi tiết tính năng bảo mật</span> →
+                        </a>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 6. SHOWCASE / GIANT PSEUDO 3D ZOOM SECTION -->
+    <section id="showcase" class="py-36 px-6 relative bg-zinc-950 border-b border-zinc-900 min-h-[120vh] flex items-center justify-center overflow-hidden">
+        
+        <div class="max-w-5xl mx-auto w-full relative">
+            
+            <div class="text-center mb-16 space-y-4">
+                <span class="text-zinc-400 font-mono text-xs tracking-widest uppercase">Giao Diện Quản Lý API & Web QR</span>
+                <h2 class="text-3xl sm:text-6xl font-extrabold text-white">Bảng Điều Khiển QR Dashboard</h2>
+                <p class="text-zinc-400 text-base max-w-xl mx-auto">Cuộn xuống để phóng to bảng điều khiển trực quan dành cho nhà phát triển và quản trị viên.</p>
+            </div>
+
+            <!-- Zoom Showcase Image Container -->
+            <div id="zoom-container" class="relative rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl bg-black group">
+                
+                <!-- Main Zooming Background Image -->
+                <!-- ADMIN CONTENT: REPLACE SHOWCASE IMAGE SRC BELOW -->
+                <img id="zoom-image" 
+                     src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1600&q=80" 
+                     alt="API Analytics Dashboard Showcase" 
+                     class="w-full h-[65vh] object-cover object-center grayscale contrast-125 transform scale-125"
+                     onerror="this.onerror=null; this.src='https://placehold.co/1600x900/000000/ffffff?text=Admin+QR+Dashboard+Preview';"
+                />
+
+                <!-- Solid Dark Gradient Overlay -->
+                <div class="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+
+                <!-- Floating Parallax Badge 1 (Drifts Top-Left) -->
+                <div id="zoom-float-left" class="absolute top-8 left-8 bg-black/90 backdrop-blur-md border border-zinc-700 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
+                    <div class="w-3 h-3 rounded-full bg-white animate-ping"></div>
+                    <div>
+                        <div class="text-[10px] text-zinc-400 font-mono uppercase">API Status</div>
+                        <div class="text-xs font-bold text-white">Token Active (250k Req/Day)</div>
+                    </div>
+                </div>
+
+                <!-- Floating Parallax Badge 2 (Drifts Bottom-Right) -->
+                <div id="zoom-float-right" class="absolute bottom-10 right-8 bg-black/90 backdrop-blur-md border border-zinc-700 p-5 rounded-2xl shadow-2xl max-w-xs hidden sm:block">
+                    <div class="text-xs text-zinc-300 font-bold mb-1">Ghi chú Admin API</div>
+                    <p class="text-xs text-zinc-400 leading-relaxed">Cập nhật hình ảnh minh họa Dashboard thực tế tại thẻ <code>#zoom-image</code> trong file HTML.</p>
+                </div>
+
+                <!-- Center Content Overlay -->
+                <div class="absolute inset-0 flex flex-col items-center justify-end p-8 sm:p-12 text-center z-10">
+                    <h3 class="text-2xl sm:text-4xl font-extrabold text-white mb-3">Tích Hợp API Trong Vài Dòng Code</h3>
+                    <p class="text-zinc-400 text-sm max-w-lg mb-6">Hỗ trợ đầy đủ SDK cho Node.js, Python, PHP, Java, C# và Go.</p>
+                    <a href="#contact" class="px-8 py-3.5 rounded-full bg-white text-black font-extrabold text-sm shadow-2xl hover:scale-105 transition-transform">
+                        Nhận API Key dùng thử miễn phí
+                    </a>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+    <!-- 7. CALL TO ACTION (CTA) SECTION -->
+    <section id="contact" class="py-36 px-6 relative bg-black overflow-hidden">
+        
+        <div id="cta-bg-glow" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-zinc-900/40 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="max-w-4xl mx-auto text-center relative z-10 space-y-8">
+            
+            <div id="cta-icon" class="inline-flex p-4 rounded-3xl bg-zinc-950 border border-zinc-800 text-white shadow-2xl">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            </div>
+
+            <!-- ADMIN CONTENT: EDIT CTA HEADLINE & SUBTITLE -->
+            <h2 id="cta-title" class="text-4xl sm:text-6xl font-extrabold text-white tracking-tight">Bắt Đầu Thuê API QR Ngay Hôm Nay</h2>
+            <p id="cta-sub" class="text-zinc-400 text-base sm:text-xl max-w-2xl mx-auto leading-relaxed">
+                Nâng cấp hạ tầng QR động cho doanh nghiệp của bạn với độ ổn định 99.99% và tiêu chuẩn bảo mật hàng đầu.
+            </p>
+
+            <div id="cta-buttons" class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-5">
+                <!-- ADMIN CONTENT: EDIT CONTACT BUTTON -->
+                <a href="mailto:api-support@smartqr.io" class="w-full sm:w-auto px-10 py-4 rounded-full bg-white text-black font-extrabold text-base shadow-2xl hover:bg-zinc-200 hover:scale-105 active:scale-95 transition-all text-center">
+                    Liên Hệ Đăng Ký Thuê API
+                </a>
+                <a href="#hero" class="w-full sm:w-auto px-9 py-4 rounded-full bg-zinc-950 hover:bg-zinc-900 text-zinc-300 font-semibold text-base transition-all text-center border border-zinc-800">
+                    Trở lại đầu trang ↑
+                </a>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-zinc-900 bg-zinc-950 text-zinc-100">
+        <div class="max-w-6xl mx-auto py-14 px-6 grid gap-10 md:grid-cols-[1.2fr_1fr_1fr]">
+            <div>
+                <a href="/" class="inline-flex items-center gap-2 font-semibold tracking-tight text-white">
+                    <img src="/brand/smartqr-icon.svg" alt="" class="h-9 w-9 rounded-lg">
+                    <span class="font-extrabold text-xl">SmartQR</span>
+                </a>
+                <p class="mt-5 max-w-sm text-sm leading-6 text-zinc-400">
+                    Nền tảng QR thông minh cho thuê hộp quét, bán vé white-label và vận hành cổng soát vé realtime.
+                </p>
+                <div class="mt-6 grid gap-2 text-sm text-zinc-400">
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        TP.HCM, Việt Nam
+                    </span>
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                        0900 000 000
+                    </span>
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        hello@smartqr.vn
+                    </span>
+                </div>
+            </div>
+            
+            <div>
+                <h3 class="font-semibold text-white">Sản phẩm</h3>
+                <div class="mt-4 grid gap-3 text-sm text-zinc-400">
+                    <a href="/san-pham" class="transition hover:text-white">SP-01 Mini</a>
+                    <a href="/thue-thiet-bi" class="transition hover:text-white">Thuê thiết bị</a>
+                    <a href="/tao-show" class="transition hover:text-white">Tạo show</a>
+                    <a href="/linh-kien" class="transition hover:text-white">Linh kiện</a>
+                </div>
+            </div>
+            
+            <div>
+                <h3 class="font-semibold text-white">Nền tảng</h3>
+                <div class="mt-4 grid gap-3 text-sm text-zinc-400">
+                    <a href="/bang-gia" class="transition hover:text-white">Bảng giá</a>
+                    <a href="/docs" class="transition hover:text-white">Tài liệu API</a>
+                    <a href="/dashboard" class="transition hover:text-white">Dashboard</a>
+                    <a href="/dashboard/scan" class="transition hover:text-white">Quét thử</a>
+                </div>
+            </div>
+        </div>
+        <div class="border-t border-zinc-800">
+            <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3 py-5 px-6 text-sm text-zinc-500">
+                <span>© 2026 SmartQR Platform. Phase 1 demo.</span>
+                <span class="inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+                    Next.js 14 · NestJS · Prisma · Redis
+                </span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC & ANIMATIONS -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Register ScrollTrigger GSAP plugin
+            gsap.registerPlugin(ScrollTrigger);
+
+            // ==========================================
+            // 1. SPLIT HERO TITLE FOR WORD-BY-WORD STAGGER
+            // ==========================================
+            const heroTitle = document.getElementById('hero-title');
+            if (heroTitle) {
+                const words = heroTitle.innerText.split(" ");
+                heroTitle.innerHTML = words.map(word => `<span class="word-span mr-2 sm:mr-3">${word}</span>`).join("");
+            }
+
+            // ==========================================
+            // 2. HERO INITIAL LOAD TIMELINE
+            // ==========================================
+            const heroTL = gsap.timeline({ defaults: { ease: "power3.out" } });
+
+            heroTL.to("#hero-badge", {
+                opacity: 1,
+                y: 0,
+                duration: 0.6,
+                startAt: { y: -20, opacity: 0 }
+            })
+            .from("#hero-title .word-span", {
+                opacity: 0,
+                y: 50,
+                rotationX: -45,
+                stagger: 0.07,
+                duration: 0.9
+            }, "-=0.3")
+            .to("#hero-sub", {
+                opacity: 1,
+                y: 0,
+                duration: 0.7,
+                startAt: { y: 30, opacity: 0 }
+            }, "-=0.5")
+            .to("#hero-cta", {
+                opacity: 1,
+                scale: 1,
+                duration: 0.7,
+                ease: "back.out(1.7)",
+                startAt: { opacity: 0, scale: 0.85 }
+            }, "-=0.4")
+            .to("#hero-image-wrapper", {
+                opacity: 1,
+                y: 0,
+                duration: 1,
+                startAt: { y: 70, opacity: 0 }
+            }, "-=0.5");
+
+            // ==========================================
+            // 3. MULTI-LAYER HERO SCROLL PARALLAX
+            // ==========================================
+            gsap.to("#hero-layer-bg-1", {
+                y: 350,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 1 }
+            });
+            gsap.to("#hero-layer-bg-2", {
+                y: -250,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 1.5 }
+            });
+
+            gsap.to("#hero-float-num-1", {
+                y: -300,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 0.8 }
+            });
+            gsap.to("#hero-float-num-2", {
+                y: -450,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 0.5 }
+            });
+
+            gsap.to("#hero-sub", {
+                y: -100,
+                opacity: 0.3,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "80% top", scrub: true }
+            });
+
+            gsap.to(".hero-btn-primary", {
+                y: -140,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "80% top", scrub: 1 }
+            });
+
+            gsap.to(".hero-btn-secondary", {
+                y: -90,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "80% top", scrub: 1.2 }
+            });
+
+            gsap.to("#hero-image-wrapper", {
+                y: 80,
+                scale: 0.95,
+                scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 2 }
+            });
+
+            // ==========================================
+            // 4. NARRATIVE SECTION HORIZONTAL DRIFT & CARD PARALLAX
+            // ==========================================
+            gsap.to("#horizon-text-1", {
+                xPercent: -30,
+                ease: "none",
+                scrollTrigger: {
+                    trigger: "#narrative",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: true
+                }
+            });
+
+            gsap.to("#narrative-card-back", {
+                y: -90,
+                scrollTrigger: {
+                    trigger: "#narrative",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: 1
+                }
+            });
+
+            gsap.to("#narrative-card-front", {
+                y: 60,
+                scrollTrigger: {
+                    trigger: "#narrative",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: 1.5
+                }
+            });
+
+            // ==========================================
+            // 5. PSEUDO 3D TILT EFFECT ON MOUSEMOVE
+            // ==========================================
+            const perspectiveCard = document.getElementById('perspective-card');
+            if (perspectiveCard) {
+                perspectiveCard.addEventListener('mousemove', (e) => {
+                    const rect = perspectiveCard.getBoundingClientRect();
+                    const x = e.clientX - rect.left - rect.width / 2;
+                    const y = e.clientY - rect.top - rect.height / 2;
+                    
+                    const rotateX = (-y / rect.height) * 20;
+                    const rotateY = (x / rect.width) * 20;
+
+                    perspectiveCard.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+                });
+
+                perspectiveCard.addEventListener('mouseleave', () => {
+                    perspectiveCard.style.transform = `rotateX(0deg) rotateY(0deg)`;
+                });
+            }
+
+            // ==========================================
+            // 6. PINNED SCROLL STEP CARDS ANIMATION
+            // ==========================================
+            gsap.utils.toArray('.step-card').forEach((card) => {
+                gsap.from(card, {
+                    y: 80,
+                    opacity: 0,
+                    duration: 0.8,
+                    ease: "power2.out",
+                    scrollTrigger: {
+                        trigger: card,
+                        start: "top 80%",
+                        toggleActions: "play none none reverse"
+                    }
+                });
+            });
+
+            // ==========================================
+            // 7. CARDS GRID OFFSET PARALLAX (LEFT VS RIGHT)
+            // ==========================================
+            gsap.to("#cards-col-left", {
+                y: -60,
+                scrollTrigger: {
+                    trigger: "#cards",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: 1
+                }
+            });
+
+            gsap.to("#cards-col-right", {
+                y: 60,
+                scrollTrigger: {
+                    trigger: "#cards",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: 1.5
+                }
+            });
+
+            // ==========================================
+            // 8. SHOWCASE ZOOM & FLOATING BADGES SCRUB
+            // ==========================================
+            gsap.to("#zoom-image", {
+                scale: 1.0,
+                ease: "none",
+                scrollTrigger: {
+                    trigger: "#showcase",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: true
+                }
+            });
+
+            gsap.to("#zoom-float-left", {
+                y: -80,
+                x: -30,
+                scrollTrigger: {
+                    trigger: "#showcase",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: 1
+                }
+            });
+
+            gsap.to("#zoom-float-right", {
+                y: -120,
+                x: 30,
+                scrollTrigger: {
+                    trigger: "#showcase",
+                    start: "top bottom",
+                    end: "bottom top",
+                    scrub: 1.5
+                }
+            });
+
+            // ==========================================
+            // 9. NAVBAR STICKY & TOP PROGRESS BAR
+            // ==========================================
+            const navbar = document.getElementById('navbar');
+            const progressBar = document.getElementById('scroll-progress-bar');
+            const percentText = document.getElementById('scroll-percent');
+
+            window.addEventListener('scroll', () => {
+                // Header styling
+                if (window.scrollY > 50) {
+                    navbar.classList.add('navbar-scrolled', 'py-3');
+                    navbar.classList.remove('py-5');
+                } else {
+                    navbar.classList.remove('navbar-scrolled', 'py-3');
+                    navbar.classList.add('py-5');
+                }
+
+                // Scroll Percentage
+                const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+                if (totalHeight > 0) {
+                    const progress = (window.scrollY / totalHeight) * 100;
+                    const roundedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+                    progressBar.style.width = roundedProgress + '%';
+                    percentText.innerText = roundedProgress + '%';
+                }
+            });
+
+            // ==========================================
+            // 10. INTERACTIVE HERO BACKGROUND CANVAS PARTICLES
+            // ==========================================
+            const heroCanvas = document.getElementById('hero-particle-canvas');
+            if (heroCanvas) {
+                const ctx = heroCanvas.getContext('2d');
+                let width = heroCanvas.width = heroCanvas.offsetWidth || window.innerWidth;
+                let height = heroCanvas.height = heroCanvas.offsetHeight || window.innerHeight;
+
+                window.addEventListener('resize', () => {
+                    width = heroCanvas.width = heroCanvas.offsetWidth || window.innerWidth;
+                    height = heroCanvas.height = heroCanvas.offsetHeight || window.innerHeight;
+                });
+
+                const particles = Array.from({ length: 45 }, () => ({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.6,
+                    vy: (Math.random() - 0.5) * 0.6,
+                    size: Math.random() * 2 + 1
+                }));
+
+                let mouseX = width / 2;
+                let mouseY = height / 2;
+
+                window.addEventListener('mousemove', (e) => {
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                });
+
+                function renderHeroCanvas() {
+                    ctx.clearRect(0, 0, width, height);
+
+                    particles.forEach((p, i) => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+
+                        if (p.x < 0 || p.x > width) p.vx *= -1;
+                        if (p.y < 0 || p.y > height) p.vy *= -1;
+
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                        ctx.fill();
+
+                        // Connect lines
+                        for (let j = i + 1; j < particles.length; j++) {
+                            const p2 = particles[j];
+                            const dx = p.x - p2.x;
+                            const dy = p.y - p2.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+
+                            if (dist < 120) {
+                                ctx.beginPath();
+                                ctx.moveTo(p.x, p.y);
+                                ctx.lineTo(p2.x, p2.y);
+                                ctx.strokeStyle = `rgba(255, 255, 255, ${0.12 * (1 - dist / 120)})`;
+                                ctx.lineWidth = 0.8;
+                                ctx.stroke();
+                            }
+                        }
+
+                        // Connect mouse
+                        const mdx = p.x - mouseX;
+                        const mdy = p.y - mouseY;
+                        const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+                        if (mdist < 150) {
+                            ctx.beginPath();
+                            ctx.moveTo(p.x, p.y);
+                            ctx.lineTo(mouseX, mouseY);
+                            ctx.strokeStyle = `rgba(255, 255, 255, ${0.25 * (1 - mdist / 150)})`;
+                            ctx.lineWidth = 1;
+                            ctx.stroke();
+                        }
+                    });
+
+                    requestAnimationFrame(renderHeroCanvas);
+                }
+                renderHeroCanvas();
+            }
+
+            // ==========================================
+            // 11. MAGNETIC BUTTONS HOVER EFFECT
+            // ==========================================
+            document.querySelectorAll('.magnetic-btn').forEach(btn => {
+                btn.addEventListener('mousemove', (e) => {
+                    const rect = btn.getBoundingClientRect();
+                    const x = e.clientX - rect.left - rect.width / 2;
+                    const y = e.clientY - rect.top - rect.height / 2;
+                    btn.style.transform = `translate(${x * 0.25}px, ${y * 0.25}px)`;
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.transform = `translate(0px, 0px)`;
+                });
+            });
+
+            // ==========================================
+            // 12. DYNAMIC REALTIME QR MATRIX GENERATOR & SANDBOX
+            // ==========================================
+            const sandboxInput = document.getElementById('sandbox-input');
+            if (sandboxInput) {
+                sandboxInput.addEventListener('input', updateInteractiveQR);
+                updateInteractiveQR();
+            }
+
+            // Mobile Menu Toggle
+            const mobileBtn = document.getElementById('mobile-menu-btn');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (mobileBtn && mobileMenu) {
+                mobileBtn.addEventListener('click', () => {
+                    mobileMenu.classList.toggle('hidden');
+                    mobileMenu.classList.toggle('flex');
+                });
+            }
+
+            // Smooth Scroll for Internal Anchors
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    const targetId = this.getAttribute('href');
+                    if (targetId !== '#') {
+                        e.preventDefault();
+                        const targetElem = document.querySelector(targetId);
+                        if (targetElem) {
+                            if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                                mobileMenu.classList.add('hidden');
+                                mobileMenu.classList.remove('flex');
+                            }
+                            targetElem.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }
+                });
+            });
+        });
+
+        // Global functions for Sandbox Interactive Controls
+        function setPreset(url) {
+            const input = document.getElementById('sandbox-input');
+            if (input) {
+                input.value = url;
+                updateInteractiveQR();
+            }
+        }
+
+        function copyCurlCode() {
+            const snippet = document.getElementById('curl-snippet');
+            if (snippet) {
+                const text = snippet.innerText;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(text);
+                } else {
+                    document.execCommand('copy');
+                }
+                const btn = document.getElementById('copy-curl-btn');
+                if (btn) {
+                    btn.innerText = '[Đã chép!]';
+                    setTimeout(() => btn.innerText = '[Sao chép]', 2000);
+                }
+            }
+        }
+
+        function updateInteractiveQR() {
+            const canvas = document.getElementById('qr-matrix-canvas');
+            const input = document.getElementById('sandbox-input');
+            const hmacToggle = document.getElementById('toggle-hmac');
+            const otpToggle = document.getElementById('toggle-otp');
+            const curlSnippet = document.getElementById('curl-snippet');
+            const hashPreview = document.getElementById('qr-hash-preview');
+
+            if (!canvas || !input) return;
+
+            const val = input.value || 'https://smartqr.io';
+            const hmac = hmacToggle ? hmacToggle.checked : false;
+            const otp = otpToggle ? otpToggle.checked : false;
+
+            // Generate deterministic Hash code for matrix visual
+            let hash = 0;
+            const fullStr = val + (hmac ? '_hmac' : '') + (otp ? '_otp' : '');
+            for (let i = 0; i < fullStr.length; i++) {
+                hash = ((hash << 5) - hash) + fullStr.charCodeAt(i);
+                hash |= 0;
+            }
+
+            // Render Dynamic QR Canvas Matrix
+            const ctx = canvas.getContext('2d');
+            const size = 180;
+            const gridCount = 21;
+            const cellSize = size / gridCount;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, size, size);
+
+            ctx.fillStyle = '#000000';
+
+            // Draw Finder Patterns (Top-Left, Top-Right, Bottom-Left)
+            drawFinderPattern(ctx, 0, 0, cellSize);
+            drawFinderPattern(ctx, (gridCount - 7) * cellSize, 0, cellSize);
+            drawFinderPattern(ctx, 0, (gridCount - 7) * cellSize, cellSize);
+
+            // Draw Dynamic Data Modules based on hash
+            for (let row = 0; row < gridCount; row++) {
+                for (let col = 0; col < gridCount; col++) {
+                    // Skip finder pattern zones
+                    if ((row < 8 && col < 8) || (row < 8 && col >= gridCount - 8) || (row >= gridCount - 8 && col < 8)) {
+                        continue;
+                    }
+                    // Skip center logo zone
+                    if (row >= 8 && row <= 12 && col >= 8 && col <= 12) {
+                        continue;
+                    }
+
+                    const bit = (Math.abs(hash ^ (row * 31 + col * 17 + fullStr.length * 7)) % 100) > 42;
+                    if (bit) {
+                        ctx.fillRect(col * cellSize, row * cellSize, cellSize - 0.5, cellSize - 0.5);
+                    }
+                }
+            }
+
+            // Update cURL Snippet Text
+            if (curlSnippet) {
+                curlSnippet.innerText = `curl -X POST "https://api.smartqr.io/v1/generate" \\
+  -H "Authorization: Bearer sqr_live_883921" \\
+  -d '{"target_url": "${val}", "hmac": ${hmac}, "otp_required": ${otp}}'`;
+            }
+
+            if (hashPreview) {
+                hashPreview.innerText = `HASH: 0x${Math.abs(hash).toString(16).padEnd(8, '0')} | HMAC: ${hmac ? 'ON' : 'OFF'}`;
+            }
+        }
+
+        function drawFinderPattern(ctx, x, y, cellSize) {
+            // Outer 7x7 box
+            ctx.fillRect(x, y, 7 * cellSize, 7 * cellSize);
+            // Inner 5x5 white box
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(x + cellSize, y + cellSize, 5 * cellSize, 5 * cellSize);
+            // Core 3x3 black box
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x + 2 * cellSize, y + 2 * cellSize, 3 * cellSize, 3 * cellSize);
+        }
+    </script>
+</body>
+</html>
