@@ -164,7 +164,6 @@ export class PlatformService {
     await this.redis.del("cache:products");
     const paymentMethod = dto.payment_method ?? "payos_demo";
     const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: isRent ? depositAmount : total, kind: "rental", method: paymentMethod, stage: "initial" });
-    if (paymentMethod === "payos_demo") setTimeout(() => void this.markRentalPaid(order.id), 5000);
     return {
       order_id: order.id,
       payment_demo_url: payment.paymentUrl,
@@ -216,13 +215,20 @@ export class PlatformService {
     }
     if (!Number.isInteger(amount) || amount < 1) throw new BadRequestException("Payment amount is invalid");
 
-    const payoutAccount = await this.prisma.payoutAccount.findFirst({
-      where: { method: "BANK", status: "active", isDefault: true, user: { role: UserRole.ADMIN } },
-      orderBy: { createdAt: "asc" },
-      select: { bankName: true, accountNumber: true, accountName: true }
-    });
-    if (!payoutAccount?.bankName || !payoutAccount.accountNumber || !payoutAccount.accountName) {
-      throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Chưa thiết lập tài khoản ngân hàng mặc định của shop tại Payout." });
+    const configuredBank = process.env.PAYOS_RECEIVER_BANK_NAME?.trim();
+    const configuredAccountNumber = process.env.PAYOS_RECEIVER_ACCOUNT_NUMBER?.trim();
+    if (Boolean(configuredBank) !== Boolean(configuredAccountNumber)) {
+      throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Cần cấu hình đồng thời PAYOS_RECEIVER_BANK_NAME và PAYOS_RECEIVER_ACCOUNT_NUMBER." });
+    }
+    const payoutAccount = configuredBank && configuredAccountNumber
+      ? { bankName: configuredBank, accountNumber: configuredAccountNumber, accountName: process.env.PAYOS_RECEIVER_ACCOUNT_NAME?.trim() ?? "" }
+      : await this.prisma.payoutAccount.findFirst({
+          where: { method: "BANK", status: "active", isDefault: true, user: { role: UserRole.ADMIN } },
+          orderBy: { createdAt: "asc" },
+          select: { bankName: true, accountNumber: true, accountName: true }
+        });
+    if (!payoutAccount?.bankName || !payoutAccount.accountNumber) {
+      throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Chưa cấu hình tài khoản nhận tiền cho shop trong biến môi trường hoặc Payout." });
     }
 
     return this.payos.createVietQrImage({

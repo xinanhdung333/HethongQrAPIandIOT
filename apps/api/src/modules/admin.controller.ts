@@ -241,8 +241,14 @@ export class AdminController {
     await this.assertAdmin(authorization);
     return this.prisma.rentalOrder.findMany({
       select: {
-        id: true, type: true, status: true, quantity: true, total: true,
-        user: { select: { email: true } }, product: { select: { name: true } }
+        id: true, type: true, status: true, quantity: true, duration: true,
+        rentFee: true, depositFee: true, installFee: true, total: true,
+        startDate: true, paymentDueAt: true, depositAmount: true, depositPercent: true,
+        remainingAmount: true, remainingPaidAmount: true, remainingPaymentStatus: true,
+        remainingPaidAt: true, depositRefundedAt: true, shippingAddress: true,
+        gateIds: true, damageNotes: true, createdAt: true, updatedAt: true,
+        user: { select: { id: true, email: true, fullName: true, phone: true, addressLine: true } },
+        product: { select: { id: true, name: true, slug: true, type: true, productType: true } }
       },
       orderBy: { createdAt: "desc" },
       take: 100

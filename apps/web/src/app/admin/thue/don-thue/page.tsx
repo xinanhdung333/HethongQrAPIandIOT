@@ -1,1 +1,2 @@
-import { AdminResourcePage } from "../../admin-resource-page"; export default function Page() { return <AdminResourcePage title="Đơn thuê" endpoint="/admin/rentals" columns={["Mã đơn", "Khách hàng", "Trạng thái", "Khoảng thời gian", "Chi tiết"]} />; }
+import { AdminConsole } from "../../admin-console";
+export default function AdminRentalOrdersPage() { return <AdminConsole initialTab="orders" />; }

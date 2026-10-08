@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart3, Copy, Database, FileText, History, KeyRound, Loader2, Package, Radio, Save, ShieldCheck, ShoppingBag, Ticket, Truck, Users } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronUp, Copy, Database, FileText, History, KeyRound, Loader2, Package, Radio, Save, ShieldCheck, ShoppingBag, Ticket, Truck, Users } from "lucide-react";
 import { API_URL, money, StaticPage } from "@/lib/api";
 import { AdminShell } from "./admin-resource-page";
 
@@ -10,7 +10,16 @@ type AdminData = {
   summary?: { counts: Record<string, number>; revenue: { total: number; payout: number; fee: number } };
   users: Array<{ id: string; email: string; role: string; createdAt: string }>;
   products: Array<{ id: string; slug: string; name: string; type: string; priceSell: number; priceRentMonth: number; stock: number; images?: string[] }>;
-  orders: Array<{ id: string; type: string; status: string; quantity: number; total: number; user?: { email: string }; product?: { name: string } }>;
+  orders: Array<{
+    id: string; type: string; status: string; quantity: number; duration: number;
+    rentFee: number; depositFee: number; installFee: number; total: number;
+    startDate: string | null; paymentDueAt: string | null; depositAmount: number;
+    depositPercent: number; remainingAmount: number; remainingPaidAmount: number;
+    remainingPaymentStatus: string; remainingPaidAt: string | null; depositRefundedAt: string | null;
+    shippingAddress: unknown; gateIds: unknown; damageNotes: string | null; createdAt: string; updatedAt: string;
+    user?: { id: string; email: string; fullName: string | null; phone: string | null; addressLine: string | null };
+    product?: { id: string; name: string; slug: string; type: string; productType: string | null };
+  }>;
   shows: Array<{ id: string; slug: string; name: string; status: string; soldTickets: number; totalTickets: number; ticketPrice: number; installationStatus: string; scannerCount: number; installationNote?: string | null; apiKeys?: Array<{ prefix: string; status: string; revokeAt?: string | null }>; owner?: { email: string } }>;
   tickets: Array<{ id: string; status: string; quantity: number; totalAmount: number; payoutAmount: number; show: { name: string }; tickets: Array<{ id: string; isUsed: boolean }> }>;
   apiKeys: Array<{ id: string; prefix: string; quota: number; userId: string; rentalId: string | null; scopes: string[]; rateLimit: number; createdAt: string; user?: { email: string }; rental?: { appName: string; plan: string } | null }>;
@@ -216,6 +225,17 @@ export function AdminConsole({ initialTab = "overview" }: { initialTab?: AdminSe
     await load(token, true);
   }
 
+  async function updateOrderStatus(id: string, status: string) {
+    setMessage("");
+    try {
+      await request(`/admin/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+      setMessage("Đã cập nhật trạng thái đơn hàng.");
+      await load(token, true);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Không thể cập nhật trạng thái đơn hàng.");
+    }
+  }
+
   async function updateShowInstallation(id: string, formData: FormData) {
     await request(`/admin/shows/${id}/installation`, {
       method: "PATCH",
@@ -352,7 +372,7 @@ export function AdminConsole({ initialTab = "overview" }: { initialTab?: AdminSe
           )}
           {tab === "staticPages" && <section className="grid gap-4">{data.staticPages.map((page) => <StaticPageEditor key={page.id} page={page} onSave={updateStaticPage} />)}</section>}
           {tab === "products" && <section className="grid gap-3">{data.products.map((product) => <ProductEditor key={product.id} product={product} onSave={updateProduct} />)}</section>}
-          {tab === "orders" && <SimpleTable rows={data.orders.map((order) => [order.id, order.user?.email ?? "", order.product?.name ?? "", order.type, order.status, money(order.total)])} />}
+          {tab === "orders" && <AdminOrders orders={data.orders} onUpdateStatus={updateOrderStatus} />}
           {tab === "shows" && (
             <section className="grid gap-3">
               {data.shows.map((show) => (
@@ -413,6 +433,146 @@ export function AdminConsole({ initialTab = "overview" }: { initialTab?: AdminSe
       </section>
     </AdminShell>
   );
+}
+
+const orderStatusLabels: Record<string, string> = {
+  PENDING: "Chờ thanh toán",
+  DEPOSIT_PAID: "Đã trả cọc",
+  DEPOSIT_FORFEITED: "Mất cọc",
+  PAID: "Đã thanh toán",
+  SHIPPED: "Đã giao hàng",
+  ACTIVE: "Đang thuê",
+  RETURNED: "Đã trả thiết bị",
+  CANCELLED: "Đã hủy"
+};
+
+function AdminOrders({ orders, onUpdateStatus }: {
+  orders: AdminData["orders"];
+  onUpdateStatus: (id: string, status: string) => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "RENT" | "BUY">("ALL");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statusEdits, setStatusEdits] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const filtered = orders.filter((order) =>
+    (typeFilter === "ALL" || order.type === typeFilter) &&
+    (!query || [
+      order.id, order.user?.email, order.user?.fullName, order.user?.phone,
+      order.product?.name, order.status, order.type
+    ].some((value) => value?.toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi"))))
+  );
+
+  async function saveStatus(order: AdminData["orders"][number]) {
+    const status = statusEdits[order.id] ?? order.status;
+    if (status === order.status) return;
+    setSavingId(order.id);
+    try {
+      await onUpdateStatus(order.id, status);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  return <section className="space-y-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-zinc-500">{filtered.length} đơn hàng · tối đa 100 đơn mới nhất</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <select className="field bg-white sm:w-44" aria-label="Lọc theo loại đơn" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "ALL" | "RENT" | "BUY")}>
+          <option value="ALL">Tất cả loại đơn</option>
+          <option value="RENT">Đơn thuê</option>
+          <option value="BUY">Đơn mua</option>
+        </select>
+        <input className="field bg-white sm:w-80" aria-label="Tìm đơn hàng" placeholder="Tìm mã đơn, khách hàng, sản phẩm..." value={query} onChange={(event) => setQuery(event.target.value)} />
+      </div>
+    </div>
+    <div className="grid gap-3">
+      {filtered.map((order) => {
+        const isExpanded = expandedId === order.id;
+        const statuses = order.type === "RENT"
+          ? ["PENDING", "DEPOSIT_PAID", "DEPOSIT_FORFEITED", "PAID", "SHIPPED", "ACTIVE", "RETURNED", "CANCELLED"]
+          : ["PENDING", "PAID", "SHIPPED", "CANCELLED"];
+        const address = displayOrderAddress(order.shippingAddress);
+        const gateIds = Array.isArray(order.gateIds) ? order.gateIds.map(String) : [];
+        return <article key={order.id} className="panel overflow-hidden">
+          <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold tracking-tight">{order.product?.name ?? "Sản phẩm đã xóa"}</h2>
+                <span className="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600">{order.type === "RENT" ? "Thuê" : "Mua"}</span>
+                <span className="text-xs text-zinc-500">#{order.id}</span>
+              </div>
+              <p className="mt-1 text-sm text-zinc-600">
+                {[order.user?.fullName, order.user?.email, order.user?.phone].filter(Boolean).join(" · ") || "Chưa có thông tin khách hàng"}
+              </p>
+              <p className="mt-2 text-sm text-zinc-600">
+                {order.quantity} sản phẩm{order.type === "RENT" ? ` · ${order.duration} tháng` : ""}
+                {" · "}Tổng <b className="text-zinc-950">{money(order.total)}</b>
+                {order.type === "RENT" && <> · Cọc <b className="text-amber-700">{money(order.depositAmount)}</b></>}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label={`Trạng thái đơn ${order.id}`}
+                className="field min-h-10 w-44 bg-white text-sm"
+                value={statusEdits[order.id] ?? order.status}
+                onChange={(event) => setStatusEdits((current) => ({ ...current, [order.id]: event.target.value }))}
+              >
+                {statuses.map((status) => <option key={status} value={status}>{orderStatusLabels[status] ?? status}</option>)}
+              </select>
+              <button type="button" className="btn btn-secondary min-h-10 text-sm" disabled={savingId === order.id || (statusEdits[order.id] ?? order.status) === order.status} onClick={() => void saveStatus(order)}>
+                {savingId === order.id ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
+                Lưu
+              </button>
+              <button type="button" aria-expanded={isExpanded} className="btn btn-secondary min-h-10 text-sm" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
+                {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                {isExpanded ? "Thu gọn" : "Chi tiết"}
+              </button>
+            </div>
+          </div>
+          {isExpanded && <div className="grid gap-x-8 gap-y-5 border-t border-zinc-200 bg-zinc-50/70 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <OrderDetail label="Mã đơn" value={order.id} />
+            <OrderDetail label="Ngày tạo" value={formatOrderDate(order.createdAt)} />
+            <OrderDetail label="Ngày bắt đầu thuê" value={formatOrderDate(order.startDate)} />
+            <OrderDetail label="Hạn thanh toán" value={formatOrderDate(order.paymentDueAt)} />
+            <OrderDetail label="Khách hàng" value={order.user?.fullName || "—"} />
+            <OrderDetail label="Email / SĐT" value={[order.user?.email, order.user?.phone].filter(Boolean).join(" · ") || "—"} />
+            <OrderDetail label="Tiền thuê" value={money(order.rentFee)} />
+            <OrderDetail label="Phí lắp đặt" value={money(order.installFee)} />
+            <OrderDetail label={`Tiền cọc (${order.depositPercent}%)`} value={money(order.depositAmount)} />
+            <OrderDetail label="Trạng thái cọc" value={order.status === "PENDING" ? "Chưa xác nhận thanh toán cọc" : order.depositRefundedAt ? "Đã hoàn cọc" : order.status === "DEPOSIT_FORFEITED" ? "Đã mất cọc" : order.type === "RENT" ? "Đã ghi nhận cọc theo trạng thái đơn" : "Không áp dụng"} />
+            <OrderDetail label="Còn phải thanh toán" value={money(Math.max(0, order.remainingAmount - order.remainingPaidAmount))} />
+            <OrderDetail label="Thanh toán phần còn lại" value={`${order.remainingPaymentStatus}${order.remainingPaidAt ? ` · ${formatOrderDate(order.remainingPaidAt)}` : ""}`} />
+            <OrderDetail label="Địa chỉ giao / lắp đặt" value={address} />
+            <OrderDetail label="Gate IDs" value={gateIds.join(", ") || "Chưa cấp"} />
+            <OrderDetail label="Ghi chú tình trạng thiết bị" value={order.damageNotes || "—"} />
+          </div>}
+        </article>;
+      })}
+      {!filtered.length && <div className="panel p-8 text-center text-sm text-zinc-500">{orders.length ? "Không tìm thấy đơn phù hợp." : "Chưa có đơn hàng."}</div>}
+    </div>
+  </section>;
+}
+
+function OrderDetail({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0">
+    <p className="text-xs font-medium text-zinc-500">{label}</p>
+    <p className="mt-1 break-words text-sm text-zinc-900">{value}</p>
+  </div>;
+}
+
+function formatOrderDate(value: string | null) {
+  return value ? new Date(value).toLocaleString("vi-VN") : "—";
+}
+
+function displayOrderAddress(value: unknown): string {
+  if (typeof value === "string") return value || "—";
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "—";
+  const parts = Object.values(value as Record<string, unknown>)
+    .filter((part): part is string | number => typeof part === "string" || typeof part === "number")
+    .map(String)
+    .filter(Boolean);
+  return parts.join(", ") || "—";
 }
 
 function StaticPageEditor({ page, onSave }: { page: StaticPage; onSave: (page: StaticPage, formData: FormData) => Promise<void> }) {

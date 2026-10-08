@@ -45,14 +45,8 @@ export function AuthClient({ mode }: { mode: "login" | "register" }) {
         <h1 className="text-3xl font-semibold tracking-tight">{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h1>
         <p className="mt-2 text-sm text-zinc-600">JWT có jti và có thể logout để revoke phiên.</p>
       </div>
-      <label className="grid gap-2 text-sm font-medium">Email<input required name="email" type="email" className="field" defaultValue={mode === "login" ? "admin@smartqr.vn" : "demo@smartqr.vn"} /></label>
-      <label className="grid gap-2 text-sm font-medium">Mật khẩu<input required name="password" type="password" className="field" defaultValue={mode === "login" ? "admin123456" : ""} minLength={8} /></label>
-      {mode === "login" && (
-        <div className="grid gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
-          <span>Admin: admin@smartqr.vn / admin123456</span>
-          <span>User: demo@smartqr.vn / demo123456</span>
-        </div>
-      )}
+      <label className="grid gap-2 text-sm font-medium">Email<input required name="email" type="email" className="field" autoComplete="username" /></label>
+      <label className="grid gap-2 text-sm font-medium">Mật khẩu<input required name="password" type="password" className="field" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} /></label>
       <button className="btn btn-primary" disabled={loading}>
         {mode === "login" ? <LogIn size={16} /> : <UserPlus size={16} />}
         {loading ? "Đang xử lý" : mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}

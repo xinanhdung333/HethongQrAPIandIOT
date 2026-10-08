@@ -13,7 +13,7 @@ export class PayosMockService {
   async createVietQrImage(input: { bankName: string; accountNumber: string; accountName: string; amount: number; orderId: string }) {
     const accountNumber = input.accountNumber.trim();
     const accountName = input.accountName.trim();
-    if (!/^\d{6,30}$/.test(accountNumber) || !accountName || !Number.isSafeInteger(input.amount) || input.amount < 1) {
+    if (!/^\d{6,30}$/.test(accountNumber) || !Number.isSafeInteger(input.amount) || input.amount < 1) {
       throw new BadRequestException({ error: "invalid_vietqr_details", message: "Thông tin ngân hàng hoặc số tiền không hợp lệ để tạo mã VietQR." });
     }
     const bank = await this.findVietQrBank(input.bankName);
@@ -23,7 +23,7 @@ export class PayosMockService {
     const imageUrl = new URL(`https://img.vietqr.io/image/${bank.bin}-${accountNumber}-compact2.png`);
     imageUrl.searchParams.set("amount", String(input.amount));
     imageUrl.searchParams.set("addInfo", input.orderId.replace(/[^a-zA-Z0-9]/g, "").slice(-25));
-    imageUrl.searchParams.set("accountName", accountName);
+    if (accountName) imageUrl.searchParams.set("accountName", accountName);
 
     let response: Response;
     try {
