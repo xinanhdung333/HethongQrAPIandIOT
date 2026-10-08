@@ -21,7 +21,7 @@ type PaidApiRental = {
   api_key_once?: string;
   apiKeyPrefix?: string;
 };
-type RentalCheckout = { id: string; total: number; depositAmount: number; remainingAmount: number; remainingPaidAmount: number; remainingPaymentStatus: string; product?: { name: string }; quantity: number; duration: number };
+type RentalCheckout = { id: string; type: "RENT" | "BUY"; total: number; depositAmount: number; remainingAmount: number; remainingPaidAmount: number; remainingPaymentStatus: string; product?: { name: string }; quantity: number; duration: number };
 
 export function PaymentClient() {
   const search = useSearchParams();
@@ -31,6 +31,7 @@ export function PaymentClient() {
   const paymentSignature = search.get("signature") || "";
   const gateway = search.get("gateway") || "";
   const paymentStage = search.get("payment_stage") || "initial";
+  const isRemainingRentalCheckout = kind === "rental" && paymentStage === "remaining";
   const enableOfflineRsa = search.get("enable_offline_rsa") === "1";
   const [status, setStatus] = useState<"waiting" | "paid" | "error" | "momo_returned">("waiting");
   const [tickets, setTickets] = useState<PaidTicket[]>([]);
@@ -39,7 +40,19 @@ export function PaymentClient() {
   const [rental, setRental] = useState<RentalCheckout | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [switchingMethod, setSwitchingMethod] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [qrError, setQrError] = useState(false);
+  const qrImageUrl = useMemo(() => {
+    if (!orderId || !paymentExpires || !paymentSignature || gateway || (isRemainingRentalCheckout && paymentMethod !== "payos_demo")) return "";
+    const query = new URLSearchParams({
+      order_id: orderId,
+      kind,
+      payment_stage: paymentStage,
+      expires: paymentExpires,
+      signature: paymentSignature
+    });
+    return `${API_URL}/webhooks/payos-demo/qr?${query.toString()}`;
+  }, [gateway, isRemainingRentalCheckout, kind, orderId, paymentExpires, paymentMethod, paymentSignature, paymentStage]);
   const backHref = useMemo(() => kind === "rental" ? "/dashboard/rentals" : kind === "api" ? "/thue-api" : "/dashboard/tickets", [kind]);
 
   useEffect(() => {
@@ -53,8 +66,8 @@ export function PaymentClient() {
 
   async function continuePayment() {
     if (!paymentMethod) return;
-    if (kind !== "rental" || paymentStage !== "remaining" || paymentMethod === "payos_demo") {
-      setStarted(true);
+    if (paymentMethod === "payos_demo") {
+      await confirmDemoPayment();
       return;
     }
     setSwitchingMethod(true);
@@ -64,60 +77,54 @@ export function PaymentClient() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Không thể đổi phương thức thanh toán."); } finally { setSwitchingMethod(false); }
   }
 
-  useEffect(() => {
-    if (kind === "rental" && (!paymentMethod || !started)) return;
-    if (gateway === "momo") {
-      setStatus("momo_returned");
-      setMessage("Da quay lai tu MoMo sandbox. Trang thai don hang se duoc cap nhat khi backend nhan IPN MoMo hop le.");
+  async function confirmDemoPayment() {
+    setConfirming(true);
+    try {
       if (kind === "rental" && paymentStage === "remaining") {
-        void api(`/rentals/${orderId}/pay-remaining/confirm-demo`, { method: "POST", body: "{}" }).then(() => setMessage("Thanh toan MoMo sandbox da duoc ghi nhan cho don thue."));
+        await api(`/rentals/${orderId}/pay-remaining/confirm-demo`, { method: "POST", body: "{}" });
+        setStatus("paid");
+        setMessage("Thanh toán phần còn lại đã được ghi nhận trong chế độ demo.");
+        return;
       }
-      return;
-    }
-    const timer = window.setTimeout(async () => {
-      try {
-        if (kind === "rental" && paymentStage === "remaining") {
-          await api(`/rentals/${orderId}/pay-remaining/confirm-demo`, { method: "POST", body: "{}" });
-          setStatus("paid");
-          setMessage("Thanh toán phần còn lại đã được ghi nhận.");
-          return;
-        }
-        const body = JSON.stringify({ order_id: orderId, kind, payment_stage: paymentStage });
-        const result = await api<PaidTicketOrder | unknown>("/webhooks/payos-demo", {
-          method: "POST",
-          headers: { "X-Payment-Expires": paymentExpires, "X-Payment-Signature": paymentSignature },
-          body
-        });
-        if (kind === "ticket" && result && typeof result === "object" && "tickets" in result) {
-          setTickets(((result as PaidTicketOrder).tickets ?? []).filter((ticket) => ticket.qrJwt));
-        }
-        if (kind === "api" && result && typeof result === "object" && "api_key_once" in result) {
-          const rawKey = String((result as PaidApiRental).api_key_once ?? "");
-          setApiKeyOnce(rawKey);
-          if (enableOfflineRsa && rawKey) {
-            try {
-              const enableResponse = await fetch(`${API_URL}/api/v1/gates/tenant-settings/enable-offline`, {
-                method: "POST",
-                headers: { "x-api-key": rawKey }
-              });
-              if (!enableResponse.ok) {
-                setMessage("Da tao API key thanh cong, nhung bat che do RSA that bai. Ban co the tu bat lai sau trong Developer Console tai dashboard/api-keys.");
-              }
-            } catch {
+      const result = await api<PaidTicketOrder | unknown>("/webhooks/payos-demo", {
+        method: "POST",
+        headers: { "X-Payment-Expires": paymentExpires, "X-Payment-Signature": paymentSignature },
+        body: JSON.stringify({ order_id: orderId, kind, payment_stage: paymentStage })
+      });
+      if (kind === "ticket" && result && typeof result === "object" && "tickets" in result) {
+        setTickets(((result as PaidTicketOrder).tickets ?? []).filter((ticket) => ticket.qrJwt));
+      }
+      if (kind === "api" && result && typeof result === "object" && "api_key_once" in result) {
+        const rawKey = String((result as PaidApiRental).api_key_once ?? "");
+        setApiKeyOnce(rawKey);
+        if (enableOfflineRsa && rawKey) {
+          try {
+            const enableResponse = await fetch(`${API_URL}/api/v1/gates/tenant-settings/enable-offline`, {
+              method: "POST",
+              headers: { "x-api-key": rawKey }
+            });
+            if (!enableResponse.ok) {
               setMessage("Da tao API key thanh cong, nhung bat che do RSA that bai. Ban co the tu bat lai sau trong Developer Console tai dashboard/api-keys.");
             }
+          } catch {
+            setMessage("Da tao API key thanh cong, nhung bat che do RSA that bai. Ban co the tu bat lai sau trong Developer Console tai dashboard/api-keys.");
           }
         }
-        setStatus("paid");
-      } catch (error) {
-        setStatus("error");
-        setMessage(error instanceof Error ? error.message : "Không thể xác nhận thanh toán demo.");
       }
-    }, kind === "rental" && paymentStage === "remaining" ? 300 : 5000);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [enableOfflineRsa, gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage, paymentMethod, started]);
+      setStatus("paid");
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "Không thể xác nhận thanh toán demo.");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  useEffect(() => {
+    if (gateway !== "momo") return;
+    setStatus("momo_returned");
+    setMessage("Da quay lai tu MoMo sandbox. Trang thai don hang se duoc cap nhat khi backend nhan IPN MoMo hop le.");
+  }, [gateway]);
 
   return (
     <main className="shell py-16">
@@ -127,8 +134,25 @@ export function PaymentClient() {
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{status === "paid" ? "Da thanh toan demo" : status === "error" ? "Thanh toan demo loi" : status === "momo_returned" ? "MoMo da quay ve" : "PayOS DEMO MOCK"}</h1>
         <p className="mt-3 text-zinc-600">Đơn {orderId}. Số tiền được xác nhận từ dữ liệu đơn hàng.</p>
-        {kind === "rental" && rental && <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-left"><p className="font-semibold">{rental.product?.name} · {rental.quantity} thiết bị · {rental.duration} tháng</p>{paymentStage === "remaining" ? <div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Giá gốc đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between"><span className="text-zinc-500">Tiền cọc đã trả</span><b className="text-emerald-700">− {money(rental.depositAmount)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Phần còn phải trả</span><b className="text-xl text-amber-700">{money(rental.remainingAmount)}</b></div></div> : <div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Tổng giá trị đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Tiền cọc cần thanh toán</span><b className="text-xl text-amber-700">{money(rental.depositAmount)}</b></div></div>}</div>}
-        {kind === "rental" && <div className="mx-auto mt-4 max-w-xl text-left"><PaymentMethodSelect value={paymentMethod} onChange={(value) => void switchPaymentMethod(value)} /><button type="button" disabled={!paymentMethod || switchingMethod} onClick={() => void continuePayment()} className="btn btn-primary mt-4 w-full">{switchingMethod ? "Đang chuyển sang cổng thanh toán..." : "Thanh toán tiếp tục"}</button>{!paymentMethod && <p className="mt-2 text-sm font-medium text-amber-700">Vui lòng chọn phương thức thanh toán để tiếp tục.</p>}</div>}
+        {kind === "rental" && rental && (rental.type === "BUY" ? <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-left"><p className="font-semibold">{rental.product?.name} · {rental.quantity} sản phẩm</p><div className="mt-4 flex justify-between border-t border-zinc-200 pt-3 text-sm"><span className="font-medium">Tổng tiền đơn mua</span><b className="text-xl text-amber-700">{money(rental.total)}</b></div></div> : <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-zinc-50 p-5 text-left"><p className="font-semibold">{rental.product?.name} · {rental.quantity} thiết bị · {rental.duration} tháng</p>{isRemainingRentalCheckout ? <div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Giá trị đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between"><span className="text-zinc-500">Tiền cọc đã trả</span><b className="text-emerald-700">− {money(rental.depositAmount)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Phần còn phải trả</span><b className="text-xl text-amber-700">{money(rental.remainingAmount)}</b></div></div> : <div className="mt-4 grid gap-3 text-sm"><div className="flex justify-between"><span className="text-zinc-500">Tổng giá trị đơn thuê</span><b>{money(rental.total)}</b></div><div className="flex justify-between border-t border-zinc-200 pt-3"><span className="font-medium">Tiền cọc cần thanh toán</span><b className="text-xl text-amber-700">{money(rental.depositAmount)}</b></div></div>}</div>)}
+        {isRemainingRentalCheckout && <div className="mx-auto mt-4 max-w-xl text-left"><PaymentMethodSelect value={paymentMethod} onChange={(value) => void switchPaymentMethod(value)} /><button type="button" disabled={!paymentMethod || switchingMethod || confirming} onClick={() => void continuePayment()} className="btn btn-primary mt-4 w-full">{switchingMethod ? "Đang chuyển sang cổng thanh toán..." : confirming ? "Đang xác nhận demo..." : paymentMethod === "payos_demo" ? "Xác nhận thanh toán demo" : "Thanh toán phần còn lại"}</button>{!paymentMethod && <p className="mt-2 text-sm font-medium text-amber-700">Vui lòng chọn phương thức thanh toán để tiếp tục.</p>}</div>}
+        {qrImageUrl && status === "waiting" && (
+          <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-white p-5 text-left">
+            <h2 className="text-lg font-semibold tracking-tight">Quét mã VietQR</h2>
+            {qrError ? (
+              <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Không tải được mã VietQR. Hãy kiểm tra tài khoản ngân hàng mặc định của shop trong phần Payout và thử tải lại trang.</p>
+            ) : (
+              <img
+                src={qrImageUrl}
+                alt="Mã VietQR thanh toán"
+                className="mx-auto mt-4 aspect-square w-64 max-w-full rounded-lg border border-zinc-200 object-contain"
+                onError={() => setQrError(true)}
+              />
+            )}
+            <p className="mt-4 text-sm leading-6 text-zinc-600">Mã được tạo theo số tiền của đơn hàng và tài khoản ngân hàng mặc định của shop. Đây là luồng PayOS demo: chuyển khoản không được đối soát tự động, trạng thái đơn vẫn được mô phỏng.</p>
+            {!isRemainingRentalCheckout && <button type="button" disabled={confirming} onClick={() => void confirmDemoPayment()} className="btn btn-primary mt-4 w-full">{confirming ? "Đang xác nhận demo..." : "Xác nhận thanh toán demo"}</button>}
+          </div>
+        )}
         {message && <p className="mt-4 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">{message}</p>}
         {status === "momo_returned" && <Link href={backHref} className="btn btn-primary mt-5">Ve don hang</Link>}
       </section>

@@ -8,7 +8,7 @@ const groups = [
     title: "Sản phẩm",
     links: [
       ["SP-01 Mini", "/san-pham"],
-      ["Thuê thiết bị", "/thue-thiet-bi"],
+      ["Sản phẩm & thuê", "/dashboard/pages/san-pham"],
       ["Tạo show", "/tao-show"],
       ["Linh kiện", "/linh-kien"]
     ]

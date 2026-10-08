@@ -100,9 +100,9 @@ export default function RentalsDashboardPage() {
             <ShoppingBag size={16} />
             Mua linh kien
           </Link>
-          <Link href="/dashboard/pages/thue-thiet-bi" className="btn btn-primary text-sm">
+          <Link href="/dashboard/pages/san-pham" className="btn btn-primary text-sm">
             <Truck size={16} />
-            Thue thiet bi
+            Mua / thue thiet bi
           </Link>
         </div>
       </div>

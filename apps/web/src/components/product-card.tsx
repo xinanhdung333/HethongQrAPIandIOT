@@ -14,10 +14,9 @@ export function ProductCard({ product }: { product: Product }) {
       <dl className="mt-5 grid gap-2 text-sm">
         <div className="flex justify-between"><dt>Giá bán</dt><dd className="font-medium">{money(product.priceSell)}</dd></div>
         {product.priceRentMonth > 0 && <div className="flex justify-between"><dt>Giá thuê/tháng</dt><dd className="font-medium">{money(product.priceRentMonth)}</dd></div>}
-        {product.depositFee > 0 && <div className="flex justify-between"><dt>Cọc</dt><dd className="font-medium">{money(product.depositFee)}</dd></div>}
       </dl>
       <div className="mt-6 flex gap-3">
-        {product.type !== "COMPONENT" && <Link href={`/thue-thiet-bi?product=${product.id}`} className="btn btn-primary flex-1 text-sm">Thuê</Link>}
+        {product.type !== "COMPONENT" && product.productType !== "THIET_BI_BAN" && product.productType !== "LINH_KIEN" && product.priceRentMonth > 0 && <Link href={`/dashboard/pages/thue-thiet-bi/thanh-toan?product=${product.id}`} className="btn btn-primary flex-1 text-sm">Thuê</Link>}
         <Link href={product.type === "COMPONENT" ? "/linh-kien" : "/san-pham"} className="btn btn-secondary flex-1 text-sm">
           <ShoppingCart size={16} />
           Mua

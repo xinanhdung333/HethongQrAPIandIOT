@@ -57,7 +57,7 @@ const endpoints = [
       ["GET", "/admin/summary", "KPI tổng quan DB.", ""],
       ["GET", "/admin/users", "Danh sách users.", ""],
       ["GET", "/admin/products", "Danh sách sản phẩm.", ""],
-      ["PATCH", "/admin/products/:id", "Sửa tên, giá, cọc, tồn kho.", `{"name":"GM65 QR Scanner","price_sell":690000,"price_rent_month":0,"deposit_fee":0,"stock":80}`],
+      ["PATCH", "/admin/products/:id", "Sửa tên, giá bán, giá thuê và tồn kho.", `{"name":"GM65 QR Scanner","price_sell":690000,"price_rent_month":0,"stock":80}`],
       ["GET", "/admin/orders", "Danh sách đơn thuê/mua.", ""],
       ["GET", "/admin/shows", "Danh sách show.", ""],
       ["PATCH", "/admin/shows/:id/status", "Đổi trạng thái DRAFT/ACTIVE/ENDED.", `{"status":"ACTIVE"}`],

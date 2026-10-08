@@ -1,12 +1,50 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadGatewayException, BadRequestException, Injectable } from "@nestjs/common";
 import crypto from "crypto";
 
 export type PaymentMethod = "payos_demo" | "momo";
 type PaymentKind = "rental" | "ticket" | "api";
 type PaymentLinkInput = { orderId: string; amount: number; kind: PaymentKind; method?: PaymentMethod; stage?: "initial" | "remaining"; gatewayOrderId?: string };
+type VietQrBank = { bin: string; name: string; shortName: string; code: string };
+
+let vietQrBanks: Promise<VietQrBank[]> | null = null;
 
 @Injectable()
 export class PayosMockService {
+  async createVietQrImage(input: { bankName: string; accountNumber: string; accountName: string; amount: number; orderId: string }) {
+    const accountNumber = input.accountNumber.trim();
+    const accountName = input.accountName.trim();
+    if (!/^\d{6,30}$/.test(accountNumber) || !accountName || !Number.isSafeInteger(input.amount) || input.amount < 1) {
+      throw new BadRequestException({ error: "invalid_vietqr_details", message: "Thông tin ngân hàng hoặc số tiền không hợp lệ để tạo mã VietQR." });
+    }
+    const bank = await this.findVietQrBank(input.bankName);
+    if (!/^\d{6}$/.test(bank.bin)) {
+      throw new BadGatewayException({ error: "invalid_vietqr_bank_code", message: "Mã ngân hàng từ VietQR không hợp lệ." });
+    }
+    const imageUrl = new URL(`https://img.vietqr.io/image/${bank.bin}-${accountNumber}-compact2.png`);
+    imageUrl.searchParams.set("amount", String(input.amount));
+    imageUrl.searchParams.set("addInfo", input.orderId.replace(/[^a-zA-Z0-9]/g, "").slice(-25));
+    imageUrl.searchParams.set("accountName", accountName);
+
+    let response: Response;
+    try {
+      response = await fetch(imageUrl, { signal: AbortSignal.timeout(10000), cache: "no-store", redirect: "error" });
+    } catch {
+      throw new BadGatewayException({ error: "vietqr_unavailable", message: "Không kết nối được dịch vụ tạo mã VietQR." });
+    }
+    if (!response.ok || !response.headers.get("content-type")?.toLowerCase().includes("image/png")) {
+      throw new BadGatewayException({ error: "vietqr_generation_failed", message: "Dịch vụ VietQR không tạo được mã thanh toán." });
+    }
+    if (Number(response.headers.get("content-length")) > 1024 * 1024) {
+      throw new BadGatewayException({ error: "vietqr_image_too_large", message: "Ảnh mã VietQR vượt quá giới hạn cho phép." });
+    }
+
+    const image = Buffer.from(await response.arrayBuffer());
+    if (image.length > 1024 * 1024) {
+      throw new BadGatewayException({ error: "vietqr_image_too_large", message: "Ảnh mã VietQR vượt quá giới hạn cho phép." });
+    }
+    return image;
+  }
+
   async createPaymentLink(input: PaymentLinkInput) {
     if (input.method === "momo") return this.createMomoPaymentLink(input);
     return this.createPayosDemoLink(input);
@@ -25,6 +63,30 @@ export class PayosMockService {
       paymentUrl: `${baseUrl}/thanh-toan-demo?${query}`,
       checkoutUrl: `${baseUrl}/thanh-toan-demo?${query}`
     };
+  }
+
+  private async findVietQrBank(bankName: string) {
+    if (!vietQrBanks) {
+      vietQrBanks = fetch("https://api.vietqr.io/v2/banks", { signal: AbortSignal.timeout(10000), cache: "no-store", redirect: "error" })
+        .then(async response => {
+          if (!response.ok) throw new Error("VietQR bank directory request failed");
+          const body = await response.json() as { code?: string; data?: VietQrBank[] };
+          if (body.code !== "00" || !Array.isArray(body.data)) throw new Error("VietQR bank directory response is invalid");
+          return body.data;
+        })
+        .catch(error => {
+          vietQrBanks = null;
+          throw new BadGatewayException({ error: "vietqr_bank_lookup_failed", message: error instanceof Error ? error.message : "Không tra cứu được mã ngân hàng VietQR." });
+        });
+    }
+
+    const banks = await vietQrBanks;
+    const normalizedName = normalizeBankName(bankName);
+    const bank = banks.find(item => [item.bin, item.code, item.shortName, item.name].some(value => normalizeBankName(value) === normalizedName));
+    if (!bank) {
+      throw new BadRequestException({ error: "unsupported_payout_bank", message: `Không tìm thấy mã VietQR cho ngân hàng "${bankName}". Hãy cập nhật tên ngân hàng bằng tên hoặc mã ngân hàng hợp lệ trong Payout.` });
+    }
+    return bank;
   }
 
   private async createMomoPaymentLink(input: PaymentLinkInput) {
@@ -67,10 +129,15 @@ export class PayosMockService {
     if (!response.ok || !body?.payUrl) {
       throw new BadRequestException({ error: "momo_payment_failed", message: body?.message ?? "MoMo sandbox did not return a payment URL" });
     }
+
     return {
       paymentId: `momo_${input.orderId}`,
       paymentUrl: body.payUrl,
       checkoutUrl: body.payUrl
     };
   }
+}
+
+function normalizeBankName(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 }

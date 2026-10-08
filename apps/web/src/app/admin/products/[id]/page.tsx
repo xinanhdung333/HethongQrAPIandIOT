@@ -7,8 +7,8 @@ import { AdminShell } from "../../admin-resource-page";
 import { invalidateAdminDataCache } from "../../admin-console";
 import { Save } from "lucide-react";
 
-type ProductForm = { id: string; slug: string; name: string; type: "IOT_MINI" | "IOT_PRO" | "COMPONENT"; priceSell: number; priceRentMonth: number; depositFee: number; stock: number; images?: string[]; specs?: Record<string, unknown> };
-const blank: Omit<ProductForm, "id"> = { slug: "", name: "", type: "COMPONENT", priceSell: 0, priceRentMonth: 0, depositFee: 0, stock: 0, images: [], specs: {} };
+type ProductForm = { id: string; slug: string; name: string; type: "IOT_MINI" | "IOT_PRO" | "COMPONENT"; priceSell: number; priceRentMonth: number; stock: number; images?: string[]; specs?: Record<string, unknown> };
+const blank: Omit<ProductForm, "id"> = { slug: "", name: "", type: "COMPONENT", priceSell: 0, priceRentMonth: 0, stock: 0, images: [], specs: {} };
 
 export default function AdminProductFormPage() {
   const { id } = useParams<{ id: string }>(); const router = useRouter(); const isNew = id === "new";
@@ -19,7 +19,7 @@ export default function AdminProductFormPage() {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
       const form = new FormData(event.currentTarget);
-      const payload = { slug: String(form.get("slug")).trim(), name: String(form.get("name")).trim(), type: values.type, price_sell: Number(form.get("priceSell")), price_rent_month: Number(form.get("priceRentMonth")), deposit_fee: Number(form.get("depositFee")), stock: Number(form.get("stock")), images: String(form.get("image") ?? "").trim() ? [String(form.get("image")).trim()] : [], specs: values.specs ?? {} };
+      const payload = { slug: String(form.get("slug")).trim(), name: String(form.get("name")).trim(), type: values.type, price_sell: Number(form.get("priceSell")), price_rent_month: Number(form.get("priceRentMonth")), stock: Number(form.get("stock")), images: String(form.get("image") ?? "").trim() ? [String(form.get("image")).trim()] : [], specs: values.specs ?? {} };
       await api(isNew ? "/admin/products" : `/admin/products/${id}`, { method: isNew ? "POST" : "PATCH", body: JSON.stringify(payload) });
       invalidateAdminDataCache(); router.push("/admin/products"); router.refresh();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Không lưu được sản phẩm."); }
@@ -32,7 +32,6 @@ export default function AdminProductFormPage() {
     <label className="grid gap-1 text-sm text-zinc-600">Tồn kho<input className="field" name="stock" type="number" min="0" value={values.stock} onChange={(e) => field("stock", Number(e.target.value))} required/></label>
     <label className="grid gap-1 text-sm text-zinc-600">Giá bán<input className="field" name="priceSell" type="number" min="0" value={values.priceSell} onChange={(e) => field("priceSell", Number(e.target.value))} required/></label>
     <label className="grid gap-1 text-sm text-zinc-600">Giá thuê / tháng<input className="field" name="priceRentMonth" type="number" min="0" value={values.priceRentMonth} onChange={(e) => field("priceRentMonth", Number(e.target.value))} required/></label>
-    <label className="grid gap-1 text-sm text-zinc-600">Tiền cọc<input className="field" name="depositFee" type="number" min="0" value={values.depositFee} onChange={(e) => field("depositFee", Number(e.target.value))} required/></label>
     <label className="grid gap-1 text-sm text-zinc-600">URL ảnh<input className="field" name="image" defaultValue={values.images?.[0] ?? ""} placeholder="https://..."/></label>
     {message && <p className="sm:col-span-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">{message}</p>}
     <div className="flex gap-2 sm:col-span-2"><button disabled={busy} className="btn btn-primary"><Save size={16}/>{busy ? "Đang lưu…" : "Lưu sản phẩm"}</button><Link className="btn btn-secondary" href="/admin/products">Hủy</Link></div>

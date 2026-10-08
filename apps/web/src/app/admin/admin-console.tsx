@@ -9,7 +9,7 @@ import { AdminShell } from "./admin-resource-page";
 type AdminData = {
   summary?: { counts: Record<string, number>; revenue: { total: number; payout: number; fee: number } };
   users: Array<{ id: string; email: string; role: string; createdAt: string }>;
-  products: Array<{ id: string; slug: string; name: string; type: string; priceSell: number; priceRentMonth: number; depositFee: number; stock: number; images?: string[] }>;
+  products: Array<{ id: string; slug: string; name: string; type: string; priceSell: number; priceRentMonth: number; stock: number; images?: string[] }>;
   orders: Array<{ id: string; type: string; status: string; quantity: number; total: number; user?: { email: string }; product?: { name: string } }>;
   shows: Array<{ id: string; slug: string; name: string; status: string; soldTickets: number; totalTickets: number; ticketPrice: number; installationStatus: string; scannerCount: number; installationNote?: string | null; apiKeys?: Array<{ prefix: string; status: string; revokeAt?: string | null }>; owner?: { email: string } }>;
   tickets: Array<{ id: string; status: string; quantity: number; totalAmount: number; payoutAmount: number; show: { name: string }; tickets: Array<{ id: string; isUsed: boolean }> }>;
@@ -178,7 +178,6 @@ export function AdminConsole({ initialTab = "overview" }: { initialTab?: AdminSe
         name: String(formData.get("name")),
         price_sell: Number(formData.get("priceSell")),
         price_rent_month: Number(formData.get("priceRentMonth")),
-        deposit_fee: Number(formData.get("depositFee")),
         stock: Number(formData.get("stock")),
         images: String(formData.get("imageUrl") || "").trim() ? [String(formData.get("imageUrl")).trim()] : []
       })
@@ -464,11 +463,10 @@ function ProductEditor({ product, onSave }: { product: AdminData["products"][num
         {image ? <img src={image} alt={product.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-zinc-400"><Package size={34} /></div>}
       </div>
       <div className="grid gap-3">
-        <div className="grid gap-3 lg:grid-cols-[1.5fr_120px_120px_120px_90px]">
+        <div className="grid gap-3 lg:grid-cols-[1.5fr_120px_120px_90px]">
           <label className="grid gap-1 text-xs font-medium text-zinc-500">Tên sản phẩm<input className="field" name="name" defaultValue={product.name} /></label>
           <label className="grid gap-1 text-xs font-medium text-zinc-500">Giá bán<input className="field" name="priceSell" type="number" defaultValue={product.priceSell} /></label>
           <label className="grid gap-1 text-xs font-medium text-zinc-500">Giá thuê<input className="field" name="priceRentMonth" type="number" defaultValue={product.priceRentMonth} /></label>
-          <label className="grid gap-1 text-xs font-medium text-zinc-500">Cọc<input className="field" name="depositFee" type="number" defaultValue={product.depositFee} /></label>
           <label className="grid gap-1 text-xs font-medium text-zinc-500">Tồn<input className="field" name="stock" type="number" defaultValue={product.stock} /></label>
         </div>
         <label className="grid gap-1 text-xs font-medium text-zinc-500">Ảnh sản phẩm<input className="field" name="imageUrl" value={image} onChange={(event) => setImage(event.target.value)} /></label>

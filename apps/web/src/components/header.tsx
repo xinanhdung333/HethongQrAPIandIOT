@@ -9,7 +9,7 @@ import { motion } from "framer-motion";
 
 const links = [
   ["chả co gì", "/#san-pham"],
-  ["Thuê thiết bị", "/#thue-thiet-bi"],
+  ["Sản phẩm & thuê", "/dashboard/pages/san-pham"],
   ["Tạo show", "/#tao-show"],
   ["Linh kiện", "/#linh-kien"],
   ["Bảng giá", "/#bang-gia"],

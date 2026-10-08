@@ -24,7 +24,9 @@ async function bootstrap() {
       "Idempotency-Key",
       "X-API-Explorer",
       "X-Demo-Scan",
-      "X-CSRF-Token"
+      "X-CSRF-Token",
+      "X-Payment-Expires",
+      "X-Payment-Signature"
     ],
     exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After", "X-Request-Id", "Idempotency-Replayed"]
   });

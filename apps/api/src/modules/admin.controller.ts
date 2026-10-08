@@ -190,7 +190,7 @@ export class AdminController {
         type: dto.type as ProductType,
         priceSell: dto.price_sell,
         priceRentMonth: dto.price_rent_month,
-        depositFee: dto.deposit_fee,
+        depositFee: 0,
         stock: dto.stock,
         images: dto.images as Prisma.InputJsonValue,
         specs: (dto.specs ?? {}) as Prisma.InputJsonValue
@@ -217,7 +217,6 @@ export class AdminController {
     if (dto.type !== undefined) data.type = dto.type as ProductType;
     if (dto.price_sell !== undefined) data.priceSell = dto.price_sell;
     if (dto.price_rent_month !== undefined) data.priceRentMonth = dto.price_rent_month;
-    if (dto.deposit_fee !== undefined) data.depositFee = dto.deposit_fee;
     if (dto.stock !== undefined) data.stock = dto.stock;
     if (dto.images !== undefined) data.images = dto.images as Prisma.InputJsonValue;
     if (dto.specs !== undefined) data.specs = dto.specs as Prisma.InputJsonValue;

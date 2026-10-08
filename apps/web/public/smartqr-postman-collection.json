@@ -443,7 +443,7 @@
             "url": "{{baseUrl}}/admin/products/{{productId}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"GM65 QR Scanner\",\n  \"price_sell\": 690000,\n  \"price_rent_month\": 0,\n  \"deposit_fee\": 0,\n  \"stock\": 80\n}"
+              "raw": "{\n  \"name\": \"GM65 QR Scanner\",\n  \"price_sell\": 690000,\n  \"price_rent_month\": 0,\n  \"stock\": 80\n}"
             }
           }
         },

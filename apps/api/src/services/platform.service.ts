@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { OrderType, Prisma, RentalStatus, TicketOrderStatus, UserRole } from "@prisma/client";
+import { OrderType, Prisma, ProductType, RentalStatus, TicketOrderStatus, UserRole } from "@prisma/client";
 import crypto from "crypto";
 import QRCode from "qrcode";
 import { AuthService, FULL_API_KEY_SCOPES } from "../security/auth.service";
@@ -138,25 +138,29 @@ export class PlatformService {
       throw new BadRequestException("Ngày bắt đầu thuê phải là ngày trong tương lai");
     }
     if (isRent && ![1, 3, 12].includes(dto.duration)) throw new BadRequestException("Duration must be 1, 3, or 12 months");
-    const depositPercent = Math.min(100, Math.max(1, Number(process.env.RENTAL_DEPOSIT_PERCENT ?? 10)));
+    const depositPercent = isRent ? 10 : 0;
     const result = await this.prisma.$transaction(async tx => {
       const product = await tx.product.findUnique({ where: { id: dto.product_id } });
       if (!product) throw new NotFoundException("Product not found");
+      if (isRent && (product.productType === "LINH_KIEN" || product.productType === "THIET_BI_BAN" || product.type === ProductType.COMPONENT)) {
+        throw new BadRequestException("Only rental equipment can be rented");
+      }
       if (isRent && product.priceRentMonth <= 0) throw new BadRequestException("Product is not available for rent");
       const reserved = await tx.product.updateMany({ where: { id: dto.product_id, stock: { gte: dto.quantity } }, data: { stock: { decrement: dto.quantity } } });
       if (!reserved.count) throw new BadRequestException("Khong du ton kho");
       const rentFee = isRent ? product.priceRentMonth * dto.duration * dto.quantity : 0;
-      const depositFee = isRent ? product.depositFee * dto.quantity : 0;
       const sellFee = isRent ? 0 : product.priceSell * dto.quantity;
-      const total = rentFee + depositFee + (isRent ? INSTALL_FEE : 0) + sellFee;
-      const depositAmount = isRent ? product.depositFee * dto.quantity : 0;
+      const installFee = isRent ? INSTALL_FEE : 0;
+      const total = rentFee + installFee + sellFee;
+      const depositAmount = isRent ? Math.round(total * depositPercent / 100) : 0;
+      const depositFee = depositAmount;
       const paymentDueAt = startDate ? new Date(startDate.getTime() - 24 * 60 * 60 * 1000) : null;
       const order = await tx.rentalOrder.create({
-      data: { userId, productId: product.id, type: isRent ? OrderType.RENT : OrderType.BUY, duration: dto.duration, quantity: dto.quantity, rentFee, depositFee, installFee: isRent ? INSTALL_FEE : 0, total, startDate, paymentDueAt, depositAmount, depositPercent, remainingAmount: Math.max(0, total - depositAmount), remainingPaymentStatus: isRent && total > depositAmount ? "PENDING" : "NOT_REQUIRED", shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [], status: RentalStatus.PENDING }
+      data: { userId, productId: product.id, type: isRent ? OrderType.RENT : OrderType.BUY, duration: dto.duration, quantity: dto.quantity, rentFee, depositFee, installFee, total, startDate, paymentDueAt, depositAmount, depositPercent, remainingAmount: Math.max(0, total - depositAmount), remainingPaymentStatus: isRent && total > depositAmount ? "PENDING" : "NOT_REQUIRED", shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [], status: RentalStatus.PENDING }
       });
-      return { order, rentFee, depositFee, sellFee, total, depositAmount, paymentDueAt };
+      return { order, rentFee, depositFee, sellFee, installFee, total, depositAmount, paymentDueAt };
     });
-    const { order, rentFee, depositFee, sellFee, total, depositAmount, paymentDueAt } = result;
+    const { order, rentFee, depositFee, sellFee, installFee, total, depositAmount, paymentDueAt } = result;
     await this.redis.del("cache:products");
     const paymentMethod = dto.payment_method ?? "payos_demo";
     const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: isRent ? depositAmount : total, kind: "rental", method: paymentMethod, stage: "initial" });
@@ -167,7 +171,7 @@ export class PlatformService {
       breakdown: {
         rent_fee: rentFee,
         deposit_fee: depositFee,
-        install_fee: isRent ? INSTALL_FEE : 0,
+        install_fee: installFee,
         sell_fee: sellFee,
         total,
         deposit_amount: depositAmount,
@@ -193,6 +197,41 @@ export class PlatformService {
     });
     if (!order) throw new NotFoundException("Rental not found");
     return order;
+  }
+
+  async createPayosDemoQr(orderId: string, kind: "rental" | "ticket" | "api", stage: "initial" | "remaining") {
+    let amount: number;
+    if (kind === "rental") {
+      const order = await this.prisma.rentalOrder.findUnique({ where: { id: orderId }, select: { type: true, total: true, depositAmount: true, remainingAmount: true } });
+      if (!order) throw new NotFoundException("Payment order not found");
+      amount = stage === "remaining" ? order.remainingAmount : order.type === OrderType.RENT ? order.depositAmount : order.total;
+    } else if (kind === "ticket") {
+      const order = await this.prisma.ticketOrder.findUnique({ where: { id: orderId }, select: { totalAmount: true } });
+      if (!order) throw new NotFoundException("Payment order not found");
+      amount = order.totalAmount;
+    } else {
+      const order = await this.prisma.apiRentalOrder.findUnique({ where: { id: orderId }, select: { total: true } });
+      if (!order) throw new NotFoundException("Payment order not found");
+      amount = order.total;
+    }
+    if (!Number.isInteger(amount) || amount < 1) throw new BadRequestException("Payment amount is invalid");
+
+    const payoutAccount = await this.prisma.payoutAccount.findFirst({
+      where: { method: "BANK", status: "active", isDefault: true, user: { role: UserRole.ADMIN } },
+      orderBy: { createdAt: "asc" },
+      select: { bankName: true, accountNumber: true, accountName: true }
+    });
+    if (!payoutAccount?.bankName || !payoutAccount.accountNumber || !payoutAccount.accountName) {
+      throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Chưa thiết lập tài khoản ngân hàng mặc định của shop tại Payout." });
+    }
+
+    return this.payos.createVietQrImage({
+      bankName: payoutAccount.bankName,
+      accountNumber: payoutAccount.accountNumber,
+      accountName: payoutAccount.accountName,
+      amount,
+      orderId
+    });
   }
 
   async createRemainingRentalPayment(id: string, userId: string, method: "payos_demo" | "momo" = "payos_demo") {

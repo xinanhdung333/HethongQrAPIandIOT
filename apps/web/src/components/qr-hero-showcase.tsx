@@ -80,9 +80,9 @@ export function QrHeroShowcase() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/thue-thiet-bi" className="btn bg-white text-zinc-950">
+          <Link href="/dashboard/pages/san-pham" className="btn bg-white text-zinc-950">
             <Download size={16} />
-            Thuê thiết bị
+            Sản phẩm & thuê
           </Link>
           <Link href="/tao-show" className="btn border border-white/12 bg-white/[0.06] text-white">
             <Eye size={16} />

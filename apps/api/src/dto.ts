@@ -122,7 +122,7 @@ export class AdminCreateProductDto {
   @IsIn(["IOT_MINI", "IOT_PRO", "COMPONENT"]) type!: "IOT_MINI" | "IOT_PRO" | "COMPONENT";
   @IsInt() @Min(0) price_sell!: number;
   @IsInt() @Min(0) price_rent_month!: number;
-  @IsInt() @Min(0) deposit_fee!: number;
+  @IsOptional() @IsInt() @Min(0) deposit_fee?: number;
   @IsInt() @Min(0) stock!: number;
   @IsArray() @IsString({ each: true }) images!: string[];
   @IsOptional() @IsObject() specs?: Record<string, unknown>;
