@@ -12,6 +12,10 @@ export type DashboardTicketOrder = {
   buyerNote?: string | null;
   createdAt?: string;
   show: { name: string; id: string; slug?: string; startAt?: string; location?: string; totalTickets?: number; soldTickets?: number; ticketPrice?: number };
+  tickets: Array<{ id: string; qrJwt?: string; qrOfflineJwt?: string | null; isUsed: boolean }>;
+};
+
+export type DashboardPurchasedTicketOrder = Omit<DashboardTicketOrder, "tickets"> & {
   tickets: Array<{ id: string; qrJwt: string; qrOfflineJwt?: string | null; isUsed: boolean }>;
 };
 
@@ -37,9 +41,9 @@ export type DashboardData = {
   shows: Array<{ id: string; slug: string; name: string; status?: string; installationStatus?: string; scannerCount?: number; installationNote?: string | null; soldTickets: number; totalTickets: number; ticketPrice: number; location?: string; startAt?: string; createdAt?: string }>;
   apiKeys: Array<{ id: string; prefix: string; quota: number; scopes?: string[]; rentalId?: string | null; showId?: string | null; status?: string; isTest?: boolean; allowedIps?: string[]; rateLimit?: number; revokeAt?: string | null; createdAt?: string }>;
   ticketOrders: DashboardTicketOrder[];
-  purchasedTicketOrders: DashboardTicketOrder[];
+  purchasedTicketOrders: DashboardPurchasedTicketOrder[];
   payouts: Array<{ id: string; amount: number; status: string }>;
-  tickets: Array<{ id: string; qrJwt?: string; qrOfflineJwt?: string | null; isUsed: boolean; show: { name: string } }>;
+  tickets: Array<{ id: string; isUsed: boolean; hasOfflineQr?: boolean; show: { name: string } }>;
   externalQrCodes: Array<{
     id: string;
     code: string;

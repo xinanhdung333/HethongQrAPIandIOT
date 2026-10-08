@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Param, Patch, Post, Req, Res, UnauthorizedException } from "@nestjs/common";
 import { Request, Response } from "express";
 import { BuyTicketDto, ShowDto } from "../dto";
+import { PasswordDto } from "../settings-payment.dto";
 import { AuthService } from "../security/auth.service";
 import { ActivityLogService } from "../services/activity-log.service";
 import { PlatformService } from "../services/platform.service";
@@ -31,6 +32,15 @@ export class ShowsController {
     if (!session) return;
     const result = await this.platform.endShow(id, session.sub);
     await this.activity.record({ session, action: "END_SHOW", targetType: "Show", targetId: id, metadata: { status: result?.status }, req });
+    return result;
+  }
+
+  @Post("shows/:showId/orders/:orderId/tickets/reveal")
+  async revealTickets(@Param("showId") showId: string, @Param("orderId") orderId: string, @Body() dto: PasswordDto, @Headers("authorization") authorization: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const session = await this.allowCustomerOnly(authorization, res);
+    if (!session) return;
+    const result = await this.platform.revealShowTickets(session.sub, showId, orderId, dto.password);
+    await this.activity.record({ session, action: "REVEAL_SHOW_TICKETS", targetType: "TicketOrder", targetId: orderId, metadata: { show_id: showId }, req });
     return result;
   }
 

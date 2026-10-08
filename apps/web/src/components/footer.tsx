@@ -19,7 +19,8 @@ const groups = [
       ["Bảng giá", "/bang-gia"],
       ["Tài liệu API", "/docs"],
       ["Dashboard", "/dashboard"],
-      ["Quét thử", "/dashboard/scan"]
+      ["Quét thử", "/dashboard/scan"],
+      ["Test API & vé", "/test-api"]
     ]
   }
 ];

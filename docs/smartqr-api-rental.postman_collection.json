@@ -1,0 +1,542 @@
+{
+  "info": {
+    "_postman_id": "4f8f5ee0-62cb-4fca-bc54-4fbf85a7474a",
+    "name": "SmartQR - API thuê (Tạo QR & Verify)",
+    "description": "Bộ request kiểm thử API thuê SmartQR: tạo QR, xác minh QR vừa tạo, API key sai/thiếu, key thiếu scope và body không hợp lệ. Không chứa API key thật. Thứ tự khuyến nghị: chạy lần lượt các request trong folder 01 trước, sau đó chạy folder 02. Verify hợp lệ sẽ tiêu thụ một lượt sử dụng của QR.\n\nBiến cần cấu hình trong Postman: baseUrl, apiMode (test/live), createApiKey, verifyApiKey, createOnlyApiKey, signingSecret (nếu bật HMAC). Không chia sẻ/export giá trị key thật.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const mode = (pm.collectionVariables.get('apiMode') || 'test').toLowerCase();",
+          "if (mode === 'test') {",
+          "  pm.request.headers.upsert({ key: 'X-API-Explorer', value: 'true' });",
+          "} else {",
+          "  pm.request.headers.remove('X-API-Explorer');",
+          "  console.warn('SmartQR LIVE mode: requests may consume quota, incur charges, or check in real QR codes.');",
+          "}",
+          "const secret = pm.collectionVariables.get('signingSecret');",
+          "if (secret) {",
+          "  const CryptoJS = require('crypto-js');",
+          "  const timestamp = Math.floor(Date.now() / 1000).toString();",
+          "  const method = pm.request.method.toUpperCase();",
+          "  const path = pm.request.url.getPath();",
+          "  const rawBody = pm.request.body && pm.request.body.mode === 'raw' ? pm.variables.replaceIn(pm.request.body.raw) : '';",
+          "  const signature = CryptoJS.HmacSHA256(timestamp + method + path + rawBody, secret).toString(CryptoJS.enc.Hex);",
+          "  pm.request.headers.upsert({ key: 'X-TIMESTAMP', value: timestamp });",
+          "  pm.request.headers.upsert({ key: 'X-SIGNATURE', value: signature });",
+          "} else {",
+          "  pm.request.headers.remove('X-TIMESTAMP');",
+          "  pm.request.headers.remove('X-SIGNATURE');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "apiMode",
+      "value": "test",
+      "type": "string",
+      "description": "test requires a test key and API Explorer enabled. Use live only with a production key; live may incur charges."
+    },
+    {
+      "key": "createApiKey",
+      "value": "",
+      "type": "string",
+      "description": "API key with qr:create. Store locally in Postman; do not share."
+    },
+    {
+      "key": "verifyApiKey",
+      "value": "",
+      "type": "string",
+      "description": "API key with ticket:verify. Can be the same key if it has both scopes."
+    },
+    {
+      "key": "createOnlyApiKey",
+      "value": "",
+      "type": "string",
+      "description": "Optional key with qr:create but without ticket:verify, used to test scope rejection."
+    },
+    {
+      "key": "signingSecret",
+      "value": "",
+      "type": "string",
+      "description": "Optional rental HMAC signing secret. Keep local and private."
+    },
+    {
+      "key": "createdTicketCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "createdQrJwt",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "createdQrId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Tạo QR và xác minh thành công",
+      "description": "Chạy tuần tự. Request xác minh thành công sẽ đánh dấu QR đã dùng (mặc định max_uses=1).",
+      "item": [
+        {
+          "name": "Tạo QR hợp lệ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{createApiKey}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "postman-qr-{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_type\": \"postman_demo\",\n  \"resource_id\": \"member-{{$timestamp}}\",\n  \"customer_ref\": \"postman-check\",\n  \"ttl_seconds\": 3600,\n  \"max_uses\": 1,\n  \"payload\": {\n    \"source\": \"postman\",\n    \"plan\": \"starter\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/qr-codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "qr-codes"
+              ]
+            },
+            "description": "Cần key có scope qr:create. Khi apiMode=test, key phải là test key và API Explorer phải được bật; khi live, dùng key production. Nếu gói bật HMAC, đặt signingSecret ở collection variables."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tạo QR trả HTTP 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Response có ticket_code và qr_jwt', function () { pm.expect(data.ticket_code).to.be.a('string').and.not.empty; pm.expect(data.qr_jwt).to.be.a('string').and.not.empty; });",
+                  "pm.collectionVariables.set('createdTicketCode', data.ticket_code);",
+                  "pm.collectionVariables.set('createdQrJwt', data.qr_jwt);",
+                  "pm.collectionVariables.set('createdQrId', data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify QR vừa tạo bằng ticket_code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{verifyApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_code\": \"{{createdTicketCode}}\",\n  \"gate_id\": \"postman-gate-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tickets/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tickets",
+                "verify"
+              ]
+            },
+            "description": "Cần key có scope ticket:verify và cùng tenant/rental + môi trường với QR. Chỉ chạy một lần cho QR max_uses=1."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Verify trả HTTP 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "pm.test('QR được xác minh thành công', function () { pm.expect(pm.response.json().valid).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify QR vừa tạo bằng qr_jwt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{verifyApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qr_jwt\": \"{{createdQrJwt}}\",\n  \"gate_id\": \"postman-gate-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tickets/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tickets",
+                "verify"
+              ]
+            },
+            "description": "Tạo một QR mới trước khi chạy request này nếu QR trước đó đã được verify, vì QR mặc định chỉ dùng một lần."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Verify bằng JWT trả HTTP 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "pm.test('QR được xác minh thành công', function () { pm.expect(pm.response.json().valid).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Kiểm tra key và dữ liệu không hợp lệ",
+      "description": "Các request âm tính được kỳ vọng bị từ chối. Chúng dùng key giả hoặc không làm thay đổi QR hợp lệ.",
+      "item": [
+        {
+          "name": "Tạo QR với API key sai (kỳ vọng 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "sq_live_INVALID_KEY_FOR_POSTMAN_TEST"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_type\": \"postman_demo\",\n  \"resource_id\": \"invalid-key-test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/qr-codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "qr-codes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Key sai bị từ chối HTTP 401', function () { pm.expect(pm.response.code).to.eql(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify với API key sai (kỳ vọng 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "sq_live_INVALID_KEY_FOR_POSTMAN_TEST"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_code\": \"SQR-DOES-NOT-MATTER\",\n  \"gate_id\": \"postman-gate-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tickets/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tickets",
+                "verify"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Key sai bị từ chối HTTP 401', function () { pm.expect(pm.response.code).to.eql(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo QR không gửi API key (kỳ vọng 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_type\": \"postman_demo\",\n  \"resource_id\": \"missing-key-test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/qr-codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "qr-codes"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Thiếu key bị từ chối HTTP 401', function () { pm.expect(pm.response.code).to.eql(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify không gửi API key (kỳ vọng 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_code\": \"SQR-DOES-NOT-MATTER\",\n  \"gate_id\": \"postman-gate-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tickets/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tickets",
+                "verify"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Thiếu key bị từ chối HTTP 401', function () { pm.expect(pm.response.code).to.eql(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify bằng key chỉ có qr:create (kỳ vọng 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{createOnlyApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticket_code\": \"SQR-SCOPE-CHECK\",\n  \"gate_id\": \"postman-gate-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tickets/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tickets",
+                "verify"
+              ]
+            },
+            "description": "Đặt createOnlyApiKey thành key hợp lệ của cùng rental có qr:create nhưng không có ticket:verify. Nếu để trống/sai, kết quả sẽ là 401 thay vì 403."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Key thiếu scope bị từ chối HTTP 403', function () { pm.expect(pm.response.code).to.eql(403); });",
+                  "pm.test('Lỗi đúng là forbidden_scope', function () { pm.expect(pm.response.json().error).to.eql('forbidden_scope'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo QR với resource_type thiếu (kỳ vọng 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-KEY",
+                "value": "{{createApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_id\": \"missing-type\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/qr-codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "qr-codes"
+              ]
+            },
+            "description": "Kiểm tra validation DTO; cần key có qr:create. Khi signingSecret được cấu hình, request sẽ được HMAC ký tự động."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Body không hợp lệ bị từ chối HTTP 400', function () { pm.expect(pm.response.code).to.eql(400); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

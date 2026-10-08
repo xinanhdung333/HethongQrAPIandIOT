@@ -308,7 +308,7 @@ function getMetrics(data: DashboardData) {
   const suspendedKeys = data.apiKeys.filter((key) => ["suspended", "revoked"].includes((key.status ?? "").toLowerCase())).length;
   const usedExternalQr = data.externalQrCodes.filter((qr) => qr.isUsed).length;
   const invalidScans = data.externalQrCodes.reduce((sum, qr) => sum + (qr.scanLogs ?? []).filter((log) => !log.valid).length, 0);
-  const offlineTickets = data.tickets.filter((ticketItem) => Boolean(ticketItem.qrOfflineJwt)).length;
+  const offlineTickets = data.tickets.filter((ticketItem) => ticketItem.hasOfflineQr).length;
 
   return {
     paidOrders: paidOrders.length,

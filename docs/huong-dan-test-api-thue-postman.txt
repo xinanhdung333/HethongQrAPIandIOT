@@ -1,0 +1,241 @@
+SMARTQR - HUONG DAN NHAP TUNG REQUEST API THUE TREN POSTMAN
+
+Tai lieu nay huong dan tao request thu cong trong Postman. Khong can import
+collection. Hay nhap va bam Send tung request mot.
+
+============================================================
+1. LAY API KEY DUNG SCOPE
+============================================================
+
+1. Dang nhap SmartQR, mo Dashboard > Quan ly API key.
+2. Chon goi thue API dang ACTIVE.
+3. Lay hoac tao API key theo moi truong:
+   - Test key: dung de thu sandbox.
+   - Live key: dung API production that.
+4. Key tao QR can scope qr:create.
+5. Key verify can scope ticket:verify.
+6. Neu mot key co ca hai scope, co the dung cung key cho ca tao va verify.
+7. Raw key chi hien mot lan. Copy va luu an toan.
+
+Canh bao: API key live da duoc gui trong cuoc tro chuyen. Hay thu hoi key do,
+tao key moi va khong dan key that vao file text, source code hoac noi dung chia
+se. Chi dan key vao Postman local cua ban.
+
+============================================================
+2. TAO REQUEST DAU TIEN TRONG POSTMAN
+============================================================
+
+1. Bam New > HTTP Request (hoac bam dau + de mo tab request moi).
+2. Chon method POST.
+3. Nhap URL:
+
+   http://localhost:4000/api/v1/qr-codes
+
+4. Mo tab Headers, nhap cac dong:
+
+   Key           Value
+   Content-Type  application/json
+   X-API-KEY     DAN_API_KEY_CO_SCOPE_qr:create_VAO_DAY
+
+5. Neu dang dung TEST KEY, them header:
+
+   X-API-Explorer: true
+
+   Neu dung LIVE KEY, KHONG them header X-API-Explorer.
+
+6. Mo tab Body > raw > chon JSON.
+7. Dan body mau:
+
+{
+  "resource_type": "postman_demo",
+  "resource_id": "member-001",
+  "customer_ref": "customer-001",
+  "ttl_seconds": 3600,
+  "max_uses": 1,
+  "payload": {
+    "source": "postman",
+    "plan": "starter"
+  }
+}
+
+8. Bam Send.
+9. Khi thanh cong, xem response va copy gia tri ticket_code hoac qr_jwt.
+   Giu request nay mo de tiep tuc tao request verify.
+
+============================================================
+3. TAO REQUEST VERIFY BANG TICKET CODE
+============================================================
+
+1. Bam New > HTTP Request (tao request moi).
+2. Chon method POST.
+3. Nhap URL:
+
+   http://localhost:4000/api/v1/tickets/verify
+
+4. Trong tab Headers, nhap:
+
+   Key           Value
+   Content-Type  application/json
+   X-API-KEY     DAN_API_KEY_CO_SCOPE_ticket:verify_VAO_DAY
+
+5. Neu dung TEST KEY, them:
+
+   X-API-Explorer: true
+
+   Neu dung LIVE KEY, khong them header nay.
+
+6. Trong Body > raw > JSON, dan noi dung duoi day. Thay SQR-ABC123 bang
+   ticket_code copy tu response tao QR:
+
+{
+  "ticket_code": "SQR-ABC123",
+  "gate_id": "postman-gate-01"
+}
+
+7. Bam Send.
+8. Verify thanh cong khi response co:
+
+   "valid": true
+
+QR mac dinh chi dung mot lan. Verify thanh cong se tieu thu mot luot.
+
+============================================================
+4. TAO REQUEST VERIFY BANG QR JWT
+============================================================
+
+Tao request moi va nhap:
+
+Method:
+   POST
+
+URL:
+   http://localhost:4000/api/v1/tickets/verify
+
+Headers:
+   Content-Type: application/json
+   X-API-KEY: DAN_API_KEY_CO_SCOPE_ticket:verify_VAO_DAY
+   X-API-Explorer: true      (chi them khi dung TEST KEY)
+
+Body > raw > JSON:
+
+{
+  "qr_jwt": "DAN_GIA_TRI_qr_jwt_TU_RESPONSE_TAO_QR_VAO_DAY",
+  "gate_id": "postman-gate-01"
+}
+
+Bam Send. Neu QR da duoc verify bang ticket_code truoc do, no da dung va khong
+the verify lai. Hay gui lai request tao QR de co QR moi truoc khi thu cach nay.
+
+============================================================
+5. THU API KEY SAI
+============================================================
+
+Tao request moi:
+
+Method:
+   POST
+
+URL:
+   http://localhost:4000/api/v1/qr-codes
+
+Headers:
+   Content-Type: application/json
+   X-API-KEY: sq_live_INVALID_KEY_FOR_TEST
+
+Body > raw > JSON:
+
+{
+  "resource_type": "postman_demo",
+  "resource_id": "invalid-key-check"
+}
+
+Bam Send. Ket qua mong doi: HTTP 401 vi API key khong ton tai.
+
+De thu verify voi key sai, doi URL thanh:
+
+   http://localhost:4000/api/v1/tickets/verify
+
+Doi Body thanh:
+
+{
+  "ticket_code": "SQR-DOES-NOT-MATTER",
+  "gate_id": "postman-gate-01"
+}
+
+Giu X-API-KEY sai roi bam Send. Ket qua mong doi: HTTP 401.
+
+============================================================
+6. THU REQUEST KHONG CO API KEY
+============================================================
+
+Tao QR khong co key:
+- Dung POST http://localhost:4000/api/v1/qr-codes
+- Xoa header X-API-KEY.
+- Body co the dung body tao QR mau o muc 2.
+- Bam Send; ket qua mong doi HTTP 401.
+
+Verify khong co key:
+- Dung POST http://localhost:4000/api/v1/tickets/verify
+- Xoa header X-API-KEY.
+- Body:
+
+{
+  "ticket_code": "SQR-DOES-NOT-MATTER",
+  "gate_id": "postman-gate-01"
+}
+
+- Bam Send; ket qua mong doi HTTP 401.
+
+============================================================
+7. THU KEY THIEU SCOPE
+============================================================
+
+De test loi scope, can mot key THAT va dang active chi co qr:create, khong co
+ticket:verify.
+
+1. Tao request verify nhu muc 3.
+2. O header X-API-KEY, dan key chi co scope qr:create.
+3. Bam Send.
+4. Ky vong HTTP 403 va error "forbidden_scope".
+
+Neu nhap key sai/khong ton tai, server tra HTTP 401 thay vi 403.
+
+============================================================
+8. THU BODY TAO QR SAI
+============================================================
+
+Tao request POST http://localhost:4000/api/v1/qr-codes, dung API key hop le co
+scope qr:create va body:
+
+{
+  "resource_id": "missing-resource-type"
+}
+
+Bam Send. Ky vong HTTP 400 do thieu resource_type.
+
+============================================================
+9. HMAC NEU GOI THUE BAT SIGNING
+============================================================
+
+Neu goi thue bat HMAC, moi request phai co them:
+
+   X-TIMESTAMP: Unix time hien tai tinh bang giay
+   X-SIGNATURE: HMAC-SHA256 duoc tao tu signing secret
+
+Signing secret khong phai API key. Khong tu dien gia tri tuy y; lay signing
+secret cua dung goi thue va tao signature theo tai lieu HMAC. Neu chua bat HMAC,
+khong can hai header nay.
+
+============================================================
+10. THU TU GOI Y DE TEST
+============================================================
+
+1. Lay test key co qr:create va ticket:verify.
+2. Tao request tao QR, bam Send va copy ticket_code.
+3. Tao request verify ticket_code, bam Send va kiem tra valid=true.
+4. Tao QR moi neu muon thu verify bang qr_jwt.
+5. Tao request moi cho tung truong hop key sai, thieu key, thieu scope hoac body
+   sai.
+
+Neu Postman bao khong ket noi, kiem tra backend dang chay tai
+http://localhost:4000 va cac service QR/ticket da duoc bat.

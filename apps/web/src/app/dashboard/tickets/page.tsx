@@ -5,7 +5,7 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { Copy, Search, Ticket } from "lucide-react";
 import { api, money } from "@/lib/api";
-import { DashboardData, DashboardTicketOrder } from "@/lib/dashboard";
+import { DashboardData, DashboardPurchasedTicketOrder } from "@/lib/dashboard";
 
 const PAGE_SIZE = 8;
 
@@ -139,7 +139,7 @@ export default function TicketsPage() {
   );
 }
 
-function TicketQrCards({ order }: { order: DashboardTicketOrder }) {
+function TicketQrCards({ order }: { order: DashboardPurchasedTicketOrder }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {order.tickets.map((ticketItem, index) => (

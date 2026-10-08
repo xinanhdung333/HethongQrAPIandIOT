@@ -214,7 +214,7 @@ export default function ShowsDashboardPage() {
                   </div>
                 </div>
 
-                {isOpen && <TicketManager orders={orders} loading={loading} />}
+                {isOpen && <TicketManager showId={show.id} orders={orders} loading={loading} />}
               </article>
             );
           })}
@@ -248,10 +248,15 @@ function installationLabel(status?: string) {
   } as Record<string, string>)[status ?? "PENDING"] ?? status ?? "Chưa cập nhật";
 }
 
-function TicketManager({ orders, loading }: { orders: DashboardTicketOrder[]; loading: boolean }) {
+function TicketManager({ showId, orders, loading }: { showId: string; orders: DashboardTicketOrder[]; loading: boolean }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [openOrderId, setOpenOrderId] = useState("");
+  const [passwordOrderId, setPasswordOrderId] = useState("");
+  const [password, setPassword] = useState("");
+  const [revealError, setRevealError] = useState("");
+  const [revealingOrderId, setRevealingOrderId] = useState("");
+  const [revealedOrders, setRevealedOrders] = useState<Record<string, DashboardTicketOrder>>({});
 
   const filteredOrders = useMemo(() => {
     const keyword = normalize(query);
@@ -260,7 +265,28 @@ function TicketManager({ orders, loading }: { orders: DashboardTicketOrder[]; lo
   }, [orders, query]);
 
   const pagedOrders = paginate(filteredOrders, page, ORDER_PAGE_SIZE);
-  const openOrder = orders.find((order) => order.id === openOrderId);
+  const openOrder = revealedOrders[openOrderId];
+
+  async function revealTickets(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!passwordOrderId) return;
+    setRevealingOrderId(passwordOrderId);
+    setRevealError("");
+    try {
+      const result = await api<{ order: DashboardTicketOrder & { tickets: Array<{ id: string; qrJwt: string; qrOfflineJwt?: string | null; isUsed: boolean }> } }>(`/shows/${showId}/orders/${passwordOrderId}/tickets/reveal`, {
+        method: "POST",
+        body: JSON.stringify({ password })
+      });
+      setRevealedOrders((current) => ({ ...current, [result.order.id]: result.order }));
+      setOpenOrderId(result.order.id);
+      setPasswordOrderId("");
+      setPassword("");
+    } catch (reason) {
+      setRevealError(reason instanceof Error ? reason.message : "Không xác thực được mật khẩu.");
+    } finally {
+      setRevealingOrderId("");
+    }
+  }
 
   useEffect(() => {
     setPage(1);
@@ -268,6 +294,10 @@ function TicketManager({ orders, loading }: { orders: DashboardTicketOrder[]; lo
 
   useEffect(() => {
     setOpenOrderId("");
+    setPasswordOrderId("");
+    setPassword("");
+    setRevealError("");
+    setRevealedOrders({});
     setQuery("");
     setPage(1);
   }, [orders]);
@@ -316,7 +346,17 @@ function TicketManager({ orders, loading }: { orders: DashboardTicketOrder[]; lo
                   <td className="px-5 py-4">{money(order.totalAmount)}</td>
                   <td className="px-5 py-4"><Status value={order.status} /></td>
                   <td className="px-5 py-4">
-                    <button className="btn btn-secondary text-xs" onClick={() => setOpenOrderId((current) => current === order.id ? "" : order.id)}>
+                    <button className="btn btn-secondary text-xs" onClick={() => {
+                      if (revealedOrders[order.id]) {
+                        setOpenOrderId((current) => current === order.id ? "" : order.id);
+                        setPasswordOrderId("");
+                      } else {
+                        setOpenOrderId("");
+                        setPasswordOrderId((current) => current === order.id ? "" : order.id);
+                        setRevealError("");
+                        setPassword("");
+                      }
+                    }}>
                       {openOrderId === order.id ? "Ẩn vé" : "Xem vé"}
                     </button>
                   </td>
@@ -330,9 +370,23 @@ function TicketManager({ orders, loading }: { orders: DashboardTicketOrder[]; lo
 
       <div className="px-5 py-4">
         <Pager page={page} totalPages={pagedOrders.totalPages} onPageChange={setPage} />
+        {passwordOrderId && (
+          <form className="mt-4 grid gap-3 rounded-lg border border-zinc-200 bg-white p-4 sm:max-w-md" onSubmit={(event) => void revealTickets(event)}>
+            <div>
+              <p className="font-medium text-zinc-900">Xác nhận mật khẩu để xem vé</p>
+              <p className="mt-1 text-sm text-zinc-600">Nhập mật khẩu tài khoản đang quản lý show này.</p>
+            </div>
+            <input className="field" type="password" autoComplete="current-password" autoFocus required value={password} onChange={(event) => setPassword(event.target.value)} aria-label="Mật khẩu tài khoản" />
+            {revealError && <p className="text-sm text-red-700">{revealError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn btn-secondary text-sm" onClick={() => { setPasswordOrderId(""); setPassword(""); setRevealError(""); }} disabled={Boolean(revealingOrderId)}>Hủy</button>
+              <button className="btn btn-primary text-sm" disabled={Boolean(revealingOrderId)}>{revealingOrderId ? <Loader2 size={15} className="animate-spin" /> : null}{revealingOrderId ? "Đang xác thực..." : "Xác nhận"}</button>
+            </div>
+          </form>
+        )}
         {openOrder ? <TicketQrCards order={openOrder} /> : (
           <p className="rounded-lg border border-dashed border-zinc-200 bg-white p-4 text-sm text-zinc-600">
-            Chưa mở đơn nào. QR/code chỉ hiện khi bạn bấm “Xem vé”.
+            {passwordOrderId ? "Vé chỉ hiện sau khi xác nhận đúng mật khẩu tài khoản." : "Chưa mở đơn nào. Bấm “Xem vé” và xác nhận mật khẩu để hiển thị QR/code."}
           </p>
         )}
       </div>
@@ -349,14 +403,16 @@ function TicketQrCards({ order }: { order: DashboardTicketOrder }) {
             <b className="text-sm">Vé #{index + 1}</b>
             <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs font-medium">{ticketItem.isUsed ? "Đã dùng" : "Còn hiệu lực"}</span>
           </div>
-          <div className="mt-4 flex justify-center rounded-lg bg-white p-3">
-            <QRCodeSVG value={ticketItem.qrOfflineJwt ?? ticketItem.qrJwt} size={128} level="H" includeMargin />
-          </div>
-          <p className="mt-3 line-clamp-2 break-all text-xs text-zinc-500">{ticketItem.qrJwt}</p>
-          <button className="btn btn-secondary mt-3 w-full text-xs" onClick={() => void navigator.clipboard.writeText(ticketItem.qrJwt)}>
-            <Copy size={14} />
-            Copy online code
-          </button>
+          {(ticketItem.qrOfflineJwt || ticketItem.qrJwt) && <div className="mt-4 flex justify-center rounded-lg bg-white p-3">
+            <QRCodeSVG value={ticketItem.qrOfflineJwt ?? ticketItem.qrJwt ?? ""} size={128} level="H" includeMargin />
+          </div>}
+          {ticketItem.qrJwt && <>
+            <p className="mt-3 line-clamp-2 break-all text-xs text-zinc-500">{ticketItem.qrJwt}</p>
+            <button className="btn btn-secondary mt-3 w-full text-xs" onClick={() => ticketItem.qrJwt && void navigator.clipboard.writeText(ticketItem.qrJwt)}>
+              <Copy size={14} />
+              Copy online code
+            </button>
+          </>}
           {ticketItem.qrOfflineJwt && (
             <button className="btn btn-secondary mt-2 w-full text-xs" onClick={() => void navigator.clipboard.writeText(ticketItem.qrOfflineJwt!)}>
               <Copy size={14} />

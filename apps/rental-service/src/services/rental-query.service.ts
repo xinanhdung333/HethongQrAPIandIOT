@@ -47,8 +47,9 @@ export class RentalQueryService {
   private createPayosDemoUrl(orderId: string) {
     const expires = Math.floor(Date.now() / 1000) + 1800;
     const secret = process.env.PAYMENT_LINK_SECRET ?? "payment-link-dev-secret";
-    const signature = crypto.createHmac("sha256", secret).update(`${orderId}.api.${expires}`).digest("hex");
-    return `${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/thanh-toan-demo?order_id=${encodeURIComponent(orderId)}&kind=api&expires=${expires}&signature=${signature}`;
+    const stage = "initial";
+    const signature = crypto.createHmac("sha256", secret).update(`${orderId}.api.${stage}.${expires}`).digest("hex");
+    return `${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/thanh-toan-demo?order_id=${encodeURIComponent(orderId)}&kind=api&payment_stage=${stage}&expires=${expires}&signature=${signature}`;
   }
 
   private async createMomoPaymentUrl(orderId: string, total: number) {

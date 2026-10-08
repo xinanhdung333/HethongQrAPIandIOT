@@ -1,207 +1,176 @@
 import Link from "next/link";
-import { Download, KeyRound, Route, ShieldCheck } from "lucide-react";
+import { Code2, KeyRound, QrCode, ShieldCheck } from "lucide-react";
 import { Reveal } from "@/components/reveal";
 
 const baseUrl = "http://localhost:4000";
 
-const endpoints = [
-  {
-    group: "Auth",
-    items: [
-      ["POST", "/auth/register", "Đăng ký user thường.", `{"email":"new-user@smartqr.vn","password":"demo123456"}`],
-      ["POST", "/auth/login", "Đăng nhập admin hoặc user, lấy access_token JWT.", `{"email":"admin@smartqr.vn","password":"admin123456"}`],
-      ["GET", "/auth/me", "Kiểm tra JWT hiện tại.", "Header: Authorization: Bearer {{userToken}}"],
-      ["POST", "/auth/logout", "Revoke JWT jti khỏi Redis/memory.", "Header: Authorization: Bearer {{userToken}}"]
-    ]
-  },
-  {
-    group: "Sản phẩm và linh kiện",
-    items: [
-      ["GET", "/products", "Lấy toàn bộ sản phẩm, thiết bị thuê và linh kiện.", ""],
-      ["POST", "/products/:id/buy", "Mua linh kiện demo, trả payment_demo_url.", `{"quantity":1,"shipping_address":{"address":"12 Nguyễn Huệ, TP.HCM","phone":"0900000000"}}`]
-    ]
-  },
-  {
-    group: "Thuê API + hộp quét",
-    items: [
-      ["POST", "/rentals", "Tạo đơn thuê SP-01/SP-02, sau PayOS paid sẽ ACTIVE và sinh API key.", `{"product_id":"prod_sp01","type":"rent","duration":1,"quantity":1,"shipping_address":{"address":"12 Nguyễn Huệ, TP.HCM","phone":"0900000000"},"agree_damage_terms":true}`],
-      ["POST", "/api-rentals", "User đăng ký thuê API cho app ngoài hệ thống, paid demo xong cấp raw API key một lần.", `{"app_name":"Gym ABC Check-in","website":"https://gym-abc.vn","plan":"starter","duration":1}`],
-      ["POST", "/api/v1/qr-codes", "App ngoài tạo QR JWT và mã code bằng X-API-KEY.", `{"resource_type":"gym_member","resource_id":"member_1001","customer_ref":"Nguyen Van A","ttl_seconds":86400,"payload":{"branch":"quan-1","plan":"gold"}}`],
-      ["PATCH", "/rentals/:id/return", "Đổi đơn thuê sang RETURNED.", ""]
-    ]
-  },
-  {
-    group: "White-label show",
-    items: [
-      ["POST", "/shows", "Tạo show, trả public_url và embed_code.", `{"name":"Đêm Nhạc Postman","banner":"https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=80","theme_color":"#18181b","location":"Nhà hát Hòa Bình, TP.HCM","start_at":"2026-10-01T20:00:00.000Z","ticket_price":100000,"total_tickets":500,"description":"Show tạo từ Postman","payout_account":{"bank":"DEMO Bank","account":"0123456789","name":"SMARTQR DEMO"}}`],
-      ["GET", "/e/:slug", "Lấy thông tin show public.", ""],
-      ["POST", "/e/:slug/buy", "Mua vé demo, trả payment_url và order_id.", `{"buyer_name":"Nguyễn Văn A","buyer_email":"buyer@example.com","buyer_phone":"0900000000","quantity":1}`],
-      ["PATCH", "/shows/:id/end", "Kết thúc show.", ""]
-    ]
-  },
-  {
-    group: "Thanh toán và cổng quét",
-    items: [
-      ["POST", "/webhooks/payos-demo", "Mock PayOS paid thủ công. kind là ticket, rental hoặc api.", `{"order_id":"{{ticketOrderId}}","kind":"ticket"}`],
-      ["POST", "/api/v1/tickets/verify", "Verify QR JWT hoặc ticket_code bằng show scan key đúng với show của vé.", `{"ticket_code":"SQR-ABC123","gate_id":"gate-main"}`]
-    ]
-  },
-  {
-    group: "Dashboard user",
-    items: [["GET", "/dashboard", "Lấy rentals, shows, apiKeys, ticketOrders, payouts, tickets demo.", ""]]
-  },
-  {
-    group: "Admin",
-    auth: "Header: Authorization: Bearer {{adminToken}}",
-    items: [
-      ["GET", "/admin/summary", "KPI tổng quan DB.", ""],
-      ["GET", "/admin/users", "Danh sách users.", ""],
-      ["GET", "/admin/products", "Danh sách sản phẩm.", ""],
-      ["PATCH", "/admin/products/:id", "Sửa tên, giá bán, giá thuê và tồn kho.", `{"name":"GM65 QR Scanner","price_sell":690000,"price_rent_month":0,"stock":80}`],
-      ["GET", "/admin/orders", "Danh sách đơn thuê/mua.", ""],
-      ["GET", "/admin/shows", "Danh sách show.", ""],
-      ["PATCH", "/admin/shows/:id/status", "Đổi trạng thái DRAFT/ACTIVE/ENDED.", `{"status":"ACTIVE"}`],
-      ["POST", "/admin/shows/:id/scan-key", "Admin cấp raw key một lần cho máy quét đúng show.", "Header: Authorization: Bearer {{adminToken}}"],
-      ["PATCH", "/admin/shows/:id/installation", "Admin cập nhật trạng thái, số máy và ghi chú lắp đặt.", `{"status":"READY","scanner_count":2,"note":"Đã test camera và mạng tại cổng chính"}`],
-      ["GET", "/admin/tickets", "Danh sách ticket orders, tickets và payout.", ""],
-      ["GET", "/admin/api-keys", "Danh sách API key prefix.", ""],
-      ["POST", "/admin/api-keys", "Tạo API key mới. Response chỉ hiện raw key một lần.", `{"user_id":"{{userId}}","quota":10000}`]
-    ]
-  }
-];
+const createQrExample = String.raw`curl -X POST "${baseUrl}/api/v1/qr-codes" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: $SMARTQR_API_KEY" \
+  -H "Idempotency-Key: member-1001-20261008" \
+  -d '{
+    "resource_type": "gym_member",
+    "resource_id": "member_1001",
+    "customer_ref": "customer_1001",
+    "ttl_seconds": 86400,
+    "max_uses": 1,
+    "payload": {
+      "branch": "quan-1",
+      "membership": "gold"
+    }
+  }'`;
 
-const flow = [
-  "Import collection: /smartqr-postman-collection.json",
-  "Login admin bằng admin@smartqr.vn / admin123456, copy access_token vào biến adminToken.",
-  "GET /admin/users, copy id của demo@smartqr.vn vào biến userId nếu muốn tạo API key.",
-  "GET /products, copy id sản phẩm vào productId. Seed có prod_sp01, prod_sp02, prod_gm65 nếu chạy in-memory; DB thật dùng id cuid nên lấy từ response.",
-  "POST /rentals hoặc POST /products/:id/buy, mở payment_demo_url hoặc POST /webhooks/payos-demo.",
-  "POST /shows, copy show_id vào showId và slug trong public_url vào showSlug.",
-  "POST /e/:slug/buy, chờ 5 giây hoặc gọi webhook kind ticket.",
-  "GET /dashboard hoặc GET /admin/tickets, copy qrJwt vào biến qrJwt.",
-  "Admin POST /admin/shows/:id/scan-key để cấp key riêng cho máy quét, sau đó POST /api/v1/tickets/verify với X-API-KEY: {{showScanKey}}."
-];
+const verifyQrExample = String.raw`curl -X POST "${baseUrl}/api/v1/tickets/verify" \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: $SMARTQR_API_KEY" \
+  -d '{
+    "ticket_code": "SQR-ABC123",
+    "gate_id": "gate-main"
+  }'`;
 
-const powershellVerifyExample = String.raw`$apiUrl = "http://localhost:4000"
-$apiKey = "sk_live_DAN_KEY_VAO_DAY"
-$qrJwt = "DAN_CHUOI_QR_JWT_VAO_DAY"
+const createResponse = `{
+  "id": "qr_record_id",
+  "type": "external_qr",
+  "qr_jwt": "<signed-token>",
+  "ticket_code": "SQR-ABC123",
+  "resource": {
+    "type": "gym_member",
+    "id": "member_1001",
+    "customer_ref": "customer_1001"
+  },
+  "is_test": false,
+  "max_uses": 1,
+  "use_count": 0,
+  "remaining_uses": 1,
+  "expires_at": "2026-10-09T00:00:00.000Z",
+  "status": "active"
+}`;
 
-$body = @{
-  qr_jwt = $qrJwt
-  gate_id = "gate-main"
-} | ConvertTo-Json
+const verifyResponse = `{
+  "valid": true,
+  "type": "external_qr",
+  "qr_id": "qr_record_id",
+  "gate_id": "gate-main",
+  "resource_type": "gym_member",
+  "resource_id": "member_1001",
+  "customer_ref": "customer_1001"
+}`;
 
-$request = @{
-  Uri = "$apiUrl/api/v1/tickets/verify"
-  Method = "Post"
-  Headers = @{
-    "X-API-KEY" = $apiKey
-    "Content-Type" = "application/json"
-  }
-  Body = $body
-}
+const signingExample = String.raw`timestamp = Unix time in seconds
+method = "POST"
+path = "/api/v1/qr-codes"
+body = exact UTF-8 JSON bytes sent in the request
 
-$result = Invoke-RestMethod @request
-$result | ConvertTo-Json -Depth 10`;
+X-SIGNATURE = hex(
+  HMAC-SHA256(signing_secret, timestamp + method + path + body)
+)
+
+Headers:
+X-TIMESTAMP: <timestamp>
+X-SIGNATURE: <hex signature>`;
 
 export default function DocsPage() {
   return (
-    <main className="shell py-16 md:py-24">
+    <main className="shell py-12 md:py-20">
       <Reveal>
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div>
-            <p className="text-sm font-medium text-zinc-500">Postman-ready</p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-6xl">Tài liệu API</h1>
-            <p className="mt-4 max-w-2xl text-zinc-600">Toàn bộ endpoint Phase 1 để test bằng Postman: auth, thuê hộp, tạo show, mua vé, quét QR, dashboard và admin.</p>
-          </div>
-          <Link href="/smartqr-postman-collection.json" className="btn btn-primary" target="_blank">
-            <Download size={16} />
-            Tải Postman Collection
-          </Link>
+        <div className="max-w-3xl">
+          <p className="text-sm font-medium text-zinc-500">SMARTQR · API RENTAL</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 md:text-5xl">Hướng dẫn sử dụng API thuê</h1>
+          <p className="mt-4 text-sm leading-6 text-zinc-600 md:text-base">
+            Tích hợp tạo QR cho thành viên, đơn hàng hoặc tài nguyên của ứng dụng; sau đó xác minh mã tại cổng bằng API key của gói thuê.
+          </p>
         </div>
       </Reveal>
 
-      <Reveal className="mt-10 grid gap-4 md:grid-cols-3">
+      <Reveal className="mt-8 grid gap-4 md:grid-cols-3">
         {[
-          ["Base URL", baseUrl, Route],
-          ["Admin", "admin@smartqr.vn / admin123456", ShieldCheck],
-          ["User", "demo@smartqr.vn / demo123456", KeyRound]
-        ].map(([title, value, Icon]) => (
-          <article key={title as string} className="panel p-5">
-            <Icon className="text-zinc-900" size={18} />
-            <h2 className="mt-4 font-semibold">{title as string}</h2>
-            <code className="mt-2 block break-all rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700">{value as string}</code>
+          { title: "Base URL", value: baseUrl, Icon: Code2 },
+          { title: "Xác thực", value: "X-API-KEY", Icon: KeyRound },
+          { title: "Scopes", value: "qr:create · ticket:verify", Icon: ShieldCheck }
+        ].map(({ title, value, Icon }) => (
+          <article key={title} className="panel p-5">
+            <Icon size={18} className="text-zinc-900" />
+            <h2 className="mt-4 font-semibold">{title}</h2>
+            <code className="mt-2 block break-all rounded-lg bg-zinc-50 p-3 text-xs text-zinc-700">{value}</code>
           </article>
         ))}
       </Reveal>
 
-      <Reveal className="mt-10 panel p-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Luồng test nhanh trong Postman</h2>
-        <ol className="mt-5 grid gap-3 text-sm text-zinc-600">
-          {flow.map((item, index) => <li key={item}>{index + 1}. {item}</li>)}
+      <Reveal className="mt-8 panel p-5 md:p-6">
+        <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><KeyRound size={19} />1. Thuê API và chuẩn bị API key</h2>
+        <ol className="mt-4 grid gap-3 text-sm leading-6 text-zinc-600">
+          <li>1. Mở <Link className="font-medium text-zinc-950 underline underline-offset-4" href="/dashboard/pages/thue-api">Thuê API</Link>, chọn gói, thời hạn và các scope cần dùng; hoàn tất thanh toán để đơn chuyển sang ACTIVE.</li>
+          <li>2. Vào <Link className="font-medium text-zinc-950 underline underline-offset-4" href="/dashboard/api-keys">Quản lý API key</Link> để tạo hoặc xem key. Raw key chỉ hiển thị một lần; lưu ở backend/vault an toàn, không nhúng vào JavaScript frontend.</li>
+          <li>3. Key tạo QR cần scope <code>qr:create</code>; key xác minh cần <code>ticket:verify</code>. Có thể cấp một key chứa cả hai scope nếu gói thuê cho phép.</li>
         </ol>
+        <div className="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
+          <b>Sandbox và live:</b> test key chỉ dành cho sandbox. Khi dùng test key, gửi thêm <code>X-API-Explorer: true</code>. Key live phải bỏ header này; request live có thể tiêu quota hoặc phát sinh phí. Không dùng test key để xác minh dữ liệu live.
+        </div>
       </Reveal>
 
-      <Reveal className="mt-10 panel p-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Verify QR show từ website khác</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-          API key của máy quét thuộc riêng từng show, không phải key thuê API chung. User chỉ tạo show và theo dõi trạng thái lắp đặt.
-          Admin vào Admin Console để bấm “Cấp key cho máy quét”; raw key được cấp một lần cho đội lắp đặt. Khách hàng chỉ nhận QR vé.
-        </p>
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <Reveal className="mt-8 panel overflow-hidden">
+        <div className="border-b border-zinc-200 bg-zinc-50 p-5 md:p-6">
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><QrCode size={19} />2. Tạo mã QR</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">Gửi yêu cầu server-to-server đến <code>POST /api/v1/qr-codes</code>. Thay mẫu key bằng key của môi trường đã chọn.</p>
+        </div>
+        <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-2">
           <div>
-            <h3 className="text-sm font-semibold">PowerShell</h3>
-            <pre className="mt-3 min-h-[360px] overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-6 text-zinc-100"><code>{powershellVerifyExample}</code></pre>
+            <h3 className="text-sm font-semibold">cURL</h3>
+            <pre className="mt-3 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100"><code>{createQrExample}</code></pre>
+            <h3 className="mt-5 text-sm font-semibold">Các trường chính</h3>
+            <ul className="mt-2 grid gap-2 text-sm leading-5 text-zinc-600">
+              <li><code>resource_type</code>, <code>resource_id</code>: loại và mã đối tượng của ứng dụng.</li>
+              <li><code>customer_ref</code>, <code>payload</code>, <code>metadata</code>: thông tin bổ sung tùy chọn.</li>
+              <li><code>ttl_seconds</code>: thời hạn từ 60 giây đến tối đa 365 ngày; mặc định 30 ngày.</li>
+              <li><code>max_uses</code>: số lần sử dụng tối đa, mặc định 1. Có thể giới hạn bằng <code>allowed_gate_ids</code>.</li>
+              <li><code>Idempotency-Key</code>: tùy chọn để retry an toàn; gửi lại cùng key và cùng body sẽ nhận kết quả cũ.</li>
+            </ul>
           </div>
           <div>
-            <h3 className="text-sm font-semibold">Body thay thế nếu dùng ticket code</h3>
-            <pre className="mt-3 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-6 text-zinc-100"><code>{`$body = @{
-  ticket_code = "SQR-ABC123"
-  gate_id = "gate-main"
-} | ConvertTo-Json`}</code></pre>
-            <p className="mt-3 text-sm leading-6 text-zinc-600">
-              Dùng <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">qr_jwt</code> cho chuỗi JWT lấy từ QR vé.
-              Nếu gửi lại cùng một vé sau khi check-in, API sẽ trả về trạng thái vé đã được sử dụng.
-            </p>
+            <h3 className="text-sm font-semibold">Phản hồi tạo QR (rút gọn)</h3>
+            <pre className="mt-3 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100"><code>{createResponse}</code></pre>
+            <p className="mt-3 text-sm leading-5 text-zinc-600">Hiển thị QR từ <code>qr_jwt</code> hoặc dùng <code>ticket_code</code> nếu cần nội dung ngắn, dễ quét. Giữ liên kết giữa mã trả về và resource của ứng dụng.</p>
           </div>
         </div>
       </Reveal>
 
-      <div className="mt-10 grid gap-8">
-        {endpoints.map((group) => (
-          <Reveal key={group.group} className="panel overflow-hidden">
-            <div className="border-b border-zinc-200 bg-zinc-50 px-5 py-4">
-              <h2 className="text-xl font-semibold tracking-tight">{group.group}</h2>
-              {group.auth && <p className="mt-1 text-sm text-zinc-600">{group.auth}</p>}
-            </div>
-            <div className="divide-y divide-zinc-200">
-              {group.items.map(([method, path, desc, body]) => (
-                <article key={`${method}-${path}`} className="grid gap-4 p-5 lg:grid-cols-[90px_240px_1fr]">
-                  <b className={method === "GET" ? "text-emerald-700" : method === "PATCH" ? "text-amber-700" : "text-zinc-950"}>{method}</b>
-                  <code className="break-all text-sm text-zinc-800">{baseUrl}{path}</code>
-                  <div>
-                    <p className="text-sm text-zinc-600">{desc}</p>
-                    {body && (
-                      <pre className="mt-3 overflow-auto rounded-lg border border-zinc-200 bg-zinc-950 p-4 text-xs leading-6 text-zinc-100">
-{formatBody(body)}
-                      </pre>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </Reveal>
-        ))}
-      </div>
+      <Reveal className="mt-8 panel overflow-hidden">
+        <div className="border-b border-zinc-200 bg-zinc-50 p-5 md:p-6">
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight"><ShieldCheck size={19} />3. Xác minh mã tại cổng</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">Gửi <code>POST /api/v1/tickets/verify</code> với key có scope <code>ticket:verify</code>. Mã hợp lệ có thể được đánh dấu đã sử dụng.</p>
+        </div>
+        <div className="grid gap-5 p-5 md:p-6 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-semibold">Xác minh bằng ticket code</h3>
+            <pre className="mt-3 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100"><code>{verifyQrExample}</code></pre>
+            <p className="mt-3 text-sm leading-5 text-zinc-600">Hoặc thay <code>ticket_code</code> bằng <code>qr_jwt</code>. <code>gate_id</code> là mã cổng/thiết bị đang quét.</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold">Phản hồi hợp lệ</h3>
+            <pre className="mt-3 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100"><code>{verifyResponse}</code></pre>
+            <p className="mt-3 text-sm leading-5 text-zinc-600">Luôn kiểm tra <code>valid</code>. Khi đã hết hạn, bị thu hồi, dùng hết lượt hoặc không đúng cổng, API từ chối; không coi mọi HTTP 200 là thành công.</p>
+          </div>
+        </div>
+      </Reveal>
+
+      <Reveal className="mt-8 grid gap-4 lg:grid-cols-2">
+        <section className="panel p-5 md:p-6">
+          <h2 className="text-xl font-semibold tracking-tight">4. Ký request HMAC (nếu bật)</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">Khi gói thuê bật Signing, mọi request cần timestamp và chữ ký. Tạo chữ ký ở backend của bạn bằng signing secret; không gửi secret qua request.</p>
+          <pre className="mt-4 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs leading-5 text-zinc-100"><code>{signingExample}</code></pre>
+          <p className="mt-3 text-sm leading-5 text-zinc-600">Timestamp Unix giây phải nằm trong khoảng ±5 phút. Path và raw body dùng để ký phải khớp chính xác request gửi đi.</p>
+        </section>
+        <section className="panel p-5 md:p-6">
+          <h2 className="text-xl font-semibold tracking-tight">Bảo mật và lỗi thường gặp</h2>
+          <ul className="mt-4 grid gap-3 text-sm leading-5 text-zinc-600">
+            <li><b className="text-zinc-900">401:</b> thiếu/sai key hoặc chữ ký; kiểm tra key còn hoạt động và HMAC nếu đang bật.</li>
+            <li><b className="text-zinc-900">403 forbidden_scope:</b> key không có scope phù hợp hoặc scope không nằm trong gói thuê.</li>
+            <li><b className="text-zinc-900">429:</b> vượt rate limit hoặc quota; đọc <code>Retry-After</code> và các header <code>X-RateLimit-*</code>.</li>
+            <li>Không đặt key thật trong mã frontend, public repository, log hoặc ảnh chụp màn hình.</li>
+            <li>Test nhanh bằng <Link className="font-medium text-zinc-950 underline underline-offset-4" href="/test-api">API Playground</Link>; thao tác live vẫn có thể tiêu quota hoặc check-in thật.</li>
+          </ul>
+        </section>
+      </Reveal>
     </main>
   );
-}
-
-function formatBody(value: string) {
-  if (value.startsWith("Header:")) return value;
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2);
-  } catch {
-    return value;
-  }
 }

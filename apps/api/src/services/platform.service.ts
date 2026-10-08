@@ -220,21 +220,14 @@ export class PlatformService {
     if (Boolean(configuredBank) !== Boolean(configuredAccountNumber)) {
       throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Cần cấu hình đồng thời PAYOS_RECEIVER_BANK_NAME và PAYOS_RECEIVER_ACCOUNT_NUMBER." });
     }
-    const payoutAccount = configuredBank && configuredAccountNumber
-      ? { bankName: configuredBank, accountNumber: configuredAccountNumber, accountName: process.env.PAYOS_RECEIVER_ACCOUNT_NAME?.trim() ?? "" }
-      : await this.prisma.payoutAccount.findFirst({
-          where: { method: "BANK", status: "active", isDefault: true, user: { role: UserRole.ADMIN } },
-          orderBy: { createdAt: "asc" },
-          select: { bankName: true, accountNumber: true, accountName: true }
-        });
-    if (!payoutAccount?.bankName || !payoutAccount.accountNumber) {
-      throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Chưa cấu hình tài khoản nhận tiền cho shop trong biến môi trường hoặc Payout." });
+    if (!configuredBank || !configuredAccountNumber) {
+      throw new BadRequestException({ error: "payment_receiver_not_configured", message: "Cần cấu hình PAYOS_RECEIVER_BANK_NAME và PAYOS_RECEIVER_ACCOUNT_NUMBER trong apps/api/.env để tạo mã VietQR." });
     }
 
     return this.payos.createVietQrImage({
-      bankName: payoutAccount.bankName,
-      accountNumber: payoutAccount.accountNumber,
-      accountName: payoutAccount.accountName,
+      bankName: configuredBank,
+      accountNumber: configuredAccountNumber,
+      accountName: process.env.PAYOS_RECEIVER_ACCOUNT_NAME?.trim() ?? "",
       amount,
       orderId
     });
@@ -299,6 +292,34 @@ export class PlatformService {
       where: { id },
       select: { id: true, slug: true, name: true, status: true, soldTickets: true, totalTickets: true, startAt: true, endAt: true }
     });
+  }
+
+  async revealShowTickets(userId: string, showId: string, orderId: string, password: string) {
+    const order = await this.prisma.ticketOrder.findFirst({
+      where: { id: orderId, showId, show: { ownerId: userId } },
+      select: {
+        id: true,
+        status: true,
+        quantity: true,
+        totalAmount: true,
+        payoutAmount: true,
+        buyerName: true,
+        buyerEmail: true,
+        buyerPhone: true,
+        buyerNote: true,
+        createdAt: true,
+        show: { select: { id: true, name: true, slug: true, startAt: true, location: true } },
+        tickets: { select: { id: true, qrJwt: true, qrOfflineJwt: true, isUsed: true } }
+      }
+    });
+    if (!order) throw new NotFoundException({ error: "ticket_order_not_found", message: "Ticket order not found" });
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+    if (!user || !(await this.auth.comparePassword(password, user.passwordHash))) {
+      throw new ForbiddenException({ error: "reauth_failed", message: "Account password is invalid" });
+    }
+
+    return { order };
   }
 
   async createShowScanKey(showId: string, userId: string) {
@@ -783,7 +804,7 @@ export class PlatformService {
       const [shows, apiKeys, ticketOrders] = await Promise.all([
         this.prisma.show.findMany({ where: { ownerId: userId }, select: { id: true, slug: true, name: true, status: true, installationStatus: true, scannerCount: true, installationNote: true, soldTickets: true, totalTickets: true, ticketPrice: true, location: true, startAt: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
         this.prisma.apiKey.findMany({ where: { userId }, select: { id: true, prefix: true, quota: true, scopes: true, rentalId: true, showId: true, status: true, isTest: true, allowedIps: true, rateLimit: true, revokeAt: true, suspendUntil: true, createdAt: true }, orderBy: { createdAt: "desc" } }),
-        this.prisma.ticketOrder.findMany({ where: { show: { ownerId: userId } }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, quantity: true, totalAmount: true, payoutAmount: true, buyerName: true, buyerEmail: true, buyerPhone: true, buyerNote: true, createdAt: true, show: { select: { id: true, name: true, slug: true, startAt: true, location: true } }, tickets: { select: { id: true, qrJwt: true, qrOfflineJwt: true, isUsed: true } } } })
+        this.prisma.ticketOrder.findMany({ where: { show: { ownerId: userId } }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, quantity: true, totalAmount: true, payoutAmount: true, buyerName: true, buyerEmail: true, buyerPhone: true, buyerNote: true, createdAt: true, show: { select: { id: true, name: true, slug: true, startAt: true, location: true } }, tickets: { select: { id: true, isUsed: true } } } })
       ]);
       return { ...empty, shows, apiKeys: apiKeys.map(key => this.publicApiKey(key)), ticketOrders };
     }
@@ -798,7 +819,17 @@ export class PlatformService {
       this.prisma.ticket.findMany({ where: { show: { ownerId: userId } }, select: { id: true, isUsed: true, qrOfflineJwt: true, show: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
       this.prisma.externalQrCode.findMany({ where: { userId }, select: { id: true, code: true, resourceType: true, resourceId: true, customerRef: true, isUsed: true, expiresAt: true, createdAt: true, scanLogs: { select: { id: true, gateId: true, valid: true, reason: true, ip: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 3 } }, orderBy: { createdAt: "desc" }, take: 20 })
     ]);
-    return { rentals, apiRentals, shows, apiKeys: apiKeys.map(key => this.publicApiKey(key)), ticketOrders, purchasedTicketOrders: [], payouts, tickets, externalQrCodes };
+    return {
+      rentals,
+      apiRentals,
+      shows,
+      apiKeys: apiKeys.map(key => this.publicApiKey(key)),
+      ticketOrders,
+      purchasedTicketOrders: [],
+      payouts,
+      tickets: tickets.map(({ qrOfflineJwt, ...ticket }) => ({ ...ticket, hasOfflineQr: Boolean(qrOfflineJwt) })),
+      externalQrCodes
+    };
   }
 
   private async assertApiKey(raw: string, requiredScope?: ApiKeyScope) {

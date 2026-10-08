@@ -27,11 +27,11 @@ export class PayosMockService {
 
     let response: Response;
     try {
-      response = await fetch(imageUrl, { signal: AbortSignal.timeout(10000), cache: "no-store", redirect: "error" });
+      response = await fetch(imageUrl, { signal: AbortSignal.timeout(10000), cache: "no-store" });
     } catch {
       throw new BadGatewayException({ error: "vietqr_unavailable", message: "Không kết nối được dịch vụ tạo mã VietQR." });
     }
-    if (!response.ok || !response.headers.get("content-type")?.toLowerCase().includes("image/png")) {
+    if (!response.url.startsWith("https://") || !response.ok || !response.headers.get("content-type")?.toLowerCase().includes("image/png")) {
       throw new BadGatewayException({ error: "vietqr_generation_failed", message: "Dịch vụ VietQR không tạo được mã thanh toán." });
     }
     if (Number(response.headers.get("content-length")) > 1024 * 1024) {

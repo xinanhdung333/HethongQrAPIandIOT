@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
+import { resolve } from "node:path";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { ApiKeyGuard } from "../security/api-key.guard";
 import { AuthService } from "../security/auth.service";
@@ -43,7 +44,10 @@ import { PayosMockService } from "../services/payos.mock";
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [resolve(__dirname, "../../.env"), resolve(process.cwd(), ".env")]
+    }),
     ThrottlerModule.forRoot([{ ttl: 1000, limit: 10 }])
   ],
   controllers: [
@@ -94,4 +98,3 @@ export class AppModule implements NestModule {
     consumer.apply(CsrfMiddleware, ApiAuditMiddleware).forRoutes("*");
   }
 }
-

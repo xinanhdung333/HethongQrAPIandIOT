@@ -41,7 +41,9 @@ export function PaymentClient() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [switchingMethod, setSwitchingMethod] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [qrError, setQrError] = useState(false);
+  const [qrImageSrc, setQrImageSrc] = useState("");
+  const [qrError, setQrError] = useState("");
+  const [qrRetry, setQrRetry] = useState(0);
   const qrImageUrl = useMemo(() => {
     if (!orderId || !paymentExpires || !paymentSignature || gateway || (isRemainingRentalCheckout && paymentMethod !== "payos_demo")) return "";
     const query = new URLSearchParams({
@@ -51,9 +53,55 @@ export function PaymentClient() {
       expires: paymentExpires,
       signature: paymentSignature
     });
-    return `${API_URL}/webhooks/payos-demo/qr?${query.toString()}`;
-  }, [gateway, isRemainingRentalCheckout, kind, orderId, paymentExpires, paymentMethod, paymentSignature, paymentStage]);
+    if (qrRetry) query.set("retry", String(qrRetry));
+    return `/api/payment-qr?${query.toString()}`;
+  }, [gateway, isRemainingRentalCheckout, kind, orderId, paymentExpires, paymentMethod, paymentSignature, paymentStage, qrRetry]);
   const backHref = useMemo(() => kind === "rental" ? "/dashboard/rentals" : kind === "api" ? "/thue-api" : "/dashboard/tickets", [kind]);
+
+  useEffect(() => {
+    if (!qrImageUrl) {
+      setQrImageSrc("");
+      setQrError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    let objectUrl = "";
+    setQrImageSrc("");
+    setQrError("");
+
+    void fetch(qrImageUrl, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          let message = `Không tải được mã VietQR (HTTP ${response.status}).`;
+          try {
+            const payload = await response.json() as { message?: unknown };
+            if (typeof payload.message === "string") message = payload.message;
+          } catch {
+            // Keep the HTTP status message when the server did not return JSON.
+          }
+          throw new Error(message);
+        }
+
+        if (!response.headers.get("content-type")?.toLowerCase().includes("image/png")) {
+          throw new Error("Máy chủ không trả về ảnh PNG VietQR hợp lệ.");
+        }
+
+        const image = await response.blob();
+        if (!image.size) throw new Error("Máy chủ trả về ảnh VietQR rỗng.");
+        objectUrl = URL.createObjectURL(image);
+        setQrImageSrc(objectUrl);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setQrError(error instanceof Error ? error.message : "Không thể tải mã VietQR.");
+      });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [qrImageUrl]);
 
   useEffect(() => {
     if (kind !== "rental" || !orderId) return;
@@ -140,16 +188,20 @@ export function PaymentClient() {
           <div className="mx-auto mt-6 max-w-xl rounded-xl border border-zinc-200 bg-white p-5 text-left">
             <h2 className="text-lg font-semibold tracking-tight">Quét mã VietQR</h2>
             {qrError ? (
-              <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Không tải được mã VietQR. Hãy kiểm tra tài khoản ngân hàng mặc định của shop trong phần Payout và thử tải lại trang.</p>
+              <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                <p>{qrError}</p>
+                <button type="button" className="btn btn-secondary mt-3 text-sm" onClick={() => setQrRetry((value) => value + 1)}>
+                  Thử tải lại mã QR
+                </button>
+              </div>
+            ) : qrImageSrc ? (
+              <img src={qrImageSrc} alt="Mã VietQR thanh toán" className="mx-auto mt-4 aspect-square w-64 max-w-full rounded-lg border border-zinc-200 object-contain" />
             ) : (
-              <img
-                src={qrImageUrl}
-                alt="Mã VietQR thanh toán"
-                className="mx-auto mt-4 aspect-square w-64 max-w-full rounded-lg border border-zinc-200 object-contain"
-                onError={() => setQrError(true)}
-              />
+              <div role="status" className="mx-auto mt-4 flex aspect-square w-64 max-w-full items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-sm text-zinc-500">
+                Đang tải mã VietQR...
+              </div>
             )}
-            <p className="mt-4 text-sm leading-6 text-zinc-600">Mã được tạo theo số tiền của đơn hàng và tài khoản ngân hàng mặc định của shop. Đây là luồng PayOS demo: chuyển khoản không được đối soát tự động, trạng thái đơn vẫn được mô phỏng.</p>
+            <p className="mt-4 text-sm leading-6 text-zinc-600">Mã được tạo theo số tiền đơn hàng và tài khoản nhận chung của admin cấu hình trong env. Đây là luồng PayOS demo: chuyển khoản không được đối soát tự động, trạng thái đơn vẫn được mô phỏng.</p>
             {!isRemainingRentalCheckout && <button type="button" disabled={confirming} aria-busy={confirming} onClick={() => void confirmDemoPayment()} className="btn btn-primary mt-4 w-full">{confirming && <Loader2 aria-hidden="true" className="animate-spin" size={16} />}{confirming ? "Đang xác nhận demo..." : "Xác nhận thanh toán demo"}</button>}
           </div>
         )}
