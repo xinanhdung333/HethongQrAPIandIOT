@@ -10,6 +10,23 @@ export class LoginDto {
   @IsString() password!: string;
 }
 
+export class ForgotPasswordDto {
+  @IsEmail() email!: string;
+}
+
+export class VerifyResetTokenDto {
+  @IsOptional() @IsString() token?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() otp?: string;
+}
+
+export class ResetPasswordDto {
+  @IsOptional() @IsString() token?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() otp?: string;
+  @IsString() @MinLength(8) password!: string;
+}
+
 export class UpdateProfileDto {
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @MinLength(8) password?: string;

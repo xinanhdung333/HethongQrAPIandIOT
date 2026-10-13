@@ -7,7 +7,8 @@ import { ApiKeyScope } from "../security/api-key.decorator";
 import { getGateKeyPairForTenant, signOfflineQrToken } from "../security/gate-signing";
 import { gateRedisTenantId } from "../security/gate-tenant";
 import { enableOfflineCapable, isOfflineCapable } from "../security/tenant";
-import { ApiRentalDto, BuyProductDto, CreateExternalQrDto, LoginDto, RegisterDto, RentalDto, ShowDto, UpdateApiKeyScopesDto, UpdateProfileDto, VerifyTicketDto } from "../dto";
+import { ApiRentalDto, BuyProductDto, CreateExternalQrDto, ForgotPasswordDto, LoginDto, RegisterDto, RentalDto, ResetPasswordDto, ShowDto, UpdateApiKeyScopesDto, UpdateProfileDto, VerifyResetTokenDto, VerifyTicketDto } from "../dto";
+import { MailService } from "./mail.service";
 import { PayosMockService } from "./payos.mock";
 import { ApiKeyIssuanceService } from "./api-key-issuance.service";
 import { PrismaService } from "./prisma.service";
@@ -35,7 +36,8 @@ export class PlatformService {
     private readonly realtime: RealtimeGateway,
     private readonly payos: PayosMockService,
     private readonly settings: SystemSettingsService,
-    private readonly keys: ApiKeyIssuanceService
+    private readonly keys: ApiKeyIssuanceService,
+    private readonly mail: MailService
   ) {}
 
   async register(dto: RegisterDto) {
@@ -56,6 +58,111 @@ export class PlatformService {
     }
     const token = await this.auth.signJwt({ sub: user.id, email: user.email, role: user.role }, 60 * 60 * 24);
     return { user: this.authUser(user), access_token: token };
+  }
+
+  googleLoginUrl() {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) throw new BadRequestException("Google OAuth chưa được cấu hình");
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${API_PUBLIC_URL}/auth/google/callback`;
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent("openid email profile")}&access_type=offline&prompt=select_account`;
+  }
+
+  async googleCallback(code: string) {
+    const clientId = process.env.GOOGLE_CLIENT_ID; const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${API_PUBLIC_URL}/auth/google/callback`;
+    if (!clientId || !clientSecret) throw new BadRequestException("Thiếu GOOGLE_CLIENT_ID hoặc GOOGLE_CLIENT_SECRET");
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }) });
+    if (!tokenResponse.ok) throw new UnauthorizedException("Không thể xác thực Google");
+    const tokens = await tokenResponse.json() as { access_token?: string }; if (!tokens.access_token) throw new UnauthorizedException("Google không trả về access token");
+    const response = await fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { Authorization: `Bearer ${tokens.access_token}` } });
+    if (!response.ok) throw new UnauthorizedException("Không lấy được thông tin tài khoản Google");
+    const profile = await response.json() as { email?: string; name?: string; picture?: string; email_verified?: boolean };
+    if (!profile.email || profile.email_verified === false) throw new UnauthorizedException("Email Google chưa được xác thực");
+    const email = profile.email.toLowerCase().trim();
+    const user = await this.prisma.user.upsert({ where: { email }, update: { ...(profile.name ? { fullName: profile.name } : {}), ...(profile.picture ? { avatarUrl: profile.picture } : {}) }, create: { email, passwordHash: await this.auth.hashPassword(crypto.randomBytes(32).toString("hex")), fullName: profile.name, avatarUrl: profile.picture, role: UserRole.CUSTOMER }, select: { id: true, email: true, role: true } });
+    return { user: this.authUser(user), access_token: await this.auth.signJwt({ sub: user.id, email: user.email, role: user.role }, 60 * 60 * 24) };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return { success: true, message: "Nếu địa chỉ email tồn tại trong hệ thống, hướng dẫn khôi phục mật khẩu đã được gửi đến hộp thư của bạn." };
+    }
+    const token = crypto.randomBytes(32).toString("hex");
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const ttlSeconds = 15 * 60;
+    await this.redis.set(`auth:reset:token:${token}`, JSON.stringify({ userId: user.id, email }), ttlSeconds);
+    await this.redis.set(`auth:reset:otp:${email}`, JSON.stringify({ token, otp, userId: user.id }), ttlSeconds);
+
+    await this.mail.sendPasswordResetEmail(user.email, token, otp);
+    return { success: true, message: "Đã gửi liên kết và mã xác thực đặt lại mật khẩu đến email của bạn." };
+  }
+
+  async verifyResetToken(dto: VerifyResetTokenDto) {
+    if (dto.token) {
+      const dataStr = await this.redis.get(`auth:reset:token:${dto.token}`);
+      if (dataStr) {
+        const data = JSON.parse(dataStr) as { userId: string; email: string };
+        return { valid: true, email: data.email };
+      }
+    }
+    if (dto.email && dto.otp) {
+      const email = dto.email.toLowerCase().trim();
+      const dataStr = await this.redis.get(`auth:reset:otp:${email}`);
+      if (dataStr) {
+        const data = JSON.parse(dataStr) as { token: string; otp: string; userId: string };
+        if (data.otp === dto.otp.trim()) {
+          return { valid: true, email, token: data.token };
+        }
+      }
+    }
+    throw new BadRequestException("Mã xác thực hoặc liên kết khôi phục không hợp lệ hoặc đã hết hạn (15 phút).");
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    let targetUserId: string | null = null;
+    let targetEmail: string | null = null;
+
+    if (dto.token) {
+      const dataStr = await this.redis.get(`auth:reset:token:${dto.token}`);
+      if (dataStr) {
+        const data = JSON.parse(dataStr) as { userId: string; email: string };
+        targetUserId = data.userId;
+        targetEmail = data.email;
+      }
+    }
+
+    if (!targetUserId && dto.email && dto.otp) {
+      const email = dto.email.toLowerCase().trim();
+      const dataStr = await this.redis.get(`auth:reset:otp:${email}`);
+      if (dataStr) {
+        const data = JSON.parse(dataStr) as { token: string; otp: string; userId: string };
+        if (data.otp === dto.otp.trim()) {
+          targetUserId = data.userId;
+          targetEmail = email;
+        }
+      }
+    }
+
+    if (!targetUserId) {
+      throw new BadRequestException("Mã xác thực hoặc liên kết khôi phục không hợp lệ hoặc đã hết hạn (15 phút).");
+    }
+
+    const passwordHash = await this.auth.hashPassword(dto.password);
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { passwordHash }
+    });
+
+    if (dto.token) await this.redis.del(`auth:reset:token:${dto.token}`);
+    if (targetEmail) await this.redis.del(`auth:reset:otp:${targetEmail}`);
+
+    if (targetEmail) {
+      void this.mail.sendPasswordChangedSuccessEmail(targetEmail);
+    }
+
+    return { success: true, message: "Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập với mật khẩu mới." };
   }
 
   async me(token: string) {
@@ -120,13 +227,29 @@ export class PlatformService {
       const order = await tx.rentalOrder.create({
         data: { userId, productId, type: OrderType.BUY, duration: 0, quantity: dto.quantity, rentFee: 0, depositFee: 0, installFee: 0, total, status: RentalStatus.PENDING, shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [] }
       });
-      return { order, total };
+      return { order, total, productName: product.name };
     });
-    const { order, total } = result;
+    const { order, total, productName } = result;
     const paymentMethod = dto.payment_method ?? "payos_demo";
     const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "rental", method: paymentMethod });
-    if (paymentMethod === "payos_demo") setTimeout(() => void this.markRentalPaid(order.id), 5000);
+    if (paymentMethod === "payos_demo") setTimeout(() => void this.markRentalPaid(order.id).catch(error => this.logger.error("Demo rental payment failed", error)), 5000);
     await this.redis.del("cache:products");
+
+    void this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }).then(u => {
+      if (u?.email) {
+        void this.mail.sendOrderCreatedEmail({
+          email: u.email,
+          orderId: order.id,
+          orderType: "BUY",
+          productName,
+          quantity: dto.quantity,
+          total,
+          paymentUrl: payment.paymentUrl,
+          shippingAddress: dto.shipping_address as Record<string, unknown>
+        });
+      }
+    });
+
     return { order_id: order.id, payment_demo_url: payment.paymentUrl, total };
   }
 
@@ -158,12 +281,29 @@ export class PlatformService {
       const order = await tx.rentalOrder.create({
       data: { userId, productId: product.id, type: isRent ? OrderType.RENT : OrderType.BUY, duration: dto.duration, quantity: dto.quantity, rentFee, depositFee, installFee, total, startDate, paymentDueAt, depositAmount, depositPercent, remainingAmount: Math.max(0, total - depositAmount), remainingPaymentStatus: isRent && total > depositAmount ? "PENDING" : "NOT_REQUIRED", shippingAddress: dto.shipping_address as Prisma.InputJsonValue, gateIds: [], status: RentalStatus.PENDING }
       });
-      return { order, rentFee, depositFee, sellFee, installFee, total, depositAmount, paymentDueAt };
+      return { order, rentFee, depositFee, sellFee, installFee, total, depositAmount, paymentDueAt, productName: product.name };
     });
-    const { order, rentFee, depositFee, sellFee, installFee, total, depositAmount, paymentDueAt } = result;
+    const { order, rentFee, depositFee, sellFee, installFee, total, depositAmount, paymentDueAt, productName } = result;
     await this.redis.del("cache:products");
     const paymentMethod = dto.payment_method ?? "payos_demo";
     const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: isRent ? depositAmount : total, kind: "rental", method: paymentMethod, stage: "initial" });
+
+    void this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }).then(u => {
+      if (u?.email) {
+        void this.mail.sendOrderCreatedEmail({
+          email: u.email,
+          orderId: order.id,
+          orderType: isRent ? "RENT" : "BUY",
+          productName,
+          quantity: dto.quantity,
+          duration: isRent ? dto.duration : undefined,
+          depositAmount: isRent ? depositAmount : undefined,
+          total,
+          paymentUrl: payment.paymentUrl,
+          shippingAddress: dto.shipping_address as Record<string, unknown>
+        });
+      }
+    });
     return {
       order_id: order.id,
       payment_demo_url: payment.paymentUrl,
@@ -233,6 +373,14 @@ export class PlatformService {
     });
   }
 
+  async getPayosDemoInfo(orderId: string, kind: "rental" | "ticket" | "api", stage: "initial" | "remaining") {
+    let amount = 0;
+    if (kind === "rental") { const o = await this.prisma.rentalOrder.findUnique({ where: { id: orderId }, select: { type: true, total: true, depositAmount: true, remainingAmount: true } }); if (!o) throw new NotFoundException("Payment order not found"); amount = stage === "remaining" ? o.remainingAmount : o.type === OrderType.RENT ? o.depositAmount : o.total; }
+    else if (kind === "ticket") { const o = await this.prisma.ticketOrder.findUnique({ where: { id: orderId }, select: { totalAmount: true } }); if (!o) throw new NotFoundException("Payment order not found"); amount = o.totalAmount; }
+    else { const o = await this.prisma.apiRentalOrder.findUnique({ where: { id: orderId }, select: { total: true } }); if (!o) throw new NotFoundException("Payment order not found"); amount = o.total; }
+    return { bank_name: process.env.PAYOS_RECEIVER_BANK_NAME?.trim() ?? "", account_number: process.env.PAYOS_RECEIVER_ACCOUNT_NUMBER?.trim() ?? "", account_name: process.env.PAYOS_RECEIVER_ACCOUNT_NAME?.trim() ?? "", amount };
+  }
+
   async createRemainingRentalPayment(id: string, userId: string, method: "payos_demo" | "momo" = "payos_demo") {
     const order = await this.prisma.rentalOrder.findFirst({ where: { id, userId } });
     if (!order) throw new NotFoundException("Rental not found");
@@ -244,7 +392,7 @@ export class PlatformService {
       throw new BadRequestException("Chi duoc thanh toan phan con lai trong vong 24 gio truoc ngay thue");
     }
     const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: remaining, kind: "rental", method, stage: "remaining", gatewayOrderId: method === "momo" ? `${order.id}-remaining-${Date.now()}` : undefined });
-    if (payment) setTimeout(() => void this.markRentalPaid(order.id), 5000);
+    if (payment) setTimeout(() => void this.markRentalPaid(order.id).catch(error => this.logger.error("Demo rental payment failed", error)), 5000);
     return { order_id: order.id, payment_demo_url: payment.paymentUrl, remaining_amount: remaining };
   }
 
@@ -399,7 +547,7 @@ export class PlatformService {
       throw error;
     }
     const order = reservation.order;
-    if ((buyer.payment_method ?? "payos_demo") === "payos_demo") setTimeout(() => void this.markTicketOrderPaid(order.id), 5000);
+    if ((buyer.payment_method ?? "payos_demo") === "payos_demo") setTimeout(() => void this.markTicketOrderPaid(order.id).catch(error => this.logger.error("Demo ticket payment failed", error)), 5000);
     return { payment_url: payment.paymentUrl, order_id: order.id };
   }
 
@@ -464,6 +612,24 @@ export class PlatformService {
     if (!claimed.count) return this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
     const paid = await this.prisma.rentalOrder.findUnique({ where: { id: orderId } });
     this.realtime.emitTicketVerified(order.userId, { type: order.type === OrderType.BUY ? "product:paid" : "rental:active", order_id: orderId });
+
+    void this.prisma.rentalOrder.findUnique({
+      where: { id: orderId },
+      include: { product: true, user: { select: { email: true } } }
+    }).then(p => {
+      if (p?.user?.email && p.product) {
+        void this.mail.sendOrderPaidEmail({
+          email: p.user.email,
+          orderId: p.id,
+          orderType: p.type as "RENT" | "BUY",
+          productName: p.product.name,
+          quantity: p.quantity,
+          total: p.total,
+          gateIds: Array.isArray(p.gateIds) ? (p.gateIds as string[]) : undefined
+        });
+      }
+    });
+
     return paid;
   }
 
@@ -500,6 +666,19 @@ export class PlatformService {
     });
     const payment = await this.payos.createPaymentLink({ orderId: order.id, amount: total, kind: "api", method: dto.payment_method ?? "payos_demo" });
     await this.prisma.apiRentalOrder.update({ where: { id: order.id }, data: { payosPaymentId: payment.paymentId } });
+
+    void this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }).then(u => {
+      if (u?.email) {
+        void this.mail.sendApiRentalPaidEmail({
+          email: u.email,
+          appName: dto.app_name.trim(),
+          plan: dto.plan,
+          quota,
+          total
+        });
+      }
+    });
+
     return {
       payment_url: payment.paymentUrl,
       order_id: order.id,
@@ -526,6 +705,20 @@ export class PlatformService {
     });
     if (!result.claimed || !result.issued) return result.paid;
     this.realtime.emitTicketVerified(order.userId, { type: "api_rental:active", order_id: orderId, api_key_prefix: result.issued.key.prefix });
+
+    void this.prisma.user.findUnique({ where: { id: order.userId }, select: { email: true } }).then(u => {
+      if (u?.email) {
+        void this.mail.sendApiRentalPaidEmail({
+          email: u.email,
+          appName: order.appName,
+          plan: order.plan,
+          quota: order.quota,
+          total: order.total,
+          apiKeyPrefix: result.issued?.key?.prefix
+        });
+      }
+    });
+
     return { ...result.paid, apiKeyPrefix: result.issued.key.prefix, api_key_once: result.issued.api_key_once };
   }
 
@@ -660,6 +853,18 @@ export class PlatformService {
     if (!result.claimed) return result.order;
     await this.redis.del(`cache:show:${order.show.slug}`);
     this.realtime.emitTicketSold(order.showId, { order_id: orderId, quantity: order.quantity, sold_tickets: result.soldTickets, payout_amount: order.payoutAmount });
+
+    if (result.order.buyerEmail) {
+      void this.mail.sendTicketOrderPaidEmail({
+        buyerEmail: result.order.buyerEmail,
+        buyerName: result.order.buyerName,
+        showName: order.show.name,
+        quantity: result.order.quantity,
+        totalAmount: result.order.totalAmount,
+        orderId: result.order.id
+      });
+    }
+
     return result.order;
   }
 

@@ -39,6 +39,7 @@ import { AccountSettingsController } from "../modules/account-settings.controlle
 import { SecurityController } from "../modules/security.controller";
 import { CsrfMiddleware } from "../security/csrf.middleware";
 import { AdminSettingsPaymentsController, DeveloperPaymentsController, PaymentsController } from "../modules/settings-payments.controller";
+import { MailService } from "../services/mail.service";
 import { PlatformService } from "../services/platform.service";
 import { PayosMockService } from "../services/payos.mock";
 
@@ -74,6 +75,7 @@ import { PayosMockService } from "../services/payos.mock";
   providers: [
     PrismaService,
     RedisService,
+    MailService,
     ApiRateLimitService,
     ApiMaintenanceService,
     DeveloperService,

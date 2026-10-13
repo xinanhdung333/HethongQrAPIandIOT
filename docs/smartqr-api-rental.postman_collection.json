@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "4f8f5ee0-62cb-4fca-bc54-4fbf85a7474a",
     "name": "SmartQR - API thuê (Tạo QR & Verify)",
-    "description": "Bộ request kiểm thử API thuê SmartQR: tạo QR, xác minh QR vừa tạo, API key sai/thiếu, key thiếu scope và body không hợp lệ. Không chứa API key thật. Thứ tự khuyến nghị: chạy lần lượt các request trong folder 01 trước, sau đó chạy folder 02. Verify hợp lệ sẽ tiêu thụ một lượt sử dụng của QR.\n\nBiến cần cấu hình trong Postman: baseUrl, apiMode (test/live), createApiKey, verifyApiKey, createOnlyApiKey, signingSecret (nếu bật HMAC). Không chia sẻ/export giá trị key thật.",
+    "description": "Luồng Postman từ lấy CSRF, đăng nhập, tạo đơn thuê API đến tạo QR/verify. Chạy folder 00 theo thứ tự; sau khi thanh toán demo đơn thuê và có API key, cấu hình key rồi chạy folder 01 và 02. Verify hợp lệ sẽ tiêu thụ một lượt sử dụng của QR. Không chứa thông tin đăng nhập hoặc API key thật.\n\nBiến cần cấu hình trong Postman: baseUrl, loginEmail, loginPassword, csrfToken (tự lấy ở request đầu), sessionToken (tự lưu sau đăng nhập), apiMode (test/live), createApiKey, verifyApiKey, createOnlyApiKey, signingSecret (nếu bật HMAC). Postman giữ cookie csrf_token trong cookie jar; không chia sẻ/export giá trị bí mật.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -73,6 +73,40 @@
       "description": "Optional rental HMAC signing secret. Keep local and private."
     },
     {
+      "key": "loginEmail",
+      "value": "",
+      "type": "string",
+      "description": "SmartQR customer account email. Keep local; do not share collection with credentials."
+    },
+    {
+      "key": "loginPassword",
+      "value": "",
+      "type": "string",
+      "description": "SmartQR account password. Keep local; do not share collection with credentials."
+    },
+    {
+      "key": "sessionToken",
+      "value": "",
+      "type": "string",
+      "description": "Saved automatically by the login request. Treat as a password."
+    },
+    {
+      "key": "csrfToken",
+      "value": "",
+      "type": "string",
+      "description": "Saved automatically by the CSRF request. Postman also needs its csrf_token cookie."
+    },
+    {
+      "key": "apiRentalOrderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "apiRentalPaymentUrl",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "createdTicketCode",
       "value": "",
       "type": "string"
@@ -89,6 +123,150 @@
     }
   ],
   "item": [
+    {
+      "name": "00 - Đăng nhập và thuê API",
+      "description": "Chạy lần lượt Lấy CSRF token, Đăng nhập, rồi Tạo đơn thuê API. Cookie csrf_token được lưu trong Postman cookie jar; token được tự gắn vào header X-CSRF-Token. Mở apiRentalPaymentUrl trong trình duyệt để hoàn tất thanh toán demo; sau khi đơn được kích hoạt, tạo/copy API key trong dashboard. Không điền mật khẩu thật vào collection được chia sẻ.",
+      "item": [
+        {
+          "name": "Lấy CSRF token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/csrf-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "csrf-token"
+              ]
+            },
+            "description": "Gửi request này đầu tiên. Postman tự lưu cookie csrf_token từ Set-Cookie."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Lấy CSRF token thành công', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Response có CSRF token', function () { pm.expect(data.token).to.be.a('string').and.not.empty; });",
+                  "if (data.token) pm.collectionVariables.set('csrfToken', data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập SmartQR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Nhập loginEmail và loginPassword trong biến collection Postman của bạn trước khi gửi. Token được lưu tự động trong sessionToken và có hiệu lực 24 giờ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập thành công (HTTP 200/201)', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const data = pm.response.json();",
+                  "pm.test('Response có access_token', function () { pm.expect(data.access_token).to.be.a('string').and.not.empty; });",
+                  "if (data.access_token) pm.collectionVariables.set('sessionToken', data.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo đơn thuê API",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sessionToken}}"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_name\": \"Postman Demo App\",\n  \"website\": \"https://example.com\",\n  \"plan\": \"starter\",\n  \"duration\": 1,\n  \"scopes\": [\n    \"qr:create\",\n    \"ticket:verify\"\n  ],\n  \"payment_method\": \"payos_demo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api-rentals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-rentals"
+              ]
+            },
+            "description": "Cần chạy Lấy CSRF token và Đăng nhập trước. Tạo đơn thuê starter 1 tháng bằng phương thức demo, với scope tạo QR và xác minh vé. Request này tạo đơn thật ở trạng thái chờ thanh toán; không phải request sandbox tạo QR."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tạo đơn thuê trả HTTP 200/201', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "if ([200, 201].includes(pm.response.code)) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.order_id) pm.collectionVariables.set('apiRentalOrderId', data.order_id);",
+                  "  if (data.payment_url) pm.collectionVariables.set('apiRentalPaymentUrl', data.payment_url);",
+                  "  pm.test('Response có mã đơn và link thanh toán', function () { pm.expect(data.order_id).to.be.a('string').and.not.empty; pm.expect(data.payment_url).to.be.a('string').and.not.empty; });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "01 - Tạo QR và xác minh thành công",
       "description": "Chạy tuần tự. Request xác minh thành công sẽ đánh dấu QR đã dùng (mặc định max_uses=1).",

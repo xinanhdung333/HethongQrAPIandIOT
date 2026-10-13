@@ -4,6 +4,91 @@ Tai lieu nay huong dan tao request thu cong trong Postman. Khong can import
 collection. Hay nhap va bam Send tung request mot.
 
 ============================================================
+0. DANG NHAP VA TAO DON THUE API BANG POSTMAN
+============================================================
+
+Can co tai khoan CUSTOMER SmartQR truoc. Neu chua co tai khoan, dang ky tren
+website roi quay lai Postman. Khong dung tai khoan ADMIN de tao don thue.
+
+A. Dang nhap
+
+1. Tao request moi trong Postman de lay CSRF truoc.
+2. Chon method GET va nhap URL:
+
+   http://localhost:4000/api/csrf-token
+
+3. Bam Send. Response co dang:
+
+{
+  "token": "CHUOI_HEX_64_KY_TU"
+}
+
+   Postman se tu luu cookie csrf_token trong Cookies cho localhost.
+   Copy gia tri token trong response.
+4. Tao request moi de dang nhap. Chon method POST va nhap URL:
+
+   http://localhost:4000/auth/login
+
+5. Trong Headers, nhap:
+
+   Content-Type: application/json
+   X-CSRF-Token: DAN_TOKEN_VUA_COPY_VAO_DAY
+
+6. Kiem tra Postman co gui cookie csrf_token tu cookie jar cho localhost.
+   Neu khong co, mo Cookies ben canh Send > localhost va them:
+
+   csrf_token = GIA_TRI_TOKEN_CSRF_VUA_COPY
+
+7. Mo Body > raw > JSON va nhap email/mat khau tai khoan SmartQR cua ban:
+
+{
+  "email": "EMAIL_TAI_KHOAN_SMARTQR",
+  "password": "MAT_KHAU_TAI_KHOAN"
+}
+
+8. Bam Send. Neu thanh cong, response co user va access_token.
+   Khong chia se access_token; token nay co the dung de thao tac thay tai khoan
+   va het han sau 24 gio.
+9. Copy access_token de dung o Authorization cua request tiep theo.
+
+B. Tao don thue API
+
+1. Tao request moi, chon POST va nhap URL:
+
+   http://localhost:4000/api-rentals
+
+2. Trong Headers, nhap:
+
+   Content-Type: application/json
+   Authorization: Bearer DAN_ACCESS_TOKEN_VUA_COPY_VAO_DAY
+   X-CSRF-Token: DAN_LAI_TOKEN_CSRF_VAO_DAY
+
+3. Mo Body > raw > JSON va nhap body mau:
+
+{
+  "app_name": "Postman Demo App",
+  "website": "https://example.com",
+  "plan": "starter",
+  "duration": 1,
+  "scopes": [
+    "qr:create",
+    "ticket:verify"
+  ],
+  "payment_method": "payos_demo"
+}
+
+4. Bam Send. Response thanh cong co order_id, breakdown va payment_url.
+   Request nay tao don thue moi that trong he thong, khong phai request sandbox
+   tao QR. Goi starter 1 thang co gia hien tren breakdown cua response.
+5. Copy payment_url va mo trong trinh duyet. Hoan tat thanh toan demo tren trang
+   thanh toan de kich hoat don. Chi xac nhan thanh toan neu ban muon tao don.
+6. Sau khi don ACTIVE, vao Dashboard > Quan ly API key de tao/copy key. Chon
+   test key de thu sandbox hoac live key neu ban chap nhan quota/phi production.
+7. Tiep tuc muc 1 de lay key co scope can thiet, sau do thu tao QR va verify.
+
+Neu Postman tra 401 khi tao don, dang nhap lai va copy access_token moi.
+
+============================================================
 1. LAY API KEY DUNG SCOPE
 ============================================================
 
@@ -230,11 +315,13 @@ khong can hai header nay.
 10. THU TU GOI Y DE TEST
 ============================================================
 
-1. Lay test key co qr:create va ticket:verify.
-2. Tao request tao QR, bam Send va copy ticket_code.
-3. Tao request verify ticket_code, bam Send va kiem tra valid=true.
-4. Tao QR moi neu muon thu verify bang qr_jwt.
-5. Tao request moi cho tung truong hop key sai, thieu key, thieu scope hoac body
+1. Dang nhap bang request POST /auth/login.
+2. Tao don thue bang POST /api-rentals, mo payment_url va hoan tat thanh toan demo.
+3. Lay test key co qr:create va ticket:verify trong Dashboard > Quan ly API key.
+4. Tao request tao QR, bam Send va copy ticket_code.
+5. Tao request verify ticket_code, bam Send va kiem tra valid=true.
+6. Tao QR moi neu muon thu verify bang qr_jwt.
+7. Tao request moi cho tung truong hop key sai, thieu key, thieu scope hoac body
    sai.
 
 Neu Postman bao khong ket noi, kiem tra backend dang chay tai

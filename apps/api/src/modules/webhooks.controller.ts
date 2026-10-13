@@ -27,6 +27,12 @@ export class WebhooksController {
     response.send(image);
   }
 
+  @Get("payos-demo/info")
+  async paymentInfo(@Query("order_id") orderId: string, @Query("kind") kind: "rental" | "ticket" | "api", @Query("payment_stage") stage: "initial" | "remaining" = "initial", @Query("expires") expires: string, @Query("signature") signature: string) {
+    await this.verifyPaymentLink(orderId, kind, stage, expires, signature, false);
+    return this.platform.getPayosDemoInfo(orderId, kind, stage);
+  }
+
   @Post("payos-demo")
   async webhook(@Body() dto: PayosWebhookDto, @Headers("x-payos-timestamp") timestamp?: string, @Headers("x-payos-nonce") nonce?: string, @Headers("x-payos-signature") signature?: string, @Headers("x-payment-expires") paymentExpires?: string, @Headers("x-payment-signature") paymentSignature?: string, @Req() req?: Request & { rawBody?: Buffer }) {
     if (paymentExpires && paymentSignature) {

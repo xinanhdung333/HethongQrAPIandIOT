@@ -110,6 +110,7 @@
     </style>
 </head>
 <body class="relative text-zinc-100 antialiased selection:bg-white selection:text-black bg-grid-pattern">
+  <div id="page-veil" aria-hidden="true" style="position:fixed;inset:0;z-index:99999;background:#09090b;opacity:1;transition:opacity .28s ease;pointer-events:none"></div>
 
     <!-- Top Solid Progress Bar -->
     <div id="scroll-progress-bar" class="fixed top-0 left-0 h-1 bg-white z-50 w-0 transition-all duration-75"></div>
@@ -629,7 +630,7 @@
 
             <div id="cta-buttons" class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-5">
                 <!-- ADMIN CONTENT: EDIT CONTACT BUTTON -->
-                <a href="mailto:api-support@smartqr.io" class="w-full sm:w-auto px-10 py-4 rounded-full bg-white text-black font-extrabold text-base shadow-2xl hover:bg-zinc-200 hover:scale-105 active:scale-95 transition-all text-center">
+                <a href="/dang-nhap" class="w-full sm:w-auto px-10 py-4 rounded-full bg-white text-black font-extrabold text-base shadow-2xl hover:bg-zinc-200 hover:scale-105 active:scale-95 transition-all text-center">
                     Liên Hệ Đăng Ký Thuê API
                 </a>
                 <a href="#hero" class="w-full sm:w-auto px-9 py-4 rounded-full bg-zinc-950 hover:bg-zinc-900 text-zinc-300 font-semibold text-base transition-all text-center border border-zinc-800">
@@ -644,7 +645,7 @@
     <footer class="border-t border-zinc-900 bg-zinc-950 text-zinc-100">
         <div class="max-w-6xl mx-auto py-14 px-6 grid gap-10 md:grid-cols-[1.2fr_1fr_1fr]">
             <div>
-                <a href="/" class="inline-flex items-center gap-2 font-semibold tracking-tight text-white">
+                    <a href="/landing/index.html" class="inline-flex items-center gap-2 font-semibold tracking-tight text-white">
                     <img src="/brand/smartqr-icon.svg" alt="" class="h-9 w-9 rounded-lg">
                     <span class="font-extrabold text-xl">SmartQR</span>
                 </a>
@@ -670,20 +671,20 @@
             <div>
                 <h3 class="font-semibold text-white">Sản phẩm</h3>
                 <div class="mt-4 grid gap-3 text-sm text-zinc-400">
-                    <a href="/san-pham" class="transition hover:text-white">SP-01 Mini</a>
-                    <a href="/thue-thiet-bi" class="transition hover:text-white">Thuê thiết bị</a>
-                    <a href="/tao-show" class="transition hover:text-white">Tạo show</a>
-                    <a href="/linh-kien" class="transition hover:text-white">Linh kiện</a>
+                    <a href="/landing/index.html" class="transition hover:text-white">SP-01 Mini</a>
+                    <a href="/landing/index.html" class="transition hover:text-white">Thuê thiết bị</a>
+                    <a href="/landing/index.html" class="transition hover:text-white">Tạo show</a>
+                    <a href="/landing/index.html" class="transition hover:text-white">Linh kiện</a>
                 </div>
             </div>
             
             <div>
                 <h3 class="font-semibold text-white">Nền tảng</h3>
                 <div class="mt-4 grid gap-3 text-sm text-zinc-400">
-                    <a href="/bang-gia" class="transition hover:text-white">Bảng giá</a>
-                    <a href="/docs" class="transition hover:text-white">Tài liệu API</a>
-                    <a href="/dashboard" class="transition hover:text-white">Dashboard</a>
-                    <a href="/dashboard/scan" class="transition hover:text-white">Quét thử</a>
+                    <a href="/landing/index.html" class="transition hover:text-white">Bảng giá</a>
+                    <a href="/landing/index.html" class="transition hover:text-white">Tài liệu API</a>
+                    <a href="/dang-nhap" class="transition hover:text-white">Dashboard</a>
+                    <a href="/dang-nhap" class="transition hover:text-white">Quét thử</a>
                 </div>
             </div>
         </div>
@@ -1192,5 +1193,13 @@
             ctx.fillRect(x + 2 * cellSize, y + 2 * cellSize, 3 * cellSize, 3 * cellSize);
         }
     </script>
+  <script>
+    const hidePageVeil = () => { const veil = document.getElementById('page-veil'); if (!veil || veil.dataset.hidden) return; veil.dataset.hidden = 'true'; veil.style.opacity = '0'; setTimeout(() => veil.remove(), 320); };
+    window.addEventListener('load', () => setTimeout(hidePageVeil, 120));
+    setTimeout(hidePageVeil, 900);
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/landing/sw.js', { scope: '/landing/' }));
+    }
+  </script>
 </body>
 </html>

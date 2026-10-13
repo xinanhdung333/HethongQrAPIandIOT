@@ -11,9 +11,17 @@ export async function getGateKeyPairForTenant(prisma: PrismaService, tenantId: s
 
   const existing = await prisma.tenantGateKey.findUnique({ where: { tenantId } });
   if (existing) {
-    const pair = { privateKey: normalizePem(openSecret(existing.privateKeyEnc)), publicKey: normalizePem(existing.publicKey) };
-    keyCache.set(tenantId, pair);
-    return pair;
+    try {
+      const pair = { privateKey: normalizePem(openSecret(existing.privateKeyEnc)), publicKey: normalizePem(existing.publicKey) };
+      keyCache.set(tenantId, pair);
+      return pair;
+    } catch (error) {
+      if (process.env.NODE_ENV === "production") throw error;
+      const pair = generateKeyPair();
+      await prisma.tenantGateKey.update({ where: { tenantId }, data: { publicKey: pair.publicKey, privateKeyEnc: sealSecret(pair.privateKey), algorithm: "RS256", rotatedAt: new Date() } });
+      keyCache.set(tenantId, pair);
+      return pair;
+    }
   }
 
   const pair = generateKeyPair();

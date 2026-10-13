@@ -1,9 +1,5 @@
-import { IotDeveloperClient } from "./iot-developer-client";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return (
-    <main className="mx-auto min-w-0 max-w-[1200px] py-3 md:py-5">
-      <IotDeveloperClient />
-    </main>
-  );
+  redirect("/iot-developer");
 }

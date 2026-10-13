@@ -1,5 +1,6 @@
 import { BadGatewayException, BadRequestException, Injectable } from "@nestjs/common";
 import crypto from "crypto";
+import QRCode from "qrcode";
 
 export type PaymentMethod = "payos_demo" | "momo";
 type PaymentKind = "rental" | "ticket" | "api";
@@ -16,6 +17,7 @@ export class PayosMockService {
     if (!/^\d{6,30}$/.test(accountNumber) || !Number.isSafeInteger(input.amount) || input.amount < 1) {
       throw new BadRequestException({ error: "invalid_vietqr_details", message: "Thông tin ngân hàng hoặc số tiền không hợp lệ để tạo mã VietQR." });
     }
+    return createLocalVietQr(input.bankName, accountNumber, input.amount, input.orderId);
     const bank = await this.findVietQrBank(input.bankName);
     if (!/^\d{6}$/.test(bank.bin)) {
       throw new BadGatewayException({ error: "invalid_vietqr_bank_code", message: "Mã ngân hàng từ VietQR không hợp lệ." });
@@ -136,6 +138,29 @@ export class PayosMockService {
       checkoutUrl: body.payUrl
     };
   }
+}
+
+async function createLocalVietQr(bankName: string, accountNumber: string, amount: number, orderId: string) {
+  const normalized = normalizeBankName(bankName);
+  const bin = normalized === "MB" || normalized === "MBBANK" || normalized === "970422" ? "970422" : /^\d{6}$/.test(bankName) ? bankName : null;
+  if (!bin) throw new BadGatewayException({ error: "vietqr_generation_failed", message: "Không xác định được mã ngân hàng để tạo QR offline." });
+  const additional = tlv("08", orderId.replace(/[^a-zA-Z0-9]/g, "").slice(-25));
+  const merchant = tlv("00", "A000000727") + tlv("01", bin) + tlv("02", accountNumber);
+  const payload = tlv("00", "01") + tlv("01", "12") + tlv("38", merchant) + tlv("52", "0000") + tlv("53", "704") + tlv("54", String(amount)) + tlv("58", "VN") + tlv("62", additional);
+  return QRCode.toBuffer(`${payload}6304${crc16(`${payload}6304`)}`, { type: "png", width: 640, margin: 2, errorCorrectionLevel: "M" });
+}
+
+function tlv(id: string, value: string) {
+  return `${id}${String(value.length).padStart(2, "0")}${value}`;
+}
+
+function crc16(value: string) {
+  let crc = 0xffff;
+  for (const char of value) {
+    crc ^= char.charCodeAt(0) << 8;
+    for (let bit = 0; bit < 8; bit++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
 }
 
 function normalizeBankName(value: string) {

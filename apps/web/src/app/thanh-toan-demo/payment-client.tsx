@@ -22,6 +22,7 @@ type PaidApiRental = {
   apiKeyPrefix?: string;
 };
 type RentalCheckout = { id: string; type: "RENT" | "BUY"; total: number; depositAmount: number; remainingAmount: number; remainingPaidAmount: number; remainingPaymentStatus: string; product?: { name: string }; quantity: number; duration: number };
+type PaymentInfo = { bank_name: string; account_number: string; account_name: string; amount: number };
 
 export function PaymentClient() {
   const search = useSearchParams();
@@ -44,6 +45,7 @@ export function PaymentClient() {
   const [qrImageSrc, setQrImageSrc] = useState("");
   const [qrError, setQrError] = useState("");
   const [qrRetry, setQrRetry] = useState(0);
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const qrImageUrl = useMemo(() => {
     if (!orderId || !paymentExpires || !paymentSignature || gateway || (isRemainingRentalCheckout && paymentMethod !== "payos_demo")) return "";
     const query = new URLSearchParams({
@@ -102,6 +104,12 @@ export function PaymentClient() {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [qrImageUrl]);
+
+  useEffect(() => {
+    if (!orderId || !paymentExpires || !paymentSignature || gateway) return;
+    const query = new URLSearchParams({ order_id: orderId, kind, payment_stage: paymentStage, expires: paymentExpires, signature: paymentSignature });
+    void fetch(`${API_URL}/webhooks/payos-demo/info?${query}`, { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(setPaymentInfo).catch(() => undefined);
+  }, [gateway, kind, orderId, paymentExpires, paymentSignature, paymentStage]);
 
   useEffect(() => {
     if (kind !== "rental" || !orderId) return;
@@ -201,6 +209,7 @@ export function PaymentClient() {
                 Đang tải mã VietQR...
               </div>
             )}
+            {paymentInfo && <div className="mt-4 grid gap-2 rounded-lg bg-zinc-50 p-4 text-sm"><div className="flex justify-between gap-4"><span className="text-zinc-500">Ngân hàng</span><b>{paymentInfo.bank_name}</b></div><div className="flex justify-between gap-4"><span className="text-zinc-500">Chủ tài khoản</span><b>{paymentInfo.account_name || "Tài khoản nhận thanh toán"}</b></div><div className="flex justify-between gap-4"><span className="text-zinc-500">Số tài khoản</span><b className="font-mono">{paymentInfo.account_number}</b></div><div className="flex justify-between gap-4 border-t border-zinc-200 pt-2"><span className="font-medium">Số tiền</span><b className="text-lg text-amber-700">{money(paymentInfo.amount)}</b></div></div>}
             <p className="mt-4 text-sm leading-6 text-zinc-600">Mã được tạo theo số tiền đơn hàng và tài khoản nhận chung của admin cấu hình trong env. Đây là luồng PayOS demo: chuyển khoản không được đối soát tự động, trạng thái đơn vẫn được mô phỏng.</p>
             {!isRemainingRentalCheckout && <button type="button" disabled={confirming} aria-busy={confirming} onClick={() => void confirmDemoPayment()} className="btn btn-primary mt-4 w-full">{confirming && <Loader2 aria-hidden="true" className="animate-spin" size={16} />}{confirming ? "Đang xác nhận demo..." : "Xác nhận thanh toán demo"}</button>}
           </div>

@@ -1,0 +1,685 @@
+MÃ MERMAID CÁC BIỂU ĐỒ SMARTQR – CHƯƠNG 2
+Ghi chú: Mỗi sơ đồ là một khối Mermaid độc lập. Có thể sao chép cả phần ```mermaid ... ``` vào Mermaid Live Editor hoặc công cụ hỗ trợ Mermaid.
+
+Hình 2.1: Biểu đồ use case tổng quan
+```mermaid
+flowchart LR
+  KH[Khách hàng / Người mua]
+  DEV[Developer / Chủ show]
+  ADMIN[Quản trị viên]
+  GATE[Ứng dụng / Gate]
+
+  subgraph SYS["Hệ thống SmartQR"]
+    UC1((Đăng ký / đăng nhập))
+    UC2((Thuê API QR))
+    UC3((Quản lý API key))
+    UC4((Tạo và quản lý show))
+    UC5((Mua vé))
+    UC6((Tạo mã QR))
+    UC7((Xác thực vé / QR))
+    UC8((Nhận webhook))
+    UC9((Quản trị nền tảng API))
+  end
+
+  KH --> UC1
+  KH --> UC5
+  DEV --> UC1
+  DEV --> UC2
+  DEV --> UC3
+  DEV --> UC4
+  DEV --> UC6
+  DEV --> UC8
+  GATE --> UC7
+  ADMIN --> UC9
+  UC2 -. cấp quyền sử dụng .-> UC3
+  UC5 -. thanh toán thành công .-> UC7
+  UC6 -. phát sinh sự kiện .-> UC8
+  UC7 -. phát sinh sự kiện .-> UC8
+```
+
+Hình 2.2: Biểu đồ use case phía khách hàng
+```mermaid
+flowchart LR
+  BUYER[Khách hàng / Người mua vé]
+  OWNER[Chủ show]
+
+  subgraph CUSTOMER_SYS["Hệ thống SmartQR"]
+    C1((Đăng ký / đăng nhập))
+    C2((Xem danh sách show))
+    C3((Xem chi tiết show))
+    C4((Đặt mua vé))
+    C5((Thanh toán đơn hàng))
+    C6((Nhận vé điện tử và mã QR))
+    C7((Tạo và quản lý show))
+    C8((Quản lý đơn hàng và vé))
+    C9((Xem và quét thử mã QR))
+  end
+
+  BUYER --> C1
+  BUYER --> C2
+  BUYER --> C3
+  BUYER --> C4
+  BUYER --> C5
+  BUYER --> C6
+  OWNER --> C1
+  OWNER --> C7
+  OWNER --> C8
+  OWNER --> C9
+  C4 -. "<<include>>" .-> C5
+  C5 -. "<<include>>" .-> C6
+```
+
+Hình 2.3: Biểu đồ use case phía quản trị
+```mermaid
+flowchart LR
+  ADMIN[Quản trị viên]
+
+  subgraph ADMIN_SYS["Khu vực quản trị SmartQR"]
+    A1((Đăng nhập quản trị))
+    A2((Xem tổng quan hệ thống))
+    A3((Quản lý API key))
+    A4((Khóa / mở khóa API key))
+    A5((Quản lý gói và quota))
+    A6((Xem mức sử dụng API))
+    A7((Xem log và audit))
+    A8((Quản lý webhook))
+    A9((Thử gửi lại webhook lỗi))
+    A10((Quản lý người dùng và show))
+  end
+
+  ADMIN --> A1
+  ADMIN --> A2
+  ADMIN --> A3
+  ADMIN --> A5
+  ADMIN --> A6
+  ADMIN --> A7
+  ADMIN --> A8
+  ADMIN --> A10
+  A3 -. có thể thực hiện .-> A4
+  A8 -. khi gửi thất bại .-> A9
+```
+
+Hình 2.4: Phân rã use case quản lý API key
+```mermaid
+flowchart LR
+  DEV[Developer / Chủ API key]
+  ADMIN[Quản trị viên]
+  MAIN((Quản lý API key))
+  K1((Xem danh sách API key))
+  K2((Xác thực quyền sở hữu))
+  K3((Tạo API key))
+  K4((Xoay vòng API key))
+  K5((Tạm khóa API key))
+  K6((Thu hồi API key))
+  K7((Cập nhật scope))
+  K8((Hiển thị key một lần))
+
+  DEV --- MAIN
+  ADMIN --- MAIN
+  MAIN -.->|&lt;&lt;include&gt;&gt;| K1
+  MAIN -.->|&lt;&lt;include&gt;&gt;| K2
+  K3 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  K4 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  K5 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  K6 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  K7 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  K3 -.->|&lt;&lt;include&gt;&gt;| K8
+  K4 -.->|&lt;&lt;include&gt;&gt;| K8
+```
+
+Hình 2.5: Phân rã use case tạo white-label show
+```mermaid
+flowchart LR
+  OWNER[Chủ show]
+  MAIN((Tạo white-label show))
+  S1((Nhập thông tin show))
+  S2((Cấu hình vé, thời gian và địa điểm))
+  S3((Xuất bản trang bán vé))
+  S4((Tùy chỉnh giao diện thương hiệu))
+  S5((Thiết lập tài khoản nhận tiền))
+
+  OWNER --- MAIN
+  MAIN -.->|&lt;&lt;include&gt;&gt;| S1
+  MAIN -.->|&lt;&lt;include&gt;&gt;| S2
+  MAIN -.->|&lt;&lt;include&gt;&gt;| S3
+  S4 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  S5 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+```
+
+Hình 2.6: Phân rã use case thuê API QR
+```mermaid
+flowchart LR
+  DEV[Developer]
+  PAY[PayOS / Cổng thanh toán]
+  MAIN((Thuê API QR))
+  R1((Chọn gói và thời hạn))
+  R2((Nhập thông tin ứng dụng))
+  R3((Tạo đơn thuê API))
+  R4((Thanh toán đơn hàng))
+  R5((Kích hoạt thuê bao))
+  R6((Nhận API key))
+  R7((Cấu hình signing / webhook))
+  R8((Theo dõi quota và chi phí))
+
+  DEV --- MAIN
+  PAY --- R4
+  MAIN -.->|&lt;&lt;include&gt;&gt;| R1
+  MAIN -.->|&lt;&lt;include&gt;&gt;| R2
+  MAIN -.->|&lt;&lt;include&gt;&gt;| R3
+  MAIN -.->|&lt;&lt;include&gt;&gt;| R4
+  MAIN -.->|&lt;&lt;include&gt;&gt;| R5
+  MAIN -.->|&lt;&lt;include&gt;&gt;| R6
+  R7 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  R8 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+```
+
+Hình 2.7: Phân rã use case xác thực vé/mã QR
+```mermaid
+flowchart LR
+  GATE[Gate / Ứng dụng tích hợp]
+  MAIN((Xác thực vé / mã QR))
+  V1((Kiểm tra API key và scope))
+  V2((Kiểm tra chữ ký và hạn dùng))
+  V3((Kiểm tra trạng thái thu hồi))
+  V4((Kiểm tra lượt sử dụng))
+  V5((Trả kết quả hợp lệ / từ chối))
+  V6((Kiểm tra giới hạn gate nếu có))
+  V7((Ghi nhận lượt quét thành công))
+
+  GATE --- MAIN
+  MAIN -.->|&lt;&lt;include&gt;&gt;| V1
+  MAIN -.->|&lt;&lt;include&gt;&gt;| V2
+  MAIN -.->|&lt;&lt;include&gt;&gt;| V3
+  MAIN -.->|&lt;&lt;include&gt;&gt;| V4
+  MAIN -.->|&lt;&lt;include&gt;&gt;| V5
+  V6 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  V7 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+```
+
+Hình 2.8: Phân rã use case quản trị nền tảng API
+```mermaid
+flowchart LR
+  ADMIN[Quản trị viên]
+  MAIN((Quản trị nền tảng API))
+  P0((Xác thực quyền quản trị))
+  P1((Quản lý người dùng))
+  P2((Quản lý API key))
+  P3((Quản lý gói và quota))
+  P4((Theo dõi request và usage))
+  P5((Xem audit log))
+  P6((Theo dõi và gửi lại webhook))
+
+  ADMIN --- MAIN
+  MAIN -.->|&lt;&lt;include&gt;&gt;| P0
+  P1 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  P2 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  P3 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  P4 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  P5 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+  P6 -.->|&lt;&lt;extend&gt;&gt;| MAIN
+```
+
+Hình 2.9: Biểu đồ trình tự use case thuê API QR
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Dev as Developer
+  participant Web as Web SmartQR
+  participant API as API SmartQR
+  participant DB as PostgreSQL
+  participant Pay as PayOS
+  participant Key as API Key Service
+
+  Dev->>Web: Chọn gói, nhập thông tin ứng dụng
+  Web->>API: POST tạo đơn thuê API
+  API->>DB: Lưu ApiRentalOrder trạng thái PENDING
+  DB-->>API: Mã đơn thuê
+  API-->>Web: Thông tin đơn và thanh toán
+  Web->>Pay: Tiến hành thanh toán
+  Pay-->>API: Webhook thanh toán thành công
+  API->>DB: Cập nhật đơn thành PAID/ACTIVE
+  API->>Key: Phát hành API key theo gói
+  Key->>DB: Lưu keyHash, quota, scopes
+  Key-->>API: Trả key thô một lần
+  API-->>Web: Kết quả kích hoạt và API key
+  Web-->>Dev: Hiển thị key một lần
+```
+
+Hình 2.10: Biểu đồ lớp phân tích use case thuê API QR
+```mermaid
+classDiagram
+  direction LR
+
+  class Developer {
+    +String id
+    +String email
+    +createRental()
+    +viewRental()
+  }
+
+  class ApiRentalOrder {
+    +String id
+    +String appName
+    +String plan
+    +Int duration
+    +Int quota
+    +Int total
+    +String status
+    +create()
+    +activate()
+  }
+
+  class PaymentTransaction {
+    +String id
+    +Int amount
+    +String status
+    +String provider
+    +confirm()
+  }
+
+  class ApiKey {
+    +String id
+    +String prefix
+    +String keyHash
+    +Json scopes
+    +Int quota
+    +String status
+    +issue()
+  }
+
+  Developer "1" --> "0..*" ApiRentalOrder : sở hữu
+  ApiRentalOrder "1" --> "0..*" PaymentTransaction : thanh toán
+  ApiRentalOrder "1" --> "0..*" ApiKey : cấp quyền sử dụng
+```
+
+Hình 2.11: Biểu đồ trình tự use case quản lý API key
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Dev as Developer
+  participant Web as Developer Console
+  participant API as Developer API
+  participant Auth as Session Auth
+  participant Key as API Key Service
+  participant DB as PostgreSQL
+  participant Audit as Audit Log
+
+  Dev->>Web: Chọn tạo / xoay vòng / khóa / thu hồi key
+  Web->>API: Gửi yêu cầu kèm session JWT
+  API->>Auth: Xác thực người dùng và quyền sở hữu
+  Auth-->>API: Session hợp lệ
+  API->>Key: Thực hiện thao tác key
+  Key->>DB: Đọc hoặc cập nhật API key
+  opt Tạo hoặc xoay vòng
+    Key->>Key: Sinh key ngẫu nhiên, tính keyHash
+    Key->>DB: Lưu hash, prefix, scopes, trạng thái
+  end
+  Key->>Audit: Ghi nhận thao tác
+  Key-->>API: Trả thông tin key
+  API-->>Web: Trả kết quả
+  Web-->>Dev: Hiển thị key thô một lần nếu có
+```
+
+Hình 2.12: Biểu đồ lớp phân tích use case quản lý API key
+```mermaid
+classDiagram
+  direction LR
+
+  class User {
+    +String id
+    +String email
+    +String role
+  }
+
+  class ApiKey {
+    +String id
+    +String userId
+    +String prefix
+    +String keyHash
+    +Json scopes
+    +Int quota
+    +String status
+    +DateTime suspendUntil
+    +DateTime revokeAt
+    +rotate()
+    +suspend()
+    +revoke()
+  }
+
+  class ApiRentalOrder {
+    +String id
+    +String status
+    +Int quota
+  }
+
+  class Show {
+    +String id
+    +String slug
+    +String name
+  }
+
+  class ActivityLog {
+    +String id
+    +String action
+    +String targetType
+  }
+
+  User "1" --> "0..*" ApiKey : sở hữu
+  ApiRentalOrder "0..1" --> "0..*" ApiKey : cấp cho thuê bao
+  Show "0..1" --> "0..*" ApiKey : giới hạn theo show
+  User "1" --> "0..*" ActivityLog : thao tác được ghi nhận
+```
+
+Hình 2.13: Biểu đồ trình tự use case tạo mã QR
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Client as Ứng dụng tích hợp
+  participant API as QR API
+  participant Guard as API Key Guard
+  participant QR as QR Platform Service
+  participant DB as PostgreSQL
+  participant Sign as QR Signing
+  participant Hook as Webhook Queue
+
+  Client->>API: POST /api/v1/qr-codes
+  API->>Guard: Kiểm tra X-API-Key và scope qr:create
+  Guard-->>API: Key hợp lệ, còn quota
+  API->>QR: Tạo mã QR theo payload
+  QR->>Sign: Ký JWT QR, sinh jti
+  Sign-->>QR: qrJwt và jti
+  QR->>DB: Lưu ExternalQrCode
+  DB-->>QR: QR đã tạo
+  opt Thuê bao có webhook
+    QR->>Hook: Enqueue qr.created
+  end
+  QR-->>API: ID, code, qrJwt, SVG URL, expiresAt
+  API-->>Client: 201 Created
+```
+
+Hình 2.14: Biểu đồ lớp phân tích use case tạo mã QR
+```mermaid
+classDiagram
+  direction LR
+
+  class ApiClient {
+    +createQr(payload)
+  }
+
+  class ApiKey {
+    +String id
+    +Json scopes
+    +Int quota
+    +String status
+  }
+
+  class ExternalQrCode {
+    +String id
+    +String jti
+    +String code
+    +String qrJwt
+    +String resourceType
+    +String resourceId
+    +DateTime expiresAt
+    +Int maxUses
+    +Int useCount
+    +revoke()
+  }
+
+  class QrPlatformService {
+    +create()
+    +serializeQr()
+  }
+
+  class WebhookEvent {
+    +String id
+    +String event
+    +String status
+  }
+
+  ApiClient --> ApiKey : xác thực bằng
+  ApiKey "1" --> "0..*" ExternalQrCode : tạo
+  QrPlatformService ..> ApiKey : kiểm tra scope/quota
+  QrPlatformService ..> ExternalQrCode : tạo và lưu
+  ExternalQrCode ..> WebhookEvent : phát sinh sự kiện
+```
+
+Hình 2.15: Biểu đồ trình tự use case xác thực vé/mã QR
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Gate as Gate / Ứng dụng
+  participant API as Verify API
+  participant Guard as API Key Guard
+  participant Verify as QR Platform Service
+  participant DB as PostgreSQL
+  participant Usage as Usage / Scan Log
+  participant Hook as Webhook Queue
+
+  Gate->>API: POST /api/v1/tickets/verify
+  API->>Guard: Kiểm tra API key và scope ticket:verify
+  Guard-->>API: Key hợp lệ
+  API->>Verify: Gửi QR token hoặc mã QR
+  Verify->>Verify: Kiểm tra chữ ký, hạn dùng, định danh
+  Verify->>DB: Tìm vé / QR và trạng thái thu hồi
+  DB-->>Verify: Dữ liệu resource
+  Verify->>Verify: Kiểm tra show, gate, số lượt sử dụng
+  Verify->>DB: Cập nhật lượt dùng và kết quả
+  Verify->>Usage: Ghi usage / scan log
+  opt Có rental webhook
+    Verify->>Hook: Enqueue ticket.verified hoặc qr.verified
+  end
+  Verify-->>API: valid, reason, resource
+  API-->>Gate: Cho phép hoặc từ chối
+```
+
+Hình 2.16: Biểu đồ lớp phân tích use case xác thực vé/mã QR
+```mermaid
+classDiagram
+  direction LR
+
+  class GateClient {
+    +verify(token)
+  }
+
+  class ApiKey {
+    +String id
+    +Json scopes
+    +String status
+  }
+
+  class Ticket {
+    +String id
+    +String jti
+    +String qrJwt
+    +Boolean isUsed
+    +Int useCount
+  }
+
+  class ExternalQrCode {
+    +String id
+    +String jti
+    +String code
+    +DateTime expiresAt
+    +Boolean isUsed
+    +Int useCount
+  }
+
+  class RevokedResource {
+    +String resourceType
+    +String jti
+    +DateTime revokedAt
+  }
+
+  class QrPlatformService {
+    +verify()
+    +deny(reason)
+    +recordUsage()
+  }
+
+  GateClient --> ApiKey : gửi API key
+  QrPlatformService ..> ApiKey : xác thực và kiểm tra scope
+  QrPlatformService ..> Ticket : tra cứu vé
+  QrPlatformService ..> ExternalQrCode : tra cứu QR
+  QrPlatformService ..> RevokedResource : kiểm tra thu hồi
+  QrPlatformService ..> Ticket : cập nhật lượt quét
+  QrPlatformService ..> ExternalQrCode : cập nhật lượt dùng
+```
+
+Hình 2.17: Biểu đồ trình tự use case mua vé
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Buyer as Người mua
+  participant Page as Trang show public
+  participant API as Show / Ticket API
+  participant DB as PostgreSQL
+  participant Pay as PayOS
+  participant Issue as Ticket Issuer
+  participant Mail as Email / Thông báo
+
+  Buyer->>Page: Chọn loại vé và số lượng
+  Page->>API: Tạo TicketOrder
+  API->>DB: Kiểm tra show, tồn vé và giữ chỗ
+  DB-->>API: TicketOrder PENDING
+  API-->>Page: Thông tin đơn và thanh toán
+  Page->>Pay: Thanh toán đơn hàng
+  Pay-->>API: Webhook thanh toán thành công
+  API->>DB: Xác nhận đơn, cập nhật sold/reserved
+  API->>Issue: Phát hành vé sau thanh toán
+  Issue->>Issue: Sinh jti và ký QR JWT cho từng vé
+  Issue->>DB: Lưu Ticket và QR token
+  API->>Mail: Gửi thông tin vé cho người mua
+  Mail-->>Buyer: Vé / mã QR
+```
+
+Hình 2.18: Biểu đồ lớp phân tích use case mua vé
+```mermaid
+classDiagram
+  direction LR
+
+  class Buyer {
+    +String name
+    +String email
+    +placeOrder()
+    +pay()
+  }
+
+  class Show {
+    +String id
+    +String slug
+    +Int ticketPrice
+    +Int totalTickets
+    +Int soldTickets
+    +Int reservedTickets
+  }
+
+  class TicketOrder {
+    +String id
+    +String buyerName
+    +String buyerEmail
+    +Int quantity
+    +Int totalAmount
+    +String status
+  }
+
+  class PaymentTransaction {
+    +String id
+    +Int amount
+    +String status
+  }
+
+  class Ticket {
+    +String id
+    +String jti
+    +String qrJwt
+    +Boolean isUsed
+  }
+
+  Buyer --> TicketOrder : đặt
+  Show "1" --> "0..*" TicketOrder : nhận đơn
+  TicketOrder "1" --> "0..*" Ticket : phát hành sau thanh toán
+  TicketOrder ..> PaymentTransaction : được thanh toán bởi
+```
+
+Hình 2.19: Biểu đồ trình tự use case gửi webhook
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Domain as QR / Ticket Service
+  participant DB as PostgreSQL
+  participant Queue as Webhook Worker
+  participant Safe as Safe HTTP
+  participant Client as Hệ thống khách hàng
+  participant Log as WebhookAttempt
+
+  Domain->>DB: Tạo WebhookEvent và dedupeKey
+  Queue->>DB: Lấy event đến hạn, khóa xử lý
+  Queue->>Safe: Gửi HTTPS POST kèm signature
+  Safe->>Client: Event body + X-Webhook-Signature
+  Client-->>Safe: HTTP response
+  Safe-->>Queue: Status code / lỗi
+  Queue->>DB: Cập nhật trạng thái event và attempts
+  Queue->>Log: Lưu statusCode, durationMs, error
+  alt Gửi thành công
+    Queue->>DB: Đánh dấu deliveredAt
+  else Gửi lỗi và còn lượt thử
+    Queue->>DB: Lên lịch retry
+  else Gửi lỗi quá số lần
+    Queue->>DB: Đánh dấu thất bại và tạo thông báo
+  end
+```
+
+Hình 2.20: Biểu đồ lớp phân tích use case gửi webhook
+```mermaid
+classDiagram
+  direction LR
+
+  class DomainEvent {
+    +String eventName
+    +String payload
+    +enqueue()
+  }
+
+  class ApiRentalOrder {
+    +String id
+    +String callbackUrl
+    +String webhookSecret
+  }
+
+  class WebhookEvent {
+    +String id
+    +String event
+    +String body
+    +String targetUrl
+    +String status
+    +Int attempts
+    +DateTime nextAttemptAt
+    +enqueue()
+    +retry()
+  }
+
+  class WebhookAttempt {
+    +String id
+    +Int attempt
+    +Int statusCode
+    +String error
+    +Int durationMs
+  }
+
+  class WebhookDeliveryService {
+    +enqueue()
+    +deliver()
+    +recoverExpiredLeases()
+  }
+
+  class CustomerEndpoint {
+    +receiveWebhook()
+  }
+
+  ApiRentalOrder "1" --> "0..*" WebhookEvent : cấu hình nhận event
+  DomainEvent ..> WebhookDeliveryService : yêu cầu gửi
+  WebhookDeliveryService --> WebhookEvent : xử lý
+  WebhookEvent "1" --> "0..*" WebhookAttempt : có lần gửi
+  WebhookDeliveryService ..> CustomerEndpoint : HTTPS POST có chữ ký
+```

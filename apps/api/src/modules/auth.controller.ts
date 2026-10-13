@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Headers, Patch, Post, Query, Req, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
-import { Request } from "express";
-import { LoginDto, RegisterDto, UpdateProfileDto } from "../dto";
+import { BadRequestException, Body, Controller, Get, Headers, Patch, Post, Query, Req, Res, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
+import { Request, Response } from "express";
+import { ForgotPasswordDto, LoginDto, RegisterDto, ResetPasswordDto, UpdateProfileDto, VerifyResetTokenDto } from "../dto";
 import { ActivityLogService } from "../services/activity-log.service";
 import { PlatformService } from "../services/platform.service";
 
@@ -21,6 +21,35 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Req() req: Request) {
     const result = await this.platform.login(dto);
     await this.activity.record({ session: { sub: result.user.id, email: result.user.email, role: result.user.role, jti: "" }, action: "LOGIN", targetType: "User", targetId: result.user.id, req });
+    return result;
+  }
+
+  @Get("google")
+  google(@Res() res: Response) { return res.redirect(this.platform.googleLoginUrl()); }
+
+  @Get("google/callback")
+  async googleCallback(@Query("code") code: string | undefined, @Query("error") error: string | undefined, @Res() res: Response) {
+    if (error || !code) return res.redirect(`${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/dang-nhap?oauth_error=google`);
+    try { const result = await this.platform.googleCallback(code); return res.redirect(`${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/auth/google-callback?token=${encodeURIComponent(result.access_token)}`); }
+    catch { return res.redirect(`${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/dang-nhap?oauth_error=google`); }
+  }
+
+  @Post("forgot-password")
+  async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request) {
+    const result = await this.platform.forgotPassword(dto);
+    await this.activity.record({ session: { sub: "", email: dto.email, role: "CUSTOMER", jti: "" }, action: "FORGOT_PASSWORD", targetType: "User", targetId: dto.email, req });
+    return result;
+  }
+
+  @Post("verify-reset-token")
+  async verifyResetToken(@Body() dto: VerifyResetTokenDto) {
+    return this.platform.verifyResetToken(dto);
+  }
+
+  @Post("reset-password")
+  async resetPassword(@Body() dto: ResetPasswordDto, @Req() req: Request) {
+    const result = await this.platform.resetPassword(dto);
+    await this.activity.record({ session: { sub: "", email: dto.email ?? "", role: "CUSTOMER", jti: "" }, action: "RESET_PASSWORD", targetType: "User", targetId: dto.email ?? "", req });
     return result;
   }
 
