@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { importSPKI, jwtVerify, type KeyLike } from "jose";
+import { Html5Qrcode } from "html5-qrcode";
 import { CheckCircle2, ImagePlus, KeyRound, ScanLine, ShieldCheck, Wifi, WifiOff, XCircle } from "lucide-react";
 import { API_URL, NetworkError, api } from "@/lib/api";
 import { readPrunedUsedMap } from "@/lib/offline-scan";
@@ -25,8 +26,23 @@ export function ScannerClient() {
   const [offlineMode, setOfflineMode] = useState(false);
   const [expectedTenantId, setExpectedTenantId] = useState<string | null>(null);
   const publicKeyRef = useRef<KeyLike | null>(null);
+  const readerRef = useRef<Html5Qrcode | null>(null);
   const validResult = Boolean(result && typeof result === "object" && "valid" in result && (result as { valid?: boolean }).valid);
   const invalidResult = Boolean(result && typeof result === "object" && "valid" in result && !(result as { valid?: boolean }).valid);
+
+  useEffect(() => {
+    const autoStartTimer = window.setTimeout(() => {
+      void startCamera(true);
+    }, 150);
+    return () => {
+      window.clearTimeout(autoStartTimer);
+      const reader = readerRef.current;
+      if (reader) {
+        void reader.stop().catch(() => undefined);
+        readerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const loadPublicKey = async () => {
@@ -147,20 +163,46 @@ export function ScannerClient() {
     }
   }
 
-  async function startCamera() {
-    const { Html5Qrcode } = await import("html5-qrcode");
-    setCamera(true);
+  async function startCamera(autoStart = false) {
+    if (camera || readerRef.current) return;
     const reader = new Html5Qrcode("qr-reader");
-    await reader.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 240, height: 240 } },
-      async (decodedText) => {
-        await reader.stop();
-        setQr(decodedText);
-        setCamera(false);
-      },
-      undefined
-    );
+    readerRef.current = reader;
+    setCamera(true);
+    try {
+      await reader.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        async (decodedText) => {
+          await reader.stop().catch(() => undefined);
+          readerRef.current = null;
+          setQr(decodedText);
+          setCamera(false);
+          setLoading(true);
+          try {
+            setResult(await (offlineMode && !navigator.onLine ? verifyOffline(decodedText) : verifyOnlineValue(decodedText)));
+          } catch (error) {
+            setResult({ valid: false, error: error instanceof Error ? error.message : "Không thể xác minh mã QR" });
+          } finally {
+            setLoading(false);
+          }
+        },
+        undefined
+      );
+    } catch (error) {
+      readerRef.current = null;
+      setCamera(false);
+      if (autoStart) {
+        setResult({ valid: false, error: "Không thể mở camera. Hãy cấp quyền camera cho trình duyệt hoặc bấm mở camera để thử lại." });
+      }
+    }
+  }
+
+  function verifyOnlineValue(value: string) {
+    return api("/api/v1/tickets/verify", {
+      method: "POST",
+      headers: apiKey ? { "x-api-key": apiKey } : { "x-demo-scan": "true" },
+      body: JSON.stringify({ ticket_code: value.trim(), gate_id: gate })
+    });
   }
 
   async function scanFile(file?: File) {
@@ -171,7 +213,6 @@ export function ScannerClient() {
         setResult({ decoded: false, error: "Khong doc duoc SVG. Hay tai lai QR dang PNG roi upload." });
         return;
       }
-      const { Html5Qrcode } = await import("html5-qrcode");
       const reader = new Html5Qrcode("qr-reader");
       const decodedText = await reader.scanFile(file, true);
       setQr(decodedText);
@@ -191,7 +232,7 @@ export function ScannerClient() {
         <section className="panel overflow-hidden"><div className="border-b border-zinc-200 bg-gradient-to-r from-blue-50/60 via-white to-violet-50/50 p-5"><h2 className="font-semibold">Nguồn dữ liệu QR</h2><p className="mt-1 text-sm text-zinc-500">Quét camera, tải ảnh hoặc dán trực tiếp token.</p></div><div className="grid gap-4 p-5 md:p-6">
           <div id="qr-reader" className="min-h-64 overflow-hidden rounded-xl border border-dashed border-blue-200 bg-blue-50/30" />
           <div className="flex flex-wrap gap-3">
-            <button className="btn btn-secondary text-sm" onClick={startCamera} disabled={camera}>
+            <button className="btn btn-secondary text-sm" onClick={() => void startCamera()} disabled={camera}>
               <ScanLine size={16} />
               {camera ? "Đang mở camera" : "Mở camera"}
             </button>

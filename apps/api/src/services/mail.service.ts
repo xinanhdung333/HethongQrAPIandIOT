@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import nodemailer from "nodemailer";
+import type { SendMailOptions } from "nodemailer";
 
 @Injectable()
 export class MailService {
@@ -55,7 +56,7 @@ export class MailService {
     await this.safeSend({ from: this.from(), to, subject, text });
   }
 
-  private async safeSend(message: nodemailer.SendMailOptions) {
+  private async safeSend(message: SendMailOptions) {
     try {
       await this.transport().sendMail(message);
     } catch (error) {
