@@ -1,0 +1,100 @@
+HUONG DAN TEST SMARTQR BANG POWERSHELL
+======================================
+
+Yeu cau:
+1. cd C:\HeThongQRthongminh
+2. PostgreSQL : localhost:5432
+3. API        : localhost:4000
+4. Ticket API : localhost:3003
+
+Kiem tra API:
+  Invoke-RestMethod http://localhost:4000/api/v1/status
+
+1. TAO VE TEST VA XAC MINH ONLINE
+==================================
+
+Lenh nhanh:
+  powershell -ExecutionPolicy Bypass -File .\scripts\test-show-scan.ps1
+
+Lenh day du:
+  .\scripts\test-show-scan.ps1 -ShowSlug "htfjgrtkfefcrbgverdk" -ApiKey "sq_live_KEY_CUA_SHOW" -GateId "gate-main"
+
+Script tu tao ve moi, ky QR JWT va goi POST /api/v1/tickets/verify.
+Ket qua dung:
+  POWERSHELL TEST: PASS
+  "valid": true
+
+Ve la one-time ticket. Verify thanh cong mot lan thi quet lai se bi tu choi.
+
+2. XAC MINH VE THU CONG
+========================
+
+  $apiKey = "sq_live_KEY_CUA_SHOW"
+  $qrJwt = "DAN_QR_JWT_VAO_DAY"
+  $body = @{ qr_jwt = $qrJwt; gate_id = "gate-main" } | ConvertTo-Json
+
+  Invoke-RestMethod -Uri "http://localhost:4000/api/v1/tickets/verify" -Method Post -Headers @{"x-api-key"=$apiKey} -ContentType "application/json" -Body $body | ConvertTo-Json -Depth 10
+
+QR online HS256 bat buoc dung API key cua dung show.
+
+3. TEST QR OFFLINE RS256
+========================
+
+QR offline khong dung API key. May quet phai dang nhap:
+  http://localhost:3000/dashboard/scan
+
+Bat online, cho:
+  Public key: Da dong bo
+Sau do chuyen sang Che do offline va dan qr_offline_jwt vao frontend.
+
+Kiem tra payload:
+  $offlineJwt = "DAN_QR_OFFLINE_JWT_VAO_DAY"
+  $p = $offlineJwt.Split('.')[1].Replace('-','+').Replace('_','/')
+  while ($p.Length % 4) { $p += '=' }
+  [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p))
+
+Payload phai co type=ticket_offline, tenant_id va exp chua het han.
+Khong gui qr_offline_jwt vao endpoint online.
+
+4. THUE API VA TAO QR API
+=========================
+
+API key can scope: qr:create, qr:read, ticket:verify
+
+  $apiKey = "sk_test_API_KEY_CUA_API_RENTAL"
+  $headers = @{"x-api-key"=$apiKey}
+  $body = @{
+    resource_type = "membership"
+    resource_id = "member-demo-001"
+    customer_ref = "demo@smartqr.vn"
+    ttl_seconds = 86400
+    payload = @{ plan = "starter"; source = "powershell" }
+  } | ConvertTo-Json -Depth 10
+
+  $created = Invoke-RestMethod -Uri "http://localhost:4000/api/v1/qr-codes" -Method Post -Headers $headers -ContentType "application/json" -Body $body
+  $created | ConvertTo-Json -Depth 10
+
+  $verifyBody = @{ qr_jwt = $created.qr_jwt; gate_id = "gate-main" } | ConvertTo-Json
+  Invoke-RestMethod -Uri "http://localhost:4000/api/v1/tickets/verify" -Method Post -Headers $headers -ContentType "application/json" -Body $verifyBody | ConvertTo-Json -Depth 10
+
+Lay SVG:
+  Invoke-WebRequest -Uri "http://localhost:4000/api/v1/qr-codes/$($created.id)/svg" -Headers $headers -OutFile ".\tmp\qr-api-test.svg"
+
+LOI THUONG GAP
+==============
+
+invalid_qr / Invalid QR signature:
+  QR_JWT_SECRET cua API va ticket-service khac nhau.
+
+show_key_mismatch:
+  API key khong thuoc show cua ve. Dung key trong Admin > Show cua dung show.
+
+Token expired:
+  Kiem tra exp. Show co start/end qua khu thi tao ve moi se het han ngay.
+
+unauthorized:
+  Online phai gui x-api-key. Offline khong dung API key, nhung phai dong bo public key va tenant truoc.
+
+Bao mat:
+  Khong commit API key that vao Git. Neu da gui key len chat/anh man hinh, vao Admin > Show va cap key moi.
+
